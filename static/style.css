@@ -1705,9 +1705,25 @@ div[data-testid="stRadio"] svg { display: none !important; }
         background: #FFFFFF !important;
         color: #0A1938 !important;
     }
-    /* Textes généraux */
-    p, span, h1, h2, h3, h4, h5, label, div {
+    /* Textes généraux — exclure les tooltips qui ont leur propre couleur */
+    p, h1, h2, h3, h4, h5, label {
         color: inherit !important;
+    }
+    /* Spans/divs généraux, mais PAS les tooltips */
+    span:not(.sa-tip-title):not(.sa-tip-body):not(.sa-tip-icon),
+    div:not(.sa-tip-box) {
+        color: inherit !important;
+    }
+    /* Forcer les couleurs des tooltips même en dark mode */
+    .sa-tip-box {
+        background: #0A1938 !important;
+        color: #FFFFFF !important;
+    }
+    .sa-tip-title {
+        color: #FFFFFF !important;
+    }
+    .sa-tip-body {
+        color: rgba(255,255,255,0.85) !important;
     }
     /* Selectbox dropdown */
     [data-baseweb="select"] * {
@@ -1786,6 +1802,23 @@ div[data-testid="stRadio"] svg { display: none !important; }
         -webkit-overflow-scrolling: touch !important;
         max-width: 100% !important;
     }
+
+    /* ── Tooltips : popup centrée fixe sur mobile ────────────────────────── */
+    .sa-tip-box {
+        position: fixed !important;
+        left: 16px !important;
+        right: 16px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 32px) !important;
+        z-index: 999999 !important;
+        /* Couleurs forcées (safe contre dark mode override) */
+        background: #0A1938 !important;
+        color: #FFFFFF !important;
+    }
+    .sa-tip-title { color: #FFFFFF !important; }
+    .sa-tip-body  { color: rgba(255,255,255,0.85) !important; }
 
     /* ── Hero ────────────────────────────────────────────────────────────── */
     .hero-title    { font-size: clamp(28px, 8vw, 44px) !important; line-height: 1.05 !important; }
