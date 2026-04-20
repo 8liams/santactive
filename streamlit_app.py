@@ -249,3 +249,28 @@ elif view == "comparer":
     comparer.render(data)
 else:
     navigate("home")
+
+# ─── BOTTOM NAV MOBILE — remplace la sidebar sur petit écran ──────────────────
+_nav_items = [
+    ("home",        "🏠", "Accueil"),
+    ("enjeux",      "⚡", "Enjeux"),
+    ("comparer",    "⇄",  "Comparer"),
+    ("methodologie","📋", "Méthodo"),
+    ("about",       "ℹ",  "À propos"),
+]
+_nav_links = "".join(
+    f'<a href="?view={v}" class="sa-nav-active" title="{label}">'
+    f'<span class="sa-nav-icon">{icon}</span>'
+    f'<span class="sa-nav-label">{label}</span>'
+    f'</a>'
+    if v == view else
+    f'<a href="?view={v}" title="{label}">'
+    f'<span class="sa-nav-icon">{icon}</span>'
+    f'<span class="sa-nav-label">{label}</span>'
+    f'</a>'
+    for v, icon, label in _nav_items
+)
+st.markdown(
+    f'<nav class="sa-mobile-nav">{_nav_links}</nav>',
+    unsafe_allow_html=True,
+)
