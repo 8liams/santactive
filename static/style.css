@@ -1705,26 +1705,13 @@ div[data-testid="stRadio"] svg { display: none !important; }
         background: #FFFFFF !important;
         color: #0A1938 !important;
     }
-    /* Textes généraux — exclure les tooltips qui ont leur propre couleur */
-    p, h1, h2, h3, h4, h5, label {
-        color: inherit !important;
-    }
-    /* Spans/divs généraux, mais PAS les tooltips */
-    span:not(.sa-tip-title):not(.sa-tip-body):not(.sa-tip-icon),
-    div:not(.sa-tip-box) {
-        color: inherit !important;
-    }
     /* Forcer les couleurs des tooltips même en dark mode */
     .sa-tip-box {
         background: #0A1938 !important;
         color: #FFFFFF !important;
     }
-    .sa-tip-title {
-        color: #FFFFFF !important;
-    }
-    .sa-tip-body {
-        color: rgba(255,255,255,0.85) !important;
-    }
+    .sa-tip-title { color: #FFFFFF !important; }
+    .sa-tip-body  { color: rgba(255,255,255,0.85) !important; }
     /* Selectbox dropdown */
     [data-baseweb="select"] * {
         background: #FFFFFF !important;
