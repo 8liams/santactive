@@ -1817,19 +1817,23 @@ div[data-testid="stRadio"] svg { display: none !important; }
         max-width: 100% !important;
     }
 
-    /* ── Mini-cartes DOM-TOM : scroll horizontal, pas de retour à la ligne ─ */
-    [data-testid="stHorizontalBlock"]:has(iframe) {
+    /* ── Mini-cartes DOM-TOM : scroll horizontal (cible uniquement les blocs
+       à 5 colonnes, pas la carte nationale qui est en 2 colonnes) ─────────── */
+    [data-testid="stHorizontalBlock"]:has(
+        > [data-testid="stColumn"]:nth-child(5)
+    ) {
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        gap: 6px !important;
+        gap: 4px !important;
         padding-bottom: 6px !important;
     }
-    [data-testid="stHorizontalBlock"]:has(iframe)
-        > [data-testid="stColumn"] {
-        min-width: 130px !important;
-        max-width: 130px !important;
-        flex: 0 0 130px !important;
+    [data-testid="stHorizontalBlock"]:has(
+        > [data-testid="stColumn"]:nth-child(5)
+    ) > [data-testid="stColumn"] {
+        min-width: 120px !important;
+        max-width: 120px !important;
+        flex: 0 0 120px !important;
     }
 
     /* ── Tooltips : popup centrée fixe sur mobile ────────────────────────── */
