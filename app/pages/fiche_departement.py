@@ -326,14 +326,22 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
     )
 
     # ── Scores ────────────────────────────────────────────────────────────
-    score_acces  = float(r.get("score_acces",    50) or 50)
-    score_pros   = float(r.get("score_pros",     50) or 50)
-    score_etabs  = float(r.get("score_etabs",    50) or 50)
-    score_apl    = float(r.get("score_apl",      50) or 50)
-    score_temps  = float(r.get("score_temps",    50) or 50)
-    score_med    = float(r.get("score_medecins", 50) or 50)
-    score_senior = float(r.get("score_seniors",  50) or 50)
-    score_fonc   = float(r.get("score_foncier",  50) or 50)
+    def _s(key: str, default: float = 50.0) -> float:
+        v = r.get(key)
+        try:
+            fv = float(v)
+            return fv if pd.notna(fv) else default
+        except (TypeError, ValueError):
+            return default
+
+    score_acces  = _s("score_acces")
+    score_pros   = _s("score_pros")
+    score_etabs  = _s("score_etabs")
+    score_apl    = _s("score_apl")
+    score_temps  = _s("score_temps")
+    score_med    = _s("score_medecins")
+    score_senior = _s("score_seniors")
+    score_fonc   = _s("score_foncier")
 
     val_acces  = float(r.get("apl_median_dept",      0) or 0)
     val_pros   = float(r.get("med_gen_pour_100k",    0) or 0)
@@ -354,7 +362,10 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         lbl_weight = "500"  if indent else "600"
         num_size   = "20px" if indent else "26px"
         mb         = "14px" if indent else "24px"
-        pos        = max(2, min(98, int(score)))
+        try:
+            pos = max(2, min(98, int(float(score))))
+        except (ValueError, TypeError):
+            pos = 50
 
         if score < 33:
             dot_color = "#A51C30"
@@ -363,7 +374,10 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         else:
             dot_color = "#1B5E3F"
 
-        d       = int(score - 50)
+        try:
+            d = int(float(score) - 50)
+        except (ValueError, TypeError):
+            d = 0
         d_str   = f"+{d}\u202fpts vs médiane" if d >= 0 else f"{d}\u202fpts vs médiane"
         d_color = "#1B5E3F" if d >= 0 else "#A51C30"
         val_str = (
