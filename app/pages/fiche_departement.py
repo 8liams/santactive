@@ -76,7 +76,7 @@ def render_topbar(r: pd.Series, data: dict) -> None:
         with st.spinner("Génération du PDF…"):
             try:
                 recos = _generate_recommendations(r, data["master"], data)
-                pdf_bytes = generate_department_pdf(r, data["master"], recos)
+                pdf_bytes = generate_department_pdf(r, data["master"], recos, data)
                 dept_slug = str(r.get("Nom du département", "rapport")).lower().replace(" ", "_")
                 st.download_button(
                     label="⬇  Rapport PDF",

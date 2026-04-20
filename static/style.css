@@ -1391,3 +1391,268 @@ div[data-testid="stRadio"] svg { display: none !important; }
     box-shadow: 0 4px 28px rgba(26,61,143,0.15) !important;
     outline: none !important;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DA v2 — Sant'active — Améliorations visuelles globales
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Section headers — trait rouge latéral ─────────────────────────────── */
+.section-header {
+    margin: 56px 0 28px;
+    padding-left: 16px;
+    border-left: 3px solid #A51C30;
+}
+.section-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #A51C30 !important;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+/* ─── Section title — meilleure hiérarchie ───────────────────────────────── */
+.section-title {
+    font-family: var(--serif) !important;
+    font-size: clamp(26px, 3vw, 36px) !important;
+    line-height: 1.08 !important;
+    letter-spacing: -0.02em !important;
+    font-weight: 400 !important;
+    color: #0A1938 !important;
+    margin: 0 0 10px !important;
+    max-width: 860px;
+}
+.section-title em { font-style: italic; color: #1A3D8F; }
+.section-lead {
+    font-size: 15px;
+    line-height: 1.65;
+    color: #4A4A4A;
+    max-width: 680px;
+}
+
+/* ─── Diagnostic KPI — chiffre + accent ─────────────────────────────────── */
+.diagnostic-kpi {
+    background: #FFFFFF;
+    border: 1px solid #E8E6DD;
+    border-top: 3px solid #1A3D8F;
+    border-radius: 6px;
+    padding: 24px 28px;
+    transition: box-shadow 0.18s;
+}
+.diagnostic-kpi:hover { box-shadow: 0 4px 18px rgba(10,25,56,0.08); }
+.diagnostic-kpi-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #6B6B68;
+    font-weight: 600;
+    margin-bottom: 14px;
+}
+.diagnostic-kpi-value {
+    font-size: 58px;
+    font-weight: 200;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-feature-settings: 'tnum';
+    margin-bottom: 16px;
+}
+.diagnostic-kpi-value.crit  { color: var(--crit); }
+.diagnostic-kpi-value.inter { color: var(--inter); }
+.diagnostic-kpi-value.fav   { color: var(--fav); }
+
+/* ─── Reco cards — bordure de priorité à gauche ──────────────────────────── */
+.reco-card {
+    background: #FFFFFF;
+    border: 1px solid #E8E6DD;
+    border-left: none !important;
+    border-radius: 0 6px 6px 0;
+    padding: 24px 28px;
+    position: relative;
+    margin-bottom: 14px;
+    min-height: 200px;
+    transition: box-shadow 0.18s;
+}
+.reco-card:hover { box-shadow: 0 4px 18px rgba(10,25,56,0.07); }
+.reco-card.p1 { border-left: 4px solid var(--crit) !important;   border-radius: 0 6px 6px 0; }
+.reco-card.p2 { border-left: 4px solid var(--inter) !important;  border-radius: 0 6px 6px 0; }
+.reco-card.p3 { border-left: 4px solid var(--fav) !important;    border-radius: 0 6px 6px 0; }
+
+.reco-priority {
+    position: absolute;
+    top: 22px; right: 22px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 100px;
+}
+.reco-priority.p1 { background: var(--crit-soft);  color: var(--crit); }
+.reco-priority.p2 { background: var(--inter-soft); color: var(--inter); }
+.reco-priority.p3 { background: var(--fav-soft);   color: var(--fav); }
+
+.reco-title {
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+    padding-right: 90px;
+    color: #0A1938;
+}
+
+/* ─── Reco stats — micro-indicateurs ────────────────────────────────────── */
+.reco-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #F0EDE8;
+    flex-wrap: wrap;
+}
+.reco-stat {
+    flex: 1;
+    min-width: 80px;
+    background: #F8F7F3;
+    border-radius: 4px;
+    padding: 10px 14px;
+    text-align: center;
+}
+.reco-stat-value {
+    font-size: 20px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: #0A1938;
+    line-height: 1.1;
+    font-feature-settings: 'tnum';
+}
+.reco-stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: #6B6B68;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+/* ─── Délais cards — valeurs colorées + hover ────────────────────────────── */
+.delai-card {
+    background: #FFFFFF;
+    border: 1px solid #E8E6DD !important;
+    border-radius: 6px !important;
+    padding: 18px 20px;
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+.delai-card:hover {
+    box-shadow: 0 6px 20px rgba(10,25,56,0.09);
+    transform: translateY(-2px);
+}
+.delai-card .spec { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #0A1938; }
+.delai-card .dur  { font-size: 30px; font-weight: 200; letter-spacing: -0.03em; line-height: 1; }
+.delai-card .dur.crit  { color: var(--crit); }
+.delai-card .dur.inter { color: var(--inter); }
+.delai-card .dur.fav   { color: var(--fav); }
+.delai-card .dur .unit { font-size: 12px; color: #6B6B68; margin-left: 2px; font-weight: 400; }
+.delai-card .comp { font-size: 11px; margin-top: 6px; }
+.delai-card .comp.crit    { color: var(--crit); }
+.delai-card .comp.inter   { color: var(--inter); }
+.delai-card .comp.neutral { color: #6B6B68; }
+
+/* ─── Topbar breadcrumb ──────────────────────────────────────────────────── */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0 10px;
+    border-bottom: 1px solid #E8E6DD;
+    margin-bottom: 32px;
+}
+.breadcrumb {
+    font-size: 12px;
+    color: #6B6B68;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.breadcrumb a { color: #1A3D8F; text-decoration: none; font-weight: 500; }
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb .sep { color: #C9C6BA; font-size: 14px; }
+.breadcrumb .current { color: #0A0A0A; font-weight: 600; }
+
+/* ─── Download button — plus proéminent ─────────────────────────────────── */
+.stDownloadButton > button {
+    background: #0A1938 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 10px 20px !important;
+    letter-spacing: 0.02em !important;
+    transition: background 0.15s, box-shadow 0.15s !important;
+}
+.stDownloadButton > button:hover {
+    background: #1A3D8F !important;
+    box-shadow: 0 4px 14px rgba(26,61,143,0.25) !important;
+}
+
+/* ─── Patho-list — barres visuelles ─────────────────────────────────────── */
+.patho-list { margin: 4px 0 8px; }
+.patho-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #F0EDE8;
+}
+.patho-item:last-child { border-bottom: none; }
+.patho-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #0A1938;
+    margin-bottom: 4px;
+}
+.patho-val {
+    font-size: 11px;
+    color: #6B6B68;
+    margin-bottom: 6px;
+    font-feature-settings: 'tnum';
+}
+.patho-bar {
+    height: 5px;
+    background: #F0EDE8;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.patho-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+/* ─── Région ranking table ─────────────────────────────────────────────────── */
+.dept-rank-grid {
+    display: grid;
+    font-size: 13px;
+    border: 1px solid #E8E6DD;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.dept-rank-header {
+    background: #F3F2EC;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6B6B68;
+    padding: 10px 14px;
+    border-bottom: 1px solid #E8E6DD;
+}
+.dept-rank-row {
+    display: contents;
+}
+.dept-rank-row > * {
+    padding: 12px 14px;
+    border-bottom: 1px solid #F5F3EE;
+    display: flex;
+    align-items: center;
+}
+.dept-rank-row:last-child > * { border-bottom: none; }
+.dept-rank-row:nth-child(even) > * { background: #FAFAF8; }
