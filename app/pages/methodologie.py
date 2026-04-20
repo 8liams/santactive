@@ -83,64 +83,217 @@ def render(data: dict) -> None:
     # 2. SCORE GLOBAL
     # ══════════════════════════════════════════════════════════════════════════
 
-    _section(
-        "SCORING",
-        f'Comment on calcule {info_tooltip("score_global")} <em>le score global.</em>',
-    )
-    _prose(
-        "Le score global est un indicateur synthétique sur 100, calculé pour chacun "
-        "des 101 départements français. Il agrège trois dimensions pondérées :",
-        "<strong>Accès aux soins (35 %)</strong> : combinaison de l'APL (65 %) et du "
-        "temps d'accès médian aux établissements de santé (35 %), tous deux normalisés "
-        "en rang percentile.",
-        "<strong>Professionnels de santé (35 %)</strong> : densité de médecins "
-        "généralistes actifs pour 100\u202f000 habitants, normalisée en rang percentile.",
-        "<strong>Établissements de santé (30 %)</strong> : densité d'hôpitaux et "
-        "cliniques FINESS pour 100\u202f000 habitants, normalisée en rang percentile.",
-        "La normalisation utilise le rang percentile (méthode standard DREES) et non "
-        "la normalisation min-max. Cette décision évite que des valeurs extrêmes "
-        "(Paris, Guyane) écrasent l'échelle de tous les autres départements.",
-        "Les zones sont déterminées par terciles réels calculés sur l'ensemble des "
-        "101 départements : <strong>Zone Critique</strong> (≤ 33e percentile), "
-        "<strong>Zone Intermédiaire</strong> (tiers médian), "
-        "<strong>Zone Favorable</strong> (≥ 67e percentile).",
-        "Ce qui est exclu du score global : le score environnemental, disponible "
-        "uniquement à la maille régionale. L'appliquer à chaque département d'une "
-        "même région introduirait un biais. Il est affiché comme indicateur "
-        "informatif séparé.",
-    )
+    st.markdown("""
+<div class="section-header">
+    <div class="section-eyebrow">SCORING</div>
+    <h2 class="section-title">
+        Comment on calcule <em>le score global.</em>
+    </h2>
+    <p class="section-lead">
+        Le score Sant'active v2 est un indice composite sur 100,
+        calculé sur 6 dimensions à partir de données open data officielles.
+        Il permet de classer les 101 départements français et d'identifier
+        les zones prioritaires d'intervention.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="sa-tbl-scroll">'
-        '<table class="sources-table">'
-        "<thead><tr>"
-        "<th>Dimension</th><th>Indicateur</th><th>Poids</th>"
-        "<th>Source</th><th>Millésime</th>"
-        "</tr></thead>"
-        "<tbody>"
-        "<tr><td><strong>Accessibilité soins de ville</strong></td>"
-        "<td>APL médian départemental</td><td><strong>30 %</strong></td>"
-        "<td>ANCT / Observatoire des territoires</td><td>2023</td></tr>"
-        "<tr><td><strong>Densité médecins généralistes</strong></td>"
-        "<td>Médecins généralistes / 100 000 hab.</td><td><strong>20 %</strong></td>"
-        "<td>RPPS / DREES</td><td>Janv. 2026</td></tr>"
-        "<tr><td><strong>Accessibilité physique</strong></td>"
-        "<td>Temps d'accès médian à l'établissement le plus proche</td>"
-        "<td><strong>20 %</strong></td>"
-        "<td>Calcul interne FINESS + INSEE</td><td>2026</td></tr>"
-        "<tr><td><strong>Offre hospitalière</strong></td>"
-        "<td>Établissements FINESS / 100 000 hab.</td><td><strong>15 %</strong></td>"
-        "<td>FINESS / DREES</td><td>Mars 2026</td></tr>"
-        "<tr><td><strong>Pression démographique</strong></td>"
-        "<td>Part des 65 ans et plus (inversé)</td><td><strong>10 %</strong></td>"
-        "<td>INSEE RP</td><td>2021</td></tr>"
-        "<tr><td><strong>Contexte foncier</strong></td>"
-        "<td>Prix médian au m² (inversé)</td><td><strong>5 %</strong></td>"
-        "<td>DVF / DGFiP</td><td>2025</td></tr>"
-        "</tbody></table>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+<div style="max-width:720px;font-size:14px;line-height:1.8;
+            color:#2B2B2B;margin-bottom:32px;">
+    <p>
+        Chaque indicateur est normalisé en <strong>rang percentile</strong>
+        sur les 101 départements — méthode standard utilisée par la DREES
+        dans ses propres publications. Un score de 50 correspond exactement
+        à la médiane nationale. Un score de 100 correspond au meilleur
+        département sur cette dimension. Un score de 0 au pire.
+    </p>
+    <p>
+        La normalisation en rang percentile présente un avantage crucial
+        par rapport à la normalisation min-max : elle est insensible aux
+        valeurs extrêmes. Paris (APL 5.0) et la Guyane (APL 0.6) n'écrasent
+        pas l'échelle de tous les autres départements.
+    </p>
+    <p>
+        Le score final est une <strong>moyenne pondérée des 6 dimensions
+        disponibles</strong>. Si une dimension est manquante pour un
+        département (données insuffisantes), son poids est redistribué
+        proportionnellement sur les autres dimensions disponibles.
+        Un département avec moins de 3 dimensions disponibles ne reçoit
+        pas de score global calculé.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div style="border:1px solid #E8E6DD;border-radius:6px;
+            overflow:hidden;margin-bottom:32px;">
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                background:#0A1938;padding:12px 20px;gap:0;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;
+                    text-transform:uppercase;color:rgba(255,255,255,0.5);">DIMENSION</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;
+                    text-transform:uppercase;color:rgba(255,255,255,0.5);">POIDS</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;
+                    text-transform:uppercase;color:rgba(255,255,255,0.5);">
+                    INDICATEUR · SOURCE · MILLÉSIME</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;
+                    text-transform:uppercase;color:rgba(255,255,255,0.5);">DIRECTION</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;border-bottom:1px solid #E8E6DD;
+                background:white;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité soins de ville</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Dimension principale</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">30 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            APL médian départemental<br>
+            <span style="color:#9C9A92;">ANCT · Observatoire des territoires · 2023</span>
+        </div>
+        <div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;border-bottom:1px solid #E8E6DD;
+                background:#FAFAF8;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité physique</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Temps de trajet</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            Temps d'accès médian pondéré par population<br>
+            <span style="color:#9C9A92;">Calcul interne · FINESS mars 2026 + INSEE 2021</span>
+        </div>
+        <div style="font-size:12px;color:#A51C30;font-weight:600;">Bas = bon</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;border-bottom:1px solid #E8E6DD;
+                background:white;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Densité médecins généralistes</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Offre professionnelle</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            Médecins généralistes actifs pour 100\u202f000 hab.<br>
+            <span style="color:#9C9A92;">RPPS · DREES · janv. 2026</span>
+        </div>
+        <div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;border-bottom:1px solid #E8E6DD;
+                background:#FAFAF8;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Offre hospitalière</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Structures de soins</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">15 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            Hôpitaux + cliniques FINESS pour 100\u202f000 hab.<br>
+            <span style="color:#9C9A92;">FINESS · DREES · mars 2026</span>
+        </div>
+        <div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;border-bottom:1px solid #E8E6DD;
+                background:white;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Pression démographique</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Vieillissement de la population</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">10 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            Part des 65 ans et plus<br>
+            Les seniors consomment 4× plus de soins (DREES).<br>
+            <span style="color:#9C9A92;">INSEE · Recensement 2021</span>
+        </div>
+        <div style="font-size:12px;color:#A51C30;font-weight:600;">
+            Bas = bon<br>
+            <span style="font-weight:400;font-size:11px;color:#9C9A92;">
+                (fort vieillissement = forte demande)
+            </span>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;
+                padding:14px 20px;background:#FAFAF8;gap:0;align-items:start;">
+        <div>
+            <div style="font-size:13px;font-weight:700;color:#0A1938;">Contexte foncier</div>
+            <div style="font-size:11px;color:#9C9A92;margin-top:3px;">Attractivité à l'installation</div>
+        </div>
+        <div style="font-size:22px;font-weight:300;color:#1A3D8F;">5 %</div>
+        <div style="font-size:12px;color:#4B4B48;line-height:1.5;">
+            Prix médian au m² (DVF)<br>
+            Un foncier accessible facilite l'installation médicale.<br>
+            <span style="color:#9C9A92;">DVF · DGFiP · 2025</span>
+        </div>
+        <div style="font-size:12px;color:#A51C30;font-weight:600;">
+            Bas = bon<br>
+            <span style="font-weight:400;font-size:11px;color:#9C9A92;">
+                (prix bas = installation facilitée)
+            </span>
+        </div>
+    </div>
+
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px;">
+    <div style="padding:12px 20px;background:white;border:1px solid #E8E6DD;
+                border-radius:4px;border-top:3px solid #A51C30;">
+        <div style="font-size:12px;font-weight:700;color:#A51C30;">CRITIQUE</div>
+        <div style="font-size:12px;color:#6B6B68;margin-top:4px;">
+            Score ≤ 33e percentile<br>Tiers inférieur national
+        </div>
+    </div>
+    <div style="padding:12px 20px;background:white;border:1px solid #E8E6DD;
+                border-radius:4px;border-top:3px solid #E8A838;">
+        <div style="font-size:12px;font-weight:700;color:#E8A838;">INTERMÉDIAIRE</div>
+        <div style="font-size:12px;color:#6B6B68;margin-top:4px;">
+            33e → 67e percentile<br>Tiers médian national
+        </div>
+    </div>
+    <div style="padding:12px 20px;background:white;border:1px solid #E8E6DD;
+                border-radius:4px;border-top:3px solid #1B5E3F;">
+        <div style="font-size:12px;font-weight:700;color:#1B5E3F;">FAVORABLE</div>
+        <div style="font-size:12px;color:#6B6B68;margin-top:4px;">
+            Score ≥ 67e percentile<br>Tiers supérieur national
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div style="max-width:720px;padding:16px 20px;background:#F3F2EC;
+            border-radius:6px;font-size:13px;color:#4B4B48;
+            line-height:1.7;margin-bottom:32px;">
+    <strong style="color:#0A1938;display:block;margin-bottom:8px;">
+        Pourquoi ces 6 dimensions et ces pondérations ?
+    </strong>
+    L'APL reçoit le poids le plus fort (30 %) car c'est l'indicateur
+    le plus précis pour mesurer l'accès réel aux soins de ville —
+    il intègre simultanément l'offre, la demande et la distance.
+    Le temps d'accès et la densité médecins reçoivent chacun 20 %
+    car ils mesurent deux facettes complémentaires de l'accessibilité.
+    Les établissements hospitaliers (15 %) complètent avec l'offre
+    de soins secondaires. La pression démographique (10 %) et le
+    contexte foncier (5 %) sont des facteurs de contexte qui
+    modulent l'intensité du besoin et la capacité d'y répondre.
+    <br><br>
+    Ces pondérations sont <strong>transparentes et discutables</strong>.
+    Elles reflètent les priorités de Sant'active mais d'autres
+    pondérations seraient défendables selon les objectifs.
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:40px 0;'>",
                 unsafe_allow_html=True)

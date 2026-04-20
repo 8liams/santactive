@@ -274,13 +274,20 @@ def render(data: dict) -> None:
         ),
         (
             "CNAM · Ameli open data · 2023",
-            "Prévalence des pathologies chroniques par département",
+            "Prévalence des pathologies chroniques par département "
+            "(diabète, cardio, cancers, respiratoire, psychiatrique...)",
             "https://data.ameli.fr/",
         ),
         (
+            "ANSM · Base des médicaments · 2025",
+            "Base nationale des médicaments — consommation et prescriptions",
+            "https://base-donnees-publique.medicaments.gouv.fr/",
+        ),
+        (
             "DREES · Études et Résultats n°1085 · 2018",
-            "Enquête nationale sur les délais d'attente en médecine",
-            "https://drees.solidarites-sante.gouv.fr/",
+            "Enquête nationale sur les délais d'attente en médecine (40 000 personnes)",
+            "https://drees.solidarites-sante.gouv.fr/publications/etudes-et-resultats/"
+            "la-moitie-des-rendez-vous-sont-obtenus-en-2-jours-chez-le",
         ),
     ]
 
