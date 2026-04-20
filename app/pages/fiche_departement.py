@@ -1331,31 +1331,49 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         agg["mediane_nat"].replace(0, float("nan")) * 100
     ).round(0)
 
-    # ── Pathologies dominantes — libellés dynamiques RPPS ────────────────
-    _PATHO_MAP = _build_patho_to_spec(pros)
+    # ── Top 5 pathologies via patho_niv1 → spécialistes RPPS ────────────
+    # Règles : (fragment_patho_niv1, label_affiché, keywords_RPPS)
+    _PATHO_RULES = [
+        ("ardio",      "Maladies cardiovasculaires",        ["cardio", "cardiolog"]),
+        ("iab\u00e8te","Diab\u00e8te",                      ["endocrin", "diab\u00e9to", "diabeto"]),
+        ("sychiatr",   "Maladies psychiatriques",           ["psychiatr", "p\u00e9dopsychiatr"]),
+        ("espira",     "Maladies respiratoires chroniques", ["pneumo"]),
+        ("ancer",      "Cancers",                           ["onco", "h\u00e9mato", "hemato", "canc\u00e9ro"]),
+        ("phtalmolog", "Affections ophtalmologiques",       ["ophtalmo"]),
+        ("humatolog",  "Rhumatologie",                      ["rhumato"]),
+        ("eurologiq",  "Neurologie",                        ["neurolo"]),
+    ]
+
+    # Libellés RPPS réels pour chaque famille de spécialistes
+    _all_rpps = pros["specialite_libelle"].dropna().unique().tolist()
+
+    def _find_rpps(keywords: list[str]) -> list[str]:
+        return [s for s in _all_rpps if any(kw.lower() in s.lower() for kw in keywords)]
+
+    # Calcule la prévalence locale et construit top5_pathos
+    # [(patho_label, prev_pct, rpps_spec_list)]
+    top5_pathos: list[tuple[str, float, list[str]]] = []
 
     patho_data = data.get("patho")
-    top_pathos = {}
-    nat_patho  = {}
-
     if patho_data is not None and not patho_data.empty:
-        dept_patho = patho_data[
+        dp = patho_data[
             patho_data["dept"].astype(str).str.zfill(2) == dept_code
-        ]
-        if not dept_patho.empty:
-            row_p = dept_patho.iloc[0]
-            for pk in _PATHO_MAP:
-                val = float(row_p.get(pk, 0) or 0)
-                if val > 0:
-                    top_pathos[pk] = val
-                    nat_patho[pk]  = float(
-                        patho_data[pk].median()
-                        if pk in patho_data.columns else 0
-                    )
-
-    top5_pathos = sorted(
-        top_pathos.items(), key=lambda x: x[1], reverse=True
-    )[:5]
+        ].copy()
+        if not dp.empty:
+            dg = dp.groupby("patho_niv1")[["Ntop", "Npop"]].sum().reset_index()
+            dg["prev"] = (
+                dg["Ntop"] / dg["Npop"].replace(0, float("nan")) * 100
+            )
+            candidates = []
+            for frag, label, kws in _PATHO_RULES:
+                mask = dg["patho_niv1"].str.contains(
+                    frag, case=False, na=False, regex=False
+                )
+                if mask.any():
+                    prev = float(dg.loc[mask, "prev"].max())
+                    if prev > 0:
+                        candidates.append((label, prev, _find_rpps(kws)))
+            top5_pathos = sorted(candidates, key=lambda x: x[1], reverse=True)[:5]
 
     # ── Calcul du besoin réel (APL-aware pour les généralistes) ──────────
     def besoin_reel(dept_val, nat_val, patho_key=None, spec_nom=""):
@@ -1371,14 +1389,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         # Cas standard
         if nat_val <= 0 or dept_val >= nat_val:
             return None
-        deficit = (nat_val - dept_val) * population / 100_000
-        facteur = 1.0
-        if patho_key and patho_key in top_pathos:
-            taux_d = top_pathos[patho_key]
-            taux_n = nat_patho.get(patho_key, taux_d)
-            if taux_n > 0:
-                facteur = max(1.0, min(1 + (taux_d - taux_n) / taux_n, 2.5))
-        result = min(int(round(deficit * facteur)), 60)
+        result = min(int(round((nat_val - dept_val) * population / 100_000)), 60)
         return result if result > 0 else None
 
     # ── Fonction render d'une ligne ───────────────────────────────────────
@@ -1505,58 +1516,40 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         "TOP 5 \u00b7 SP\u00c9CIALISTES LI\u00c9S AUX PATHOLOGIES PR\u00c9DOMINANTES"
     )
 
-    _FALLBACK_NOM = {
-        "prev_cardio":        "Cardiologue",
-        "prev_diabete":       "Endocrinologue / Diab\u00e9tologue",
-        "prev_psychiatrique": "Psychiatre",
-        "prev_respiratoire":  "Pneumologue",
-        "prev_cancers":       "Oncologue",
-        "prev_rhumatologie":  "Rhumatologue",
-        "prev_neurologie":    "Neurologue",
-        "prev_ophtalmologie": "Ophtalmologiste",
-    }
-
     spec_count = 0
-    for pk, taux in top5_pathos:
+    for patho_label, prev_val, spec_list in top5_pathos:
         if spec_count >= 5:
             break
-        cfg = _PATHO_MAP.get(pk)
-        if not cfg:
-            continue
-        patho_label = cfg["label"]
-        spec_list   = cfg["specialites"]
 
-        # Fallback si aucun libellé trouvé dans le RPPS national
+        # Fallback si aucun libellé RPPS trouvé pour cette famille
         if not spec_list:
             table_html += render_row(
-                spec_nom=_FALLBACK_NOM.get(pk, "Sp\u00e9cialiste"),
+                spec_nom="Sp\u00e9cialiste",
                 nb=0, pour_100k=0.0, med_nat=0.0,
-                patho_label=patho_label, patho_key=pk,
+                patho_label=patho_label, patho_key=None,
                 idx=spec_count, is_absent=True,
             )
             spec_count += 1
             continue
 
         # Premier libellé exact trouvé dans le RPPS
-        for spec_exact in spec_list[:1]:
-            if spec_count >= 5:
-                break
-            match = agg[agg["specialite"] == spec_exact]
-            if not match.empty:
-                row_s = match.iloc[0]
-                table_html += render_row(
-                    spec_nom=row_s["specialite"], nb=int(row_s["nb"]),
-                    pour_100k=float(row_s["pour_100k"]),
-                    med_nat=float(row_s["mediane_nat"]),
-                    patho_label=patho_label, patho_key=pk, idx=spec_count,
-                )
-            else:
-                table_html += render_row(
-                    spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
-                    patho_label=patho_label, patho_key=pk,
-                    idx=spec_count, is_absent=True,
-                )
-            spec_count += 1
+        spec_exact = spec_list[0]
+        match = agg[agg["specialite"] == spec_exact]
+        if not match.empty:
+            row_s = match.iloc[0]
+            table_html += render_row(
+                spec_nom=row_s["specialite"], nb=int(row_s["nb"]),
+                pour_100k=float(row_s["pour_100k"]),
+                med_nat=float(row_s["mediane_nat"]),
+                patho_label=patho_label, patho_key=None, idx=spec_count,
+            )
+        else:
+            table_html += render_row(
+                spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
+                patho_label=patho_label, patho_key=None,
+                idx=spec_count, is_absent=True,
+            )
+        spec_count += 1
 
     table_html += "</div>"
     st.markdown(table_html, unsafe_allow_html=True)
