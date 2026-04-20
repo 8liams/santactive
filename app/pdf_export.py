@@ -466,11 +466,16 @@ def generate_department_pdf(
     if recos:
         _section_heading("Plan d'action recommandé", story)
 
-        prio_colors = {"P1": ROUGE_CRIT, "P2": AMBRE, "P3": BLEU_ROYAL}
+        _prio_col_map = {
+            1: ROUGE_CRIT, "P1": ROUGE_CRIT,
+            2: AMBRE,      "P2": AMBRE,
+            3: BLEU_ROYAL, "P3": BLEU_ROYAL,
+        }
 
         for i, reco in enumerate(recos[:4], 1):
-            prio      = reco.get("priority", f"P{i}")
-            badge_col = prio_colors.get(prio, BLEU_ROYAL)
+            prio_raw  = reco.get("priority", i)
+            prio_lbl  = f"P{prio_raw}" if isinstance(prio_raw, int) else str(prio_raw)
+            badge_col = _prio_col_map.get(prio_raw, BLEU_ROYAL)
             stats     = reco.get("stats", [])
 
             content = [
@@ -512,7 +517,7 @@ def generate_department_pdf(
 
             reco_tbl = Table([[
                 Paragraph(
-                    f'<b><font size="12" color="#{_hex(badge_col)}">{prio}</font></b>',
+                    f'<b><font size="12" color="#{_hex(badge_col)}">{prio_lbl}</font></b>',
                     _s(f"rb{i}", fontName="Helvetica-Bold", fontSize=12,
                        alignment=TA_CENTER, textColor=badge_col),
                 ),
