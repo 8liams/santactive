@@ -250,7 +250,7 @@ elif view == "comparer":
 else:
     navigate("home")
 
-# ─── BOTTOM NAV MOBILE — remplace la sidebar sur petit écran ──────────────────
+# ─── TOP NAV MOBILE — remplace la sidebar sur petit écran ────────────────────
 _nav_items = [
     ("home",        "🏠", "Accueil"),
     ("enjeux",      "⚡", "Enjeux"),
