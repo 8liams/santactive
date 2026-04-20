@@ -223,16 +223,19 @@ DOM_CONFIG = {
 
 def render_dom_cartouches(
     master: pd.DataFrame,
-    geojson_dom: dict | None,
+    geojson_dom: dict | None = None,  # non utilisé — conservé pour compatibilité
     metric: str = "score_global",
     colormap_name: str = "score",
     reverse: bool = False,
     height: int = 180,
 ) -> None:
-    """Affiche 5 mini-cartes DOM en ligne sous la carte nationale."""
-    if geojson_dom is None:
-        return
+    """Affiche 5 mini-cartes DOM en ligne sous la carte nationale.
 
+    Les contours sont récupérés depuis geo.api.gouv.fr (communes),
+    car le GeoJSON national ne contient pas les DOM.
+    Toutes les communes d'un DOM sont colorées avec la couleur
+    du score du département.
+    """
     # Prépare les données métriques par code département
     data_map: dict[str, float] = {}
     if not master.empty and metric in master.columns:
@@ -254,14 +257,6 @@ def render_dom_cartouches(
     if reverse:
         colors = list(reversed(colors))
     cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
-
-    # Filtre une fois toutes les features DOM du GeoJSON national
-    all_features = geojson_dom.get("features", [])
-    dom_features_by_code: dict[str, list] = {c: [] for c in DOM_CONFIG}
-    for feat in all_features:
-        code = str(feat["properties"].get("code", ""))
-        if code in DOM_CONFIG:
-            dom_features_by_code[code].append(feat)
 
     cols = st.columns(5)
 
@@ -289,8 +284,9 @@ def render_dom_cartouches(
                 unsafe_allow_html=True,
             )
 
-            features = dom_features_by_code.get(code_dom, [])
-            if not features:
+            # Contours communaux pour ce DOM (mis en cache)
+            geojson = _fetch_communes_geojson(code_dom)
+            if geojson is None or not geojson.get("features"):
                 st.markdown(
                     f'<div style="height:{height}px;background:#F3F2EC;'
                     f'border-radius:4px;display:flex;align-items:center;'
@@ -300,24 +296,17 @@ def render_dom_cartouches(
                 )
                 continue
 
-            dom_geojson = {"type": "FeatureCollection", "features": features}
+            # Couleur uniforme = score du département
+            dept_color = "#E8E6DD"
+            if score_val is not None:
+                try:
+                    dept_color = cmap(score_val)
+                except Exception:
+                    dept_color = "#E8E6DD"
 
-            # Pré-calcul couleurs
-            code_to_color: dict[str, str] = {}
-            for feat in features:
-                fcode = str(feat["properties"].get("code", ""))
-                val = data_map.get(fcode)
-                if val is not None:
-                    try:
-                        code_to_color[fcode] = cmap(val)
-                    except Exception:
-                        code_to_color[fcode] = "#E8E6DD"
-
-            def _style(feature, _ctc=code_to_color):
-                fcode = str(feature["properties"].get("code", ""))
-                color = _ctc.get(fcode, "#E8E6DD")
-                return {"fillColor": color, "color": "#FFFFFF",
-                        "weight": 0.8, "fillOpacity": 0.88}
+            def _style(feature, _color=dept_color):
+                return {"fillColor": _color, "color": "#FFFFFF",
+                        "weight": 0.5, "fillOpacity": 0.88}
 
             def _highlight(feature):
                 return {"fillColor": "#0A1938", "color": "#0A1938",
@@ -336,12 +325,12 @@ def render_dom_cartouches(
             )
 
             folium.GeoJson(
-                dom_geojson,
+                geojson,
                 style_function=_style,
                 highlight_function=_highlight,
                 tooltip=folium.GeoJsonTooltip(
-                    fields=["code"],
-                    aliases=["Code"],
+                    fields=["nom", "code"],
+                    aliases=["Commune", "Code INSEE"],
                     localize=True,
                     sticky=False,
                     class_name="sa-tooltip",
