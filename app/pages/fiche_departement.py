@@ -369,54 +369,54 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
 
     st.markdown(f'<div class="scorecard-block">{rows_html}</div>', unsafe_allow_html=True)
 
-    # ── Tableau détail 6 dimensions Sant'active v2 ───────────────────────
+    # ── Détail 6 dimensions dans un expander ─────────────────────────────
     breakdown = get_score_breakdown(r)
 
-    detail_rows = ""
-    for dim in breakdown:
-        if dim["score"] is None:
-            score_display = "N/D"
-            bar_width     = 0
-            color         = "#E8E6DD"
-            txt_color     = "#9C9A92"
-        else:
-            score_display = f"{dim['score']:.0f}/100"
-            bar_width     = int(dim["score"])
-            color = (
-                "#A51C30" if dim["score"] < 33
-                else "#E8A838" if dim["score"] < 67
-                else "#1B5E3F"
+    with st.expander("Voir le détail des 6 dimensions →", expanded=False):
+        rows_html = ""
+        for dim in breakdown:
+            if dim["score"] is None:
+                score_display = "N/D"
+                bar_width = 0
+                color = "#E8E6DD"
+            else:
+                score_display = f"{dim['score']:.0f}/100"
+                bar_width = int(dim["score"])
+                color = (
+                    "#A51C30" if dim["score"] < 33
+                    else "#E8A838" if dim["score"] < 67
+                    else "#1B5E3F"
+                )
+
+            rows_html += (
+                f'<div style="display:flex;align-items:center;gap:16px;'
+                f'padding:10px 0;border-bottom:1px solid #E8E6DD;">'
+                f'<div style="width:200px;font-size:13px;color:#2B2B2B;'
+                f'font-weight:500;flex-shrink:0;">{dim["label"]}</div>'
+                f'<div style="flex:1;height:4px;background:#E8E6DD;'
+                f'border-radius:2px;overflow:hidden;">'
+                f'<div style="width:{bar_width}%;height:100%;'
+                f'background:{color};border-radius:2px;"></div></div>'
+                f'<div style="width:60px;text-align:right;font-size:13px;'
+                f'color:{color};font-weight:600;flex-shrink:0;">{score_display}</div>'
+                f'<div style="width:32px;text-align:right;font-size:11px;'
+                f'color:#9C9A92;flex-shrink:0;">{int(dim["weight"] * 100)}%</div>'
+                f'</div>'
             )
-            txt_color = color
 
-        detail_rows += (
-            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
-            f'<div style="width:170px;font-size:12px;color:#2B2B2B;font-weight:500;flex-shrink:0;">'
-            f'{dim["label"]}'
-            f'</div>'
-            f'<div style="flex:1;height:6px;background:#E8E6DD;border-radius:3px;overflow:hidden;">'
-            f'<div style="width:{bar_width}%;height:100%;background:{color};border-radius:3px;"></div>'
-            f'</div>'
-            f'<div style="width:55px;text-align:right;font-size:12px;color:{txt_color};font-weight:600;">'
-            f'{score_display}'
-            f'</div>'
-            f'<div style="width:36px;text-align:right;font-size:11px;color:#9C9A92;">'
-            f'{int(dim["weight"] * 100)}\u202f%'
-            f'</div>'
-            f'</div>'
+        st.markdown(
+            f'<div style="padding:4px 0;">{rows_html}</div>',
+            unsafe_allow_html=True,
         )
-
-    st.markdown(
-        '<div style="margin-top:24px;padding:16px 20px;background:#F3F2EC;'
-        'border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:#6B6B68;margin-bottom:14px;">'
-        "DÉTAIL · SANT'ACTIVE v2 · 6 DIMENSIONS"
-        '</div>'
-        f'{detail_rows}'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        st.markdown(
+            '<div style="margin-top:12px;font-size:11px;color:#9C9A92;line-height:1.6;">'
+            "Score Sant'active v2 · 6 dimensions normalisées en rang percentile national. "
+            "0\u202f= pire département · 100\u202f= meilleur. "
+            "Pondérations\u202f: APL 30\u202f% · Temps d'accès 20\u202f% · Médecins 20\u202f%"
+            " · Établissements 15\u202f% · Vieillissement 10\u202f% · Foncier 5\u202f%."
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

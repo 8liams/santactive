@@ -140,6 +140,31 @@ html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] *,
 .alert-ok       { background: #DFFEE6; border-color: #00A878; color: #003D1F; }
 .alert-info     { background: #E8EDF8; border-color: #1A3D8F; color: #0F1E4A; }
 
+/* ─── Expander scorecard ─────────────────────────────────────────────────── */
+div[data-testid="stExpander"] {
+    border: 1px solid #E8E6DD !important;
+    border-radius: 6px !important;
+    background: white !important;
+    box-shadow: none !important;
+    margin-top: 12px !important;
+}
+div[data-testid="stExpander"] summary {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #1A3D8F !important;
+    padding: 12px 16px !important;
+    font-family: Marianne, sans-serif !important;
+}
+div[data-testid="stExpander"] summary:hover {
+    color: #0A1938 !important;
+}
+div[data-testid="stExpander"] > div:last-child {
+    padding: 0 16px 16px !important;
+}
+div[data-testid="stExpander"] > div {
+    background: white !important;
+}
+
 /* ─── Boutons & formulaires ───────────────────────────────────────────────── */
 .stButton > button, .stDownloadButton > button {
     background: #1A3D8F;
