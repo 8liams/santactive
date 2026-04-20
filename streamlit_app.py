@@ -33,7 +33,7 @@ st.set_page_config(
     page_title="Sant'active",
     page_icon=str(_logo_path) if _logo_path.exists() else "🏥",
     layout="wide",
-    initial_sidebar_state="expanded",  # toujours ouverte (boutons collapse masqués)
+    initial_sidebar_state="auto",  # auto = rétractée sur mobile, ouverte sur desktop
     menu_items={
         "Get Help": None,
         "Report a bug": None,
