@@ -1488,7 +1488,9 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     ]
 
     table_html = (
-        f'<div style="border:1px solid #E8E6DD;border-radius:6px;overflow:hidden;">'
+        '<div class="sa-tbl-scroll">'
+        '<div style="min-width:520px;border:1px solid #E8E6DD;'
+        'border-radius:6px;overflow:hidden;">'
         f'{header}'
     )
 
@@ -1551,7 +1553,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             )
         spec_count += 1
 
-    table_html += "</div>"
+    table_html += "</div></div>"  # ferme inner div + sa-tbl-scroll
     st.markdown(table_html, unsafe_allow_html=True)
 
     # ── Bandeau paradoxe RPPS/APL ─────────────────────────────────────────

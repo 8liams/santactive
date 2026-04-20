@@ -1817,6 +1817,21 @@ div[data-testid="stRadio"] svg { display: none !important; }
         max-width: 100% !important;
     }
 
+    /* ── Mini-cartes DOM-TOM : scroll horizontal, pas de retour à la ligne ─ */
+    [data-testid="stHorizontalBlock"]:has(iframe) {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 6px !important;
+        padding-bottom: 6px !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(iframe)
+        > [data-testid="stColumn"] {
+        min-width: 130px !important;
+        max-width: 130px !important;
+        flex: 0 0 130px !important;
+    }
+
     /* ── Tooltips : popup centrée fixe sur mobile ────────────────────────── */
     .sa-tip-box {
         position: fixed !important;
