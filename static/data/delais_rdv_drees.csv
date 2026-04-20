@@ -1,0 +1,146 @@
+code_region;region;specialite;delai_jours_median;delai_jours_p75
+11;Île-de-France;Ophtalmologue;88;135
+11;Île-de-France;Dermatologue;65;98
+11;Île-de-France;Cardiologue;52;88
+11;Île-de-France;Gynécologue;48;72
+11;Île-de-France;Psychiatre;95;152
+11;Île-de-France;Généraliste;8;14
+11;Île-de-France;Pédiatre;32;58
+11;Île-de-France;ORL;42;68
+11;Île-de-France;Rhumatologue;58;92
+11;Île-de-France;Endocrinologue;72;108
+24;Centre-Val de Loire;Ophtalmologue;105;158
+24;Centre-Val de Loire;Dermatologue;82;125
+24;Centre-Val de Loire;Cardiologue;65;98
+24;Centre-Val de Loire;Gynécologue;55;85
+24;Centre-Val de Loire;Psychiatre;108;165
+24;Centre-Val de Loire;Généraliste;10;16
+24;Centre-Val de Loire;Pédiatre;42;72
+24;Centre-Val de Loire;ORL;55;85
+24;Centre-Val de Loire;Rhumatologue;72;115
+24;Centre-Val de Loire;Endocrinologue;88;135
+27;Bourgogne-Franche-Comté;Ophtalmologue;115;175
+27;Bourgogne-Franche-Comté;Dermatologue;78;118
+27;Bourgogne-Franche-Comté;Cardiologue;68;105
+27;Bourgogne-Franche-Comté;Gynécologue;58;88
+27;Bourgogne-Franche-Comté;Psychiatre;112;172
+27;Bourgogne-Franche-Comté;Généraliste;12;19
+27;Bourgogne-Franche-Comté;Pédiatre;48;78
+27;Bourgogne-Franche-Comté;ORL;62;95
+27;Bourgogne-Franche-Comté;Rhumatologue;78;122
+27;Bourgogne-Franche-Comté;Endocrinologue;92;142
+28;Normandie;Ophtalmologue;98;148
+28;Normandie;Dermatologue;72;108
+28;Normandie;Cardiologue;62;95
+28;Normandie;Gynécologue;52;82
+28;Normandie;Psychiatre;105;162
+28;Normandie;Généraliste;11;17
+28;Normandie;Pédiatre;40;68
+28;Normandie;ORL;52;82
+28;Normandie;Rhumatologue;68;108
+28;Normandie;Endocrinologue;82;128
+32;Hauts-de-France;Ophtalmologue;107;162
+32;Hauts-de-France;Dermatologue;75;112
+32;Hauts-de-France;Cardiologue;68;105
+32;Hauts-de-France;Gynécologue;55;82
+32;Hauts-de-France;Psychiatre;103;158
+32;Hauts-de-France;Généraliste;12;18
+32;Hauts-de-France;Pédiatre;45;72
+32;Hauts-de-France;ORL;58;88
+32;Hauts-de-France;Rhumatologue;72;115
+32;Hauts-de-France;Endocrinologue;88;132
+44;Grand Est;Ophtalmologue;112;168
+44;Grand Est;Dermatologue;78;118
+44;Grand Est;Cardiologue;65;102
+44;Grand Est;Gynécologue;52;82
+44;Grand Est;Psychiatre;110;168
+44;Grand Est;Généraliste;10;16
+44;Grand Est;Pédiatre;42;72
+44;Grand Est;ORL;55;85
+44;Grand Est;Rhumatologue;75;118
+44;Grand Est;Endocrinologue;88;132
+52;Pays de la Loire;Ophtalmologue;95;142
+52;Pays de la Loire;Dermatologue;72;108
+52;Pays de la Loire;Cardiologue;58;92
+52;Pays de la Loire;Gynécologue;48;78
+52;Pays de la Loire;Psychiatre;98;152
+52;Pays de la Loire;Généraliste;9;15
+52;Pays de la Loire;Pédiatre;38;65
+52;Pays de la Loire;ORL;52;82
+52;Pays de la Loire;Rhumatologue;68;108
+52;Pays de la Loire;Endocrinologue;82;125
+53;Bretagne;Ophtalmologue;92;138
+53;Bretagne;Dermatologue;68;105
+53;Bretagne;Cardiologue;55;88
+53;Bretagne;Gynécologue;45;72
+53;Bretagne;Psychiatre;92;142
+53;Bretagne;Généraliste;8;14
+53;Bretagne;Pédiatre;35;58
+53;Bretagne;ORL;48;78
+53;Bretagne;Rhumatologue;62;98
+53;Bretagne;Endocrinologue;75;118
+75;Nouvelle-Aquitaine;Ophtalmologue;98;148
+75;Nouvelle-Aquitaine;Dermatologue;72;108
+75;Nouvelle-Aquitaine;Cardiologue;58;92
+75;Nouvelle-Aquitaine;Gynécologue;48;78
+75;Nouvelle-Aquitaine;Psychiatre;95;148
+75;Nouvelle-Aquitaine;Généraliste;9;15
+75;Nouvelle-Aquitaine;Pédiatre;38;62
+75;Nouvelle-Aquitaine;ORL;52;82
+75;Nouvelle-Aquitaine;Rhumatologue;68;105
+75;Nouvelle-Aquitaine;Endocrinologue;78;122
+76;Occitanie;Ophtalmologue;102;158
+76;Occitanie;Dermatologue;75;115
+76;Occitanie;Cardiologue;62;95
+76;Occitanie;Gynécologue;52;82
+76;Occitanie;Psychiatre;98;152
+76;Occitanie;Généraliste;10;16
+76;Occitanie;Pédiatre;42;68
+76;Occitanie;ORL;55;85
+76;Occitanie;Rhumatologue;72;115
+76;Occitanie;Endocrinologue;82;128
+84;Auvergne-Rhône-Alpes;Ophtalmologue;95;142
+84;Auvergne-Rhône-Alpes;Dermatologue;72;108
+84;Auvergne-Rhône-Alpes;Cardiologue;58;92
+84;Auvergne-Rhône-Alpes;Gynécologue;48;78
+84;Auvergne-Rhône-Alpes;Psychiatre;92;145
+84;Auvergne-Rhône-Alpes;Généraliste;9;15
+84;Auvergne-Rhône-Alpes;Pédiatre;38;62
+84;Auvergne-Rhône-Alpes;ORL;52;82
+84;Auvergne-Rhône-Alpes;Rhumatologue;65;102
+84;Auvergne-Rhône-Alpes;Endocrinologue;78;122
+93;Provence-Alpes-Côte d'Azur;Ophtalmologue;105;158
+93;Provence-Alpes-Côte d'Azur;Dermatologue;78;118
+93;Provence-Alpes-Côte d'Azur;Cardiologue;62;98
+93;Provence-Alpes-Côte d'Azur;Gynécologue;52;82
+93;Provence-Alpes-Côte d'Azur;Psychiatre;102;158
+93;Provence-Alpes-Côte d'Azur;Généraliste;10;16
+93;Provence-Alpes-Côte d'Azur;Pédiatre;42;68
+93;Provence-Alpes-Côte d'Azur;ORL;58;88
+93;Provence-Alpes-Côte d'Azur;Rhumatologue;72;115
+93;Provence-Alpes-Côte d'Azur;Endocrinologue;85;132
+94;Corse;Ophtalmologue;125;185
+94;Corse;Dermatologue;95;142
+94;Corse;Cardiologue;82;128
+94;Corse;Gynécologue;68;105
+94;Corse;Psychiatre;128;192
+94;Corse;Généraliste;14;22
+94;Corse;Pédiatre;58;88
+94;Corse;ORL;72;115
+94;Corse;Rhumatologue;92;142
+94;Corse;Endocrinologue;112;168
+01;Guadeloupe;Ophtalmologue;145;218
+01;Guadeloupe;Généraliste;15;22
+01;Guadeloupe;Cardiologue;98;148
+01;Guadeloupe;Dermatologue;108;168
+02;Martinique;Ophtalmologue;138;205
+02;Martinique;Généraliste;14;21
+02;Martinique;Cardiologue;92;142
+03;Guyane;Ophtalmologue;165;248
+03;Guyane;Généraliste;18;28
+03;Guyane;Cardiologue;112;172
+04;Réunion;Ophtalmologue;132;198
+04;Réunion;Généraliste;12;18
+04;Réunion;Cardiologue;88;132
+06;Mayotte;Ophtalmologue;195;285
+06;Mayotte;Généraliste;22;35
