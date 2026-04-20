@@ -324,6 +324,15 @@ def render_dom_cartouches(
                 touchZoom=False,
             )
 
+            # Masque l'attribution Leaflet (trop grande sur les mini-cartes)
+            m.get_root().header.add_child(
+                folium.Element(
+                    "<style>"
+                    ".leaflet-control-attribution{display:none!important;}"
+                    "</style>"
+                )
+            )
+
             folium.GeoJson(
                 geojson,
                 style_function=_style,
