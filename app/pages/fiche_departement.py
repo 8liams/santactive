@@ -429,10 +429,12 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
     _render_bar("Accessibilité physique", "Temps trajet établissement",
                 score_temps, val_temps, "min", indent=True)
 
-    _render_bar("Professionnels de santé", "RPPS, hors remplaçants",
-                score_pros, val_pros, "/100k", tooltip_key="med_100k")
-    _render_bar("Médecins généralistes /100k", "Densité RPPS janv. 2026",
-                score_med, val_pros, "/100k", indent=True)
+    _render_bar(
+        "Professionnels de santé",
+        (f"RPPS toutes spéc. · {val_pros:.0f}\u202f/100k"
+         + (f" · APL libéraux\u202f: {val_apl:.1f}/hab." if val_apl else "")),
+        score_pros, val_pros, "/100k", tooltip_key="med_100k",
+    )
 
     _render_bar("Établissements", "Hôpitaux + cliniques FINESS",
                 score_etabs, val_etabs, "/100k")
@@ -1219,6 +1221,59 @@ SPEC_PRIMAIRES = [
 ]
 
 
+def _build_patho_to_spec(pros_df: pd.DataFrame) -> dict:
+    """Construit le mapping pathologie → libellés RPPS réels présents dans les données."""
+    spec_col = (
+        "specialite_libelle" if "specialite_libelle" in pros_df.columns
+        else "specialite" if "specialite" in pros_df.columns
+        else pros_df.columns[-1]
+    )
+    all_specs = pros_df[spec_col].dropna().unique().tolist()
+
+    def find_specs(keywords: list[str]) -> list[str]:
+        result = []
+        for spec in all_specs:
+            sl = spec.lower()
+            if any(kw.lower() in sl for kw in keywords):
+                result.append(spec)
+        return result
+
+    return {
+        "prev_cardio": {
+            "label":     "Maladies cardiovasculaires",
+            "specialites": find_specs(["cardio", "cardiolog"]),
+        },
+        "prev_diabete": {
+            "label":     "Diabète",
+            "specialites": find_specs(["endocrin", "diab\u00e9to", "diabeto"]),
+        },
+        "prev_psychiatrique": {
+            "label":     "Maladies psychiatriques",
+            "specialites": find_specs(["psychiatr", "p\u00e9dopsychiatr"]),
+        },
+        "prev_respiratoire": {
+            "label":     "Maladies respiratoires chroniques",
+            "specialites": find_specs(["pneumo"]),
+        },
+        "prev_cancers": {
+            "label":     "Cancers",
+            "specialites": find_specs(["onco", "h\u00e9mato", "hemato", "canc\u00e9ro"]),
+        },
+        "prev_rhumatologie": {
+            "label":     "Rhumatologie",
+            "specialites": find_specs(["rhumato"]),
+        },
+        "prev_neurologie": {
+            "label":     "Neurologie",
+            "specialites": find_specs(["neurolo"]),
+        },
+        "prev_ophtalmologie": {
+            "label":     "Ophtalmologie",
+            "specialites": find_specs(["ophtalmo"]),
+        },
+    }
+
+
 def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
     st.markdown(
@@ -1236,6 +1291,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
     dept_code  = str(r.get("dept", "")).zfill(2)
     population = float(r.get("population_num", 300_000) or 300_000)
+    apl_val    = float(r.get("apl_median_dept", 3.0) or 3.0)
     pros       = data.get("pros")
 
     if pros is None or pros.empty:
@@ -1243,7 +1299,6 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         return
 
     # ── Agrégation RPPS pour ce département ──────────────────────────────
-    # pros contient les colonnes : dept, specialite_libelle
     pros_dept = pros[pros["dept"].astype(str) == dept_code].copy()
 
     agg = (
@@ -1263,9 +1318,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     nat_by_dept["pop"] = nat_by_dept["dept"].map(
         lambda x: float(pop_map.get(str(x), 300_000) or 300_000)
     )
-    nat_by_dept["densite"] = (
-        nat_by_dept["nb_dept"] / nat_by_dept["pop"] * 100_000
-    )
+    nat_by_dept["densite"] = nat_by_dept["nb_dept"] / nat_by_dept["pop"] * 100_000
     nat_medians = (
         nat_by_dept.groupby("specialite")["densite"]
         .median().reset_index()
@@ -1278,17 +1331,8 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         agg["mediane_nat"].replace(0, float("nan")) * 100
     ).round(0)
 
-    # ── Pathologies dominantes ────────────────────────────────────────────
-    _PATHO_MAP = {
-        "prev_cardio":        ("Maladies cardiovasculaires", ["Cardiologue"]),
-        "prev_diabete":       ("Diabète",                   ["Endocrinologue"]),
-        "prev_psychiatrique": ("Maladies psychiatriques",   ["Psychiatre"]),
-        "prev_respiratoire":  ("Maladies respiratoires",    ["Pneumologue"]),
-        "prev_cancers":       ("Cancers",                   ["Oncologue médical", "Hématologue"]),
-        "prev_rhumatologie":  ("Rhumatologie",              ["Rhumatologue"]),
-        "prev_neurologie":    ("Neurologie",                ["Neurologue"]),
-        "prev_ophtalmologie": ("Ophtalmologie",             ["Ophtalmologiste"]),
-    }
+    # ── Pathologies dominantes — libellés dynamiques RPPS ────────────────
+    _PATHO_MAP = _build_patho_to_spec(pros)
 
     patho_data = data.get("patho")
     top_pathos = {}
@@ -1313,8 +1357,18 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         top_pathos.items(), key=lambda x: x[1], reverse=True
     )[:5]
 
-    # ── Calcul du besoin réel ─────────────────────────────────────────────
-    def besoin_reel(dept_val, nat_val, patho_key=None):
+    # ── Calcul du besoin réel (APL-aware pour les généralistes) ──────────
+    def besoin_reel(dept_val, nat_val, patho_key=None, spec_nom=""):
+        is_generaliste = "g\u00e9n\u00e9raliste" in spec_nom.lower()
+        apl_nat        = 2.9
+
+        # Paradoxe RPPS/APL : RPPS ok mais désert médical → base APL
+        if is_generaliste and apl_val < 2.5:
+            deficit_apl = max(0.0, apl_nat - apl_val)
+            result      = int(deficit_apl * population / 290)
+            return min(result, 60) if result > 0 else None
+
+        # Cas standard
         if nat_val <= 0 or dept_val >= nat_val:
             return None
         deficit = (nat_val - dept_val) * population / 100_000
@@ -1324,7 +1378,8 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             taux_n = nat_patho.get(patho_key, taux_d)
             if taux_n > 0:
                 facteur = max(1.0, min(1 + (taux_d - taux_n) / taux_n, 2.5))
-        return min(int(round(deficit * facteur)), 60)
+        result = min(int(round(deficit * facteur)), 60)
+        return result if result > 0 else None
 
     # ── Fonction render d'une ligne ───────────────────────────────────────
     def render_row(spec_nom, nb, pour_100k, med_nat,
@@ -1340,8 +1395,14 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         )
         ecart_str = f"+{int(ecart)} %" if ecart >= 0 else f"{int(ecart)} %"
 
-        br       = besoin_reel(pour_100k, med_nat, patho_key)
-        br_str   = f"+{br}" if br else "—"
+        # Signal paradoxe : généraliste RPPS > médiane mais désert APL
+        if ("g\u00e9n\u00e9raliste" in spec_nom.lower()
+                and apl_val < 2.5 and pour_100k >= med_nat):
+            ecart_str   = f"+{int(ecart)} % \u26a0"
+            ecart_color = "#E8A838"
+
+        br       = besoin_reel(pour_100k, med_nat, patho_key, spec_nom)
+        br_str   = f"+{br}" if br else "\u2014"
         br_color = "#A51C30" if br else "#9C9A92"
 
         badge = ""
@@ -1385,17 +1446,17 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr 0.9fr;'
         'padding:10px 16px;background:#0A1938;border-radius:6px 6px 0 0;gap:0;">'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.5);">SPÉCIALITÉ</div>'
+        'text-transform:uppercase;color:rgba(255,255,255,0.5);">SP\u00c9CIALIT\u00c9</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">NB</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">/100K</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">MÉD.NAT.</div>'
+        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">M\u00c9D.NAT.</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">ÉCART</div>'
+        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">\u00c9CART</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">BESOIN RÉEL*</div>'
+        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">BESOIN R\u00c9EL*</div>'
         '</div>'
     )
 
@@ -1408,10 +1469,10 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         )
 
     SOINS_PRIMAIRES = [
-        "Médecin généraliste",
+        "M\u00e9decin g\u00e9n\u00e9raliste",
         "Infirmier",
         "Pharmacien",
-        "Masseur-kinésithérapeute",
+        "Masseur-kin\u00e9sith\u00e9rapeute",
         "Chirurgien-dentiste",
     ]
 
@@ -1421,7 +1482,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     )
 
     # ── TOP 5 SOINS PRIMAIRES ─────────────────────────────────────────────
-    table_html += section_sep("TOP 5 · SOINS PRIMAIRES")
+    table_html += section_sep("TOP 5 \u00b7 SOINS PRIMAIRES")
 
     for i, spec_exact in enumerate(SOINS_PRIMAIRES):
         match = agg[agg["specialite"].str.lower() == spec_exact.lower()]
@@ -1441,8 +1502,19 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
     # ── TOP 5 SPÉCIALISTES LIÉS AUX PATHOLOGIES ──────────────────────────
     table_html += section_sep(
-        "TOP 5 · SPÉCIALISTES LIÉS AUX PATHOLOGIES PRÉDOMINANTES"
+        "TOP 5 \u00b7 SP\u00c9CIALISTES LI\u00c9S AUX PATHOLOGIES PR\u00c9DOMINANTES"
     )
+
+    _FALLBACK_NOM = {
+        "prev_cardio":        "Cardiologue",
+        "prev_diabete":       "Endocrinologue / Diab\u00e9tologue",
+        "prev_psychiatrique": "Psychiatre",
+        "prev_respiratoire":  "Pneumologue",
+        "prev_cancers":       "Oncologue",
+        "prev_rhumatologie":  "Rhumatologue",
+        "prev_neurologie":    "Neurologue",
+        "prev_ophtalmologie": "Ophtalmologiste",
+    }
 
     spec_count = 0
     for pk, taux in top5_pathos:
@@ -1451,13 +1523,25 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         cfg = _PATHO_MAP.get(pk)
         if not cfg:
             continue
-        patho_label, spec_list = cfg
-        for spec_exact in spec_list:
+        patho_label = cfg["label"]
+        spec_list   = cfg["specialites"]
+
+        # Fallback si aucun libellé trouvé dans le RPPS national
+        if not spec_list:
+            table_html += render_row(
+                spec_nom=_FALLBACK_NOM.get(pk, "Sp\u00e9cialiste"),
+                nb=0, pour_100k=0.0, med_nat=0.0,
+                patho_label=patho_label, patho_key=pk,
+                idx=spec_count, is_absent=True,
+            )
+            spec_count += 1
+            continue
+
+        # Premier libellé exact trouvé dans le RPPS
+        for spec_exact in spec_list[:1]:
             if spec_count >= 5:
                 break
-            match = agg[
-                agg["specialite"].str.lower().str.startswith(spec_exact.lower())
-            ]
+            match = agg[agg["specialite"] == spec_exact]
             if not match.empty:
                 row_s = match.iloc[0]
                 table_html += render_row(
@@ -1477,15 +1561,41 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     table_html += "</div>"
     st.markdown(table_html, unsafe_allow_html=True)
 
+    # ── Bandeau paradoxe RPPS/APL ─────────────────────────────────────────
+    gen_match = agg[
+        agg["specialite"].str.lower().str.contains("g\u00e9n\u00e9raliste",
+                                                    na=False, regex=False)
+    ]
+    if not gen_match.empty and apl_val < 2.5:
+        gen_row = gen_match.iloc[0]
+        if float(gen_row["pour_100k"]) >= float(gen_row["mediane_nat"]):
+            st.markdown(
+                f'<div style="margin-top:10px;padding:12px 16px;'
+                f'background:#FCF4DB;border:1px solid #F4C430;'
+                f'border-radius:4px;font-size:12px;color:#7D4A00;line-height:1.6;">'
+                f'<strong>\u26a0\ufe0f Paradoxe RPPS\u202f/\u202fAPL</strong><br>'
+                f'Le RPPS indique un nombre de g\u00e9n\u00e9ralistes sup\u00e9rieur '
+                f'\u00e0 la m\u00e9diane nationale, mais l\u2019APL de {apl_val:.1f} '
+                f'r\u00e9v\u00e8le un acc\u00e8s insuffisant aux soins de ville. '
+                f'Les m\u00e9decins compt\u00e9s dans le RPPS exercent majoritairement '
+                f'en milieu hospitalier et ne contribuent pas \u00e0 l\u2019offre '
+                f'lib\u00e9rale de proximit\u00e9. Le besoin r\u00e9el est calcul\u00e9 '
+                f'sur la base de l\u2019APL.'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    # Note méthodologique
     st.markdown(
         '<div style="margin-top:10px;padding:12px 16px;background:#F3F2EC;'
         'border-radius:4px;font-size:12px;color:#6B6B68;line-height:1.6;">'
-        '<strong style="color:#2B2B2B;">* Besoin réel</strong> = '
-        '(médiane nationale \u2212 densité locale) \u00d7 population / 100\u202f000, '
-        'amplifié par la prévalence locale de la pathologie associée '
-        '(facteur max \u00d72.5, plafon 60). Le RPPS inclut tous les modes '
-        "d'exercice ; l'APL reste l'indicateur de référence pour "
-        'l\'accès réel aux soins de ville.'
+        '<strong style="color:#2B2B2B;">* Besoin r\u00e9el</strong> = '
+        '(m\u00e9diane nationale \u2212 densit\u00e9 locale) \u00d7 population\u202f/\u202f100\u202f000, '
+        'amplifi\u00e9 par la pr\u00e9valence locale de la pathologie associ\u00e9e '
+        '(facteur max \u00d72.5, plafon 60). Pour les g\u00e9n\u00e9ralistes en d\u00e9sert m\u00e9dical, '
+        'le besoin est calcul\u00e9 sur l\u2019\u00e9cart APL vs m\u00e9diane nationale (2.9). '
+        'Le RPPS inclut tous les modes d\u2019exercice\u202f; l\u2019APL reste '
+        'l\u2019indicateur de r\u00e9f\u00e9rence pour l\u2019acc\u00e8s r\u00e9el.'
         '</div>',
         unsafe_allow_html=True,
     )
