@@ -630,12 +630,13 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
         return
 
     _titres = {1: "Un levier", 2: "Deux leviers", 3: "Trois leviers", 4: "Quatre leviers"}
-    titre = _titres.get(nb, f"{nb} leviers")
+    titre   = _titres.get(nb, f"{nb} leviers")
+    suffixe = "prioritaire" if nb == 1 else "prioritaires"
 
     st.html(
         '<div class="section-header">'
         '<div class="section-eyebrow">PLAN D\'ACTION</div>'
-        f'<h2 class="section-title">{titre} <em>prioritaires</em>.</h2>'
+        f'<h2 class="section-title">{titre} <em>{suffixe}</em>.</h2>'
         '<p class="section-lead">Recommandations générées à partir du croisement '
         'des indicateurs. Chiffrées, localisées, hiérarchisées.</p>'
         '</div>'
@@ -1219,172 +1220,169 @@ SPEC_PRIMAIRES = [
 
 
 def render_offre_medicale(r: pd.Series, data: dict) -> None:
-    """Tableau des spécialistes trié selon les besoins pathologiques du territoire."""
+
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">OFFRE MÉDICALE</div>'
         '<h2 class="section-title">'
         "Combien de <em>spécialistes,</em> et qu'en déduire.</h2>"
         '<p class="section-lead">'
-        'Spécialités triées selon les pathologies prédominantes '
-        'du département. Comparées à la médiane nationale pour '
-        '100\u202f000 habitants.</p>'
+        'Top 5 soins primaires et top 5 spécialistes liés aux pathologies '
+        'prédominantes du territoire. Comparés à la médiane nationale '
+        'pour 100 000 habitants.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
     dept_code  = str(r.get("dept", "")).zfill(2)
-    population = float(r.get("population_num", 300_000) or 300_000)
+    population = float(r.get("Population", 300_000) or 300_000)
     pros       = data.get("pros")
-    master     = data.get("master")
 
     if pros is None or pros.empty:
         st.info("Données professionnels non disponibles.")
         return
 
-    # ── Données RPPS pour ce département ─────────────────────────────────
-    pros_dept = pros[pros["dept"].astype(str).str.zfill(2) == dept_code].copy()
+    # ── Agrégation RPPS pour ce département ──────────────────────────────
+    pros_dept = pros[
+        pros["code_departement"].astype(str).str.zfill(2) == dept_code
+    ].copy()
 
-    if pros_dept.empty:
-        st.info("Aucune donnée RPPS pour ce département.")
-        return
-
-    # Agrégation par spécialité
     agg = (
-        pros_dept.groupby("specialite_libelle")
-        .size()
+        pros_dept.groupby("specialite").size()
         .reset_index(name="nb")
-        .rename(columns={"specialite_libelle": "specialite"})
     )
     agg["pour_100k"] = (agg["nb"] / population * 100_000).round(1)
 
-    # Médiane nationale par spécialité (densités départementales)
-    pop_map = (
-        master.set_index("dept")["population_num"]
-        if master is not None and "population_num" in master.columns
-        else pd.Series(dtype=float)
-    )
+    # Médiane nationale par spécialité (densité médiane sur tous les depts)
     nat_by_dept = (
-        pros.groupby(["dept", "specialite_libelle"])
-        .size()
-        .reset_index(name="nb_dept")
+        pros.groupby(["code_departement", "specialite"])
+        .size().reset_index(name="nb_dept")
     )
-    nat_by_dept["pop_dept"] = nat_by_dept["dept"].map(pop_map)
+    pop_map = data["master"].set_index("dept")["Population"].to_dict()
+    nat_by_dept["pop"] = nat_by_dept["code_departement"].map(
+        lambda x: float(pop_map.get(str(x).zfill(2), 300_000) or 300_000)
+    )
     nat_by_dept["densite"] = (
-        nat_by_dept["nb_dept"]
-        / nat_by_dept["pop_dept"].replace(0, float("nan"))
-        * 100_000
+        nat_by_dept["nb_dept"] / nat_by_dept["pop"] * 100_000
     )
     nat_medians = (
-        nat_by_dept.groupby("specialite_libelle")["densite"]
-        .median()
-        .reset_index()
-        .rename(columns={"specialite_libelle": "specialite", "densite": "mediane_nat"})
+        nat_by_dept.groupby("specialite")["densite"]
+        .median().reset_index()
+        .rename(columns={"densite": "mediane_nat"})
     )
-
     agg = agg.merge(nat_medians, on="specialite", how="left")
     agg["mediane_nat"] = agg["mediane_nat"].fillna(0)
-    agg["ecart_pct"] = (
-        (agg["pour_100k"] - agg["mediane_nat"])
-        / agg["mediane_nat"].replace(0, float("nan"))
-        * 100
+    agg["ecart_pct"]   = (
+        (agg["pour_100k"] - agg["mediane_nat"]) /
+        agg["mediane_nat"].replace(0, float("nan")) * 100
     ).round(0)
 
-    # ── Prévalence des pathologies pour ce département ────────────────────
-    patho_data   = data.get("patho")
-    top_pathos   = {}   # {pk: taux_dept}
-    nat_patho    = {}   # {pk: taux_national_median}
+    # ── Pathologies dominantes ────────────────────────────────────────────
+    _PATHO_MAP = {
+        "prev_cardio":        ("Maladies cardiovasculaires", ["Cardiologue"]),
+        "prev_diabete":       ("Diabète",                   ["Endocrinologue"]),
+        "prev_psychiatrique": ("Maladies psychiatriques",   ["Psychiatre"]),
+        "prev_respiratoire":  ("Maladies respiratoires",    ["Pneumologue"]),
+        "prev_cancers":       ("Cancers",                   ["Oncologue médical", "Hématologue"]),
+        "prev_rhumatologie":  ("Rhumatologie",              ["Rhumatologue"]),
+        "prev_neurologie":    ("Neurologie",                ["Neurologue"]),
+        "prev_ophtalmologie": ("Ophtalmologie",             ["Ophtalmologiste"]),
+    }
 
-    if patho_data is not None and not patho_data.empty and "_error" not in patho_data.columns:
-        dept_patho = patho_data[patho_data["dept"].astype(str).str.zfill(2) == dept_code]
+    patho_data = data.get("patho")
+    top_pathos = {}
+    nat_patho  = {}
+
+    if patho_data is not None and not patho_data.empty:
+        dept_patho = patho_data[
+            patho_data["dept"].astype(str).str.zfill(2) == dept_code
+        ]
         if not dept_patho.empty:
-            dg_dept = (
-                dept_patho.groupby("patho_niv1")[["Ntop", "Npop"]]
-                .sum()
-                .reset_index()
-            )
-            dg_dept["prev"] = (
-                dg_dept["Ntop"] / dg_dept["Npop"].replace(0, float("nan")) * 100
-            )
+            row_p = dept_patho.iloc[0]
+            for pk in _PATHO_MAP:
+                val = float(row_p.get(pk, 0) or 0)
+                if val > 0:
+                    top_pathos[pk] = val
+                    nat_patho[pk]  = float(
+                        patho_data[pk].median()
+                        if pk in patho_data.columns else 0
+                    )
 
-            # National : médiane des prévalences par département
-            dg_nat = (
-                patho_data.groupby(["dept", "patho_niv1"])[["Ntop", "Npop"]]
-                .sum()
-                .reset_index()
-            )
-            dg_nat["prev"] = (
-                dg_nat["Ntop"] / dg_nat["Npop"].replace(0, float("nan")) * 100
-            )
-            nat_prev_median = dg_nat.groupby("patho_niv1")["prev"].median()
-
-            for pk, cfg in PATHO_TO_SPEC.items():
-                frag = cfg["patho_fragment"]
-                mask = dg_dept["patho_niv1"].str.contains(frag, case=False, na=False, regex=False)
-                if mask.any():
-                    taux = float(dg_dept.loc[mask, "prev"].max())
-                    if taux > 0:
-                        top_pathos[pk] = taux
-                        nat_mask = nat_prev_median.index.str.contains(frag, case=False, na=False, regex=False)
-                        nat_patho[pk] = float(nat_prev_median[nat_mask].median()) if nat_mask.any() else taux
-
-    top_pathos_sorted = sorted(top_pathos.items(), key=lambda x: x[1], reverse=True)
-
-    # ── Ordre d'affichage des spécialités ─────────────────────────────────
-    prioritaires = []   # [(spec_libelle, is_primary)]
-    patho_specs  = []   # [(spec_libelle, patho_label, patho_taux, patho_key)]
-    seen_specs   = set()
-
-    # 1. Soins primaires
-    for frag in SPEC_PRIMAIRES:
-        matches = agg[agg["specialite"].str.contains(frag, case=False, na=False, regex=False)]
-        for _, row_s in matches.iterrows():
-            if row_s["specialite"] not in seen_specs:
-                prioritaires.append(row_s["specialite"])
-                seen_specs.add(row_s["specialite"])
-
-    # 2. Spécialités liées aux top 5 pathologies
-    for pk, taux in top_pathos_sorted[:5]:
-        cfg = PATHO_TO_SPEC[pk]
-        for spec_frag in cfg["specialites"]:
-            matches = agg[agg["specialite"].str.contains(spec_frag, case=False, na=False, regex=False)]
-            if not matches.empty:
-                for _, row_s in matches.iterrows():
-                    if row_s["specialite"] not in seen_specs:
-                        patho_specs.append((row_s["specialite"], cfg["label"], taux, pk))
-                        seen_specs.add(row_s["specialite"])
-            else:
-                if spec_frag not in seen_specs:
-                    patho_specs.append((spec_frag, cfg["label"], taux, pk))
-                    seen_specs.add(spec_frag)
-
-    # 3. Reste trié par déficit décroissant
-    reste = agg[~agg["specialite"].isin(seen_specs)].copy()
-    reste = reste.sort_values("ecart_pct", ascending=True)
+    top5_pathos = sorted(
+        top_pathos.items(), key=lambda x: x[1], reverse=True
+    )[:5]
 
     # ── Calcul du besoin réel ─────────────────────────────────────────────
-    def besoin_reel(pour_100k_val: float, med_nat_val: float, patho_key=None) -> int | None:
-        if med_nat_val <= 0:
+    def besoin_reel(dept_val, nat_val, patho_key=None):
+        if nat_val <= 0 or dept_val >= nat_val:
             return None
-        deficit = med_nat_val - pour_100k_val
-        if deficit <= 0:
-            return None
-        nb_brut = deficit * population / 100_000
+        deficit = (nat_val - dept_val) * population / 100_000
         facteur = 1.0
         if patho_key and patho_key in top_pathos:
-            taux_dept = top_pathos[patho_key]
-            taux_nat  = nat_patho.get(patho_key, taux_dept)
-            if taux_nat > 0:
-                facteur = 1.0 + (taux_dept - taux_nat) / taux_nat
-                facteur = max(1.0, min(facteur, 2.5))
-        return min(int(round(nb_brut * facteur)), 60)
+            taux_d = top_pathos[patho_key]
+            taux_n = nat_patho.get(patho_key, taux_d)
+            if taux_n > 0:
+                facteur = max(1.0, min(1 + (taux_d - taux_n) / taux_n, 2.5))
+        return min(int(round(deficit * facteur)), 60)
 
-    # ── Rendu ─────────────────────────────────────────────────────────────
-    # En-tête du tableau
-    st.markdown(
+    # ── Fonction render d'une ligne ───────────────────────────────────────
+    def render_row(spec_nom, nb, pour_100k, med_nat,
+                   patho_label, patho_key, idx, is_absent=False):
+        ecart = (
+            ((pour_100k - med_nat) / med_nat * 100)
+            if med_nat > 0 else -100
+        )
+        ecart_color = (
+            "#1B5E3F" if ecart >= 10
+            else "#A51C30" if ecart <= -10
+            else "#6B6B68"
+        )
+        ecart_str = f"+{int(ecart)} %" if ecart >= 0 else f"{int(ecart)} %"
+
+        br       = besoin_reel(pour_100k, med_nat, patho_key)
+        br_str   = f"+{br}" if br else "—"
+        br_color = "#A51C30" if br else "#9C9A92"
+
+        badge = ""
+        if patho_label:
+            badge = (
+                f'<span style="font-size:10px;background:#FEF3F2;'
+                f'color:#A51C30;border:1px solid #FECDCA;border-radius:3px;'
+                f'padding:1px 6px;margin-left:8px;font-weight:600;">'
+                f'{patho_label}</span>'
+            )
+
+        nb_display = (
+            '<span style="color:#A51C30;font-weight:700;">0</span>'
+            if is_absent else str(nb)
+        )
+        bg = "#FEF8F8" if (is_absent or ecart <= -10) and patho_label else (
+            "white" if idx % 2 == 0 else "#FAFAF8"
+        )
+
+        return (
+            f'<div style="display:grid;'
+            f'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr 0.9fr;'
+            f'padding:12px 16px;background:{bg};'
+            f'border-bottom:1px solid #E8E6DD;gap:0;align-items:center;">'
+            f'<div style="font-size:13px;color:#0A1938;font-weight:500;'
+            f'display:flex;align-items:center;flex-wrap:wrap;gap:4px;">'
+            f'{spec_nom}{badge}</div>'
+            f'<div style="font-size:13px;color:#2B2B2B;text-align:right;">{nb_display}</div>'
+            f'<div style="font-size:13px;color:#2B2B2B;text-align:right;">{pour_100k:.1f}</div>'
+            f'<div style="font-size:13px;color:#9C9A92;text-align:right;">{med_nat:.1f}</div>'
+            f'<div style="font-size:13px;font-weight:600;color:{ecart_color};text-align:right;">'
+            f'{ecart_str}</div>'
+            f'<div style="font-size:13px;font-weight:700;color:{br_color};text-align:right;">'
+            f'{br_str}</div>'
+            f'</div>'
+        )
+
+    # ── En-tête tableau ───────────────────────────────────────────────────
+    header = (
         '<div style="display:grid;'
-        'grid-template-columns:3fr 0.7fr 0.9fr 0.9fr 0.8fr 1fr;'
-        'padding:10px 16px;background:#0A1938;border-radius:4px 4px 0 0;gap:0;">'
+        'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr 0.9fr;'
+        'padding:10px 16px;background:#0A1938;border-radius:6px 6px 0 0;gap:0;">'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);">SPÉCIALITÉ</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
@@ -1397,126 +1395,96 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">ÉCART</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">BESOIN RÉEL*</div>'
-        '</div>',
-        unsafe_allow_html=True,
+        '</div>'
     )
 
-    def _row_html(spec_libelle: str, patho_label: str | None, patho_key: str | None,
-                  idx: int, is_primary: bool = False) -> str:
-        row_match = agg[agg["specialite"].str.contains(
-            spec_libelle.split("/")[0].strip(), case=False, na=False, regex=False,
-        )]
-        if not row_match.empty:
-            rs        = row_match.iloc[0]
-            nb        = int(rs["nb"])
-            pour_100k = float(rs["pour_100k"])
-            med_nat   = float(rs["mediane_nat"])
-            ecart_pct = float(rs["ecart_pct"]) if pd.notna(rs["ecart_pct"]) else 0.0
-        else:
-            nb        = 0
-            pour_100k = 0.0
-            med_nat   = 0.0
-            ecart_pct = -100.0
-
-        if ecart_pct >= 10:
-            ecart_color, ecart_str = "#1B5E3F", f"+{int(ecart_pct)}\u202f%"
-        elif ecart_pct <= -10:
-            ecart_color, ecart_str = "#A51C30", f"{int(ecart_pct)}\u202f%"
-        else:
-            ecart_color, ecart_str = "#6B6B68", f"{int(ecart_pct):+}\u202f%"
-
-        besoin     = besoin_reel(pour_100k, med_nat, patho_key)
-        besoin_str = f"+{besoin}" if besoin and besoin > 0 else "—"
-        besoin_col = "#A51C30" if besoin and besoin > 0 else "#9C9A92"
-
-        if patho_label:
-            badge = (
-                '<span style="font-size:10px;background:#FEF3F2;color:#A51C30;'
-                'border:1px solid #FECDCA;border-radius:3px;padding:1px 6px;'
-                'margin-left:6px;font-weight:600;white-space:nowrap;">'
-                f'{patho_label}</span>'
-            )
-        elif is_primary:
-            badge = (
-                '<span style="font-size:10px;background:#F0F3FA;color:#1A3D8F;'
-                'border:1px solid #C7D4F0;border-radius:3px;padding:1px 6px;'
-                'margin-left:6px;font-weight:600;">Soins primaires</span>'
-            )
-        else:
-            badge = ""
-
-        bg = "#FAFAF8" if idx % 2 == 0 else "white"
-        if patho_label and ecart_pct < -10:
-            bg = "#FEF8F8"
-
-        nb_html = (
-            f'<span style="color:#A51C30;font-weight:600;">0</span>'
-            if nb == 0
-            else str(nb)
-        )
-
+    def section_sep(label):
         return (
-            f'<div style="display:grid;grid-template-columns:3fr 0.7fr 0.9fr 0.9fr 0.8fr 1fr;'
-            f'padding:12px 16px;background:{bg};border-bottom:1px solid #E8E6DD;'
-            f'gap:0;align-items:center;">'
-            f'<div style="font-size:13px;color:#0A1938;font-weight:500;'
-            f'display:flex;align-items:center;flex-wrap:wrap;gap:4px;">'
-            f'{spec_libelle}{badge}</div>'
-            f'<div style="font-size:13px;color:#2B2B2B;text-align:right;">{nb_html}</div>'
-            f'<div style="font-size:13px;color:#2B2B2B;text-align:right;">{pour_100k:.1f}</div>'
-            f'<div style="font-size:13px;color:#6B6B68;text-align:right;">{med_nat:.1f}</div>'
-            f'<div style="font-size:13px;font-weight:600;color:{ecart_color};text-align:right;">'
-            f'{ecart_str}</div>'
-            f'<div style="font-size:13px;font-weight:700;color:{besoin_col};text-align:right;">'
-            f'{besoin_str}</div>'
-            f'</div>'
+            f'<div style="padding:8px 16px;background:#F3F2EC;'
+            f'font-size:10px;font-weight:700;letter-spacing:0.1em;'
+            f'text-transform:uppercase;color:#6B6B68;'
+            f'border-bottom:1px solid #E8E6DD;">{label}</div>'
         )
 
-    def _section_sep(label: str) -> str:
-        return (
-            f'<div style="padding:8px 16px;background:#F3F2EC;font-size:10px;'
-            f'font-weight:700;letter-spacing:0.1em;text-transform:uppercase;'
-            f'color:#6B6B68;border-bottom:1px solid #E8E6DD;">{label}</div>'
-        )
+    SOINS_PRIMAIRES = [
+        "Médecin généraliste",
+        "Infirmier",
+        "Pharmacien",
+        "Masseur-kinésithérapeute",
+        "Chirurgien-dentiste",
+    ]
 
     table_html = (
-        '<div style="border:1px solid #E8E6DD;border-top:none;'
-        'border-radius:0 0 6px 6px;overflow:hidden;">'
+        f'<div style="border:1px solid #E8E6DD;border-radius:6px;overflow:hidden;">'
+        f'{header}'
     )
 
-    table_html += _section_sep("Soins primaires")
-    for i, spec in enumerate(prioritaires):
-        table_html += _row_html(spec, None, None, i, is_primary=True)
+    # ── TOP 5 SOINS PRIMAIRES ─────────────────────────────────────────────
+    table_html += section_sep("TOP 5 · SOINS PRIMAIRES")
 
-    if patho_specs:
-        table_html += _section_sep(
-            "Spécialistes · liés aux pathologies prédominantes du territoire"
-        )
-        for i, (spec, p_label, _, p_key) in enumerate(patho_specs):
-            table_html += _row_html(spec, p_label, p_key, i)
+    for i, spec_exact in enumerate(SOINS_PRIMAIRES):
+        match = agg[agg["specialite"].str.lower() == spec_exact.lower()]
+        if not match.empty:
+            row_s = match.iloc[0]
+            table_html += render_row(
+                spec_nom=row_s["specialite"], nb=int(row_s["nb"]),
+                pour_100k=float(row_s["pour_100k"]),
+                med_nat=float(row_s["mediane_nat"]),
+                patho_label=None, patho_key=None, idx=i,
+            )
+        else:
+            table_html += render_row(
+                spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
+                patho_label=None, patho_key=None, idx=i, is_absent=True,
+            )
 
-    if not reste.empty:
-        table_html += _section_sep("Autres spécialités")
-        for i, (_, row_s) in enumerate(reste.iterrows()):
-            table_html += _row_html(row_s["specialite"], None, None, i)
+    # ── TOP 5 SPÉCIALISTES LIÉS AUX PATHOLOGIES ──────────────────────────
+    table_html += section_sep(
+        "TOP 5 · SPÉCIALISTES LIÉS AUX PATHOLOGIES PRÉDOMINANTES"
+    )
+
+    spec_count = 0
+    for pk, taux in top5_pathos:
+        if spec_count >= 5:
+            break
+        cfg = _PATHO_MAP.get(pk)
+        if not cfg:
+            continue
+        patho_label, spec_list = cfg
+        for spec_exact in spec_list:
+            if spec_count >= 5:
+                break
+            match = agg[
+                agg["specialite"].str.lower().str.startswith(spec_exact.lower())
+            ]
+            if not match.empty:
+                row_s = match.iloc[0]
+                table_html += render_row(
+                    spec_nom=row_s["specialite"], nb=int(row_s["nb"]),
+                    pour_100k=float(row_s["pour_100k"]),
+                    med_nat=float(row_s["mediane_nat"]),
+                    patho_label=patho_label, patho_key=pk, idx=spec_count,
+                )
+            else:
+                table_html += render_row(
+                    spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
+                    patho_label=patho_label, patho_key=pk,
+                    idx=spec_count, is_absent=True,
+                )
+            spec_count += 1
 
     table_html += "</div>"
     st.markdown(table_html, unsafe_allow_html=True)
 
     st.markdown(
-        '<div style="margin-top:12px;padding:12px 16px;background:#F3F2EC;'
+        '<div style="margin-top:10px;padding:12px 16px;background:#F3F2EC;'
         'border-radius:4px;font-size:12px;color:#6B6B68;line-height:1.6;">'
-        '<strong style="color:#2B2B2B;">* Comment est calculé le besoin réel\u202f?</strong><br>'
-        'Besoin réel\u202f= (médiane nationale − densité locale) × population / 100\u202f000 '
-        '× facteur pathologique.<br>'
-        'Le facteur pathologique amplifie le besoin si la prévalence locale '
-        'de la pathologie associée dépasse la médiane nationale (max ×2.5, '
-        'plafon absolu\u202f: 60 installations).<br><br>'
-        '<strong style="color:#2B2B2B;">'
-        'Pourquoi le RPPS peut sembler contradictoire avec l\'APL\u202f?</strong><br>'
-        'Le RPPS comptabilise tous les modes d\'exercice (libéral + salarié '
-        'hospitalier + mixte). L\'APL ne compte que les libéraux avec '
-        'une activité réelle pondérée.'
+        '<strong style="color:#2B2B2B;">* Besoin réel</strong> = '
+        '(médiane nationale \u2212 densité locale) \u00d7 population / 100\u202f000, '
+        'amplifié par la prévalence locale de la pathologie associée '
+        '(facteur max \u00d72.5, plafon 60). Le RPPS inclut tous les modes '
+        "d'exercice ; l'APL reste l'indicateur de référence pour "
+        'l\'accès réel aux soins de ville.'
         '</div>',
         unsafe_allow_html=True,
     )
