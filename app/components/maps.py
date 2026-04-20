@@ -198,6 +198,15 @@ def render_national_choropleth(
         name="departements",
     ).add_to(m)
 
+    # Masque l'attribution Leaflet/CARTO
+    m.get_root().header.add_child(
+        folium.Element(
+            "<style>"
+            ".leaflet-control-attribution{display:none!important;}"
+            "</style>"
+        )
+    )
+
     event = st_folium(
         m,
         width=None,
