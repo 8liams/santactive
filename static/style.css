@@ -591,7 +591,9 @@ html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] *,
     color: #0A0A0A;
     padding: 32px 0;
 }
-.diagnostic-prose em { font-style: italic; color: var(--crit); }
+.diagnostic-prose em          { font-style: italic; color: var(--crit); }
+.diagnostic-prose em.inter    { color: #B07D00; }
+.diagnostic-prose em.fav      { color: #1A7A4A; }
 .diagnostic-prose strong {
     font-weight: 400;
     background: linear-gradient(transparent 62%, var(--crit-soft) 62%);

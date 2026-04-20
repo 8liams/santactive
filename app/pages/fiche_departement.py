@@ -121,8 +121,8 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     typologie_str = typologie_labels.get(str(r.get("typologie", "inconnu")), "—")
 
     badge_class = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
-    score_str = f"{score:.1f}" if pd.notna(score) else "—"
-    rang_str = str(rang_num)
+    score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
+    rang_str  = str(int(rang_num)) if isinstance(rang_num, (int, float)) and pd.notna(rang_num) else "N/D"
 
     st.markdown(
         '<div class="fiche-header">'
@@ -158,40 +158,84 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
 # 2. DIAGNOSTIC
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _get_situation_label(r: pd.Series) -> tuple[str, str]:
+    """Retourne (label_css, label_texte) selon les indicateurs réels.
+
+    Priorité :
+    1. APL < 1.5 → critique quelle que soit la zone
+    2. APL < 2.5 → préoccupante quelle que soit la zone
+    3. Zone calculée si APL disponible et >= 2.5
+    4. Score global si APL indisponible
+    5. Fallback neutre si rien de disponible
+    """
+    apl   = r.get("apl_median_dept")
+    zone  = str(r.get("zone_short", "")).strip()
+    score = r.get("score_global")
+
+    if pd.notna(apl):
+        apl_val = float(apl)
+        if apl_val < 1.5:
+            return ("crit", "critique")
+        elif apl_val < 2.5:
+            return ("crit", "préoccupante")
+        elif apl_val < 3.5:
+            return ("inter", "intermédiaire")
+        else:
+            return ("fav", "favorable")
+
+    if zone == "Critique":
+        return ("crit", "préoccupante")
+    elif zone == "Favorable":
+        return ("fav", "favorable")
+    elif zone == "Intermédiaire":
+        return ("inter", "intermédiaire")
+
+    if pd.notna(score):
+        score_val = float(score)
+        if score_val < 33:
+            return ("crit", "préoccupante")
+        elif score_val < 67:
+            return ("inter", "intermédiaire")
+        else:
+            return ("fav", "favorable")
+
+    return ("inter", "indéterminée")
+
+
+def _get_sous_effectif(r: pd.Series) -> str | None:
+    """Retourne la phrase sur le sous-effectif ou None."""
+    apl     = r.get("apl_median_dept")
+    apl_nat = 2.9
+
+    if pd.notna(apl):
+        delta_pct = (float(apl) - apl_nat) / apl_nat * 100
+        if delta_pct < -5:
+            return f"un sous-effectif médical de {abs(delta_pct):.0f}\u202f% sous la médiane nationale"
+        elif delta_pct > 5:
+            return f"un sur-effectif médical de {delta_pct:.0f}\u202f% au-dessus de la médiane nationale"
+
+    return None
+
+
 def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
     """Phrase éditoriale + APL en chiffre géant (vraies données DREES)."""
-    zone = str(r.get("zone_short", ""))
+    dept_nom = str(r.get("Nom du département", "Ce département"))
+    css_class, label_texte = _get_situation_label(r)
+    sous_effectif = _get_sous_effectif(r)
+    nb_communes_critiques = int(r.get("nb_communes_critiques", 0) or 0)
 
-    phrases = []
-    if zone == "Critique":
-        phrases.append("présente une situation <em>préoccupante</em>")
-    elif zone == "Intermédiaire":
-        phrases.append("présente une situation <em>mitigée</em>")
+    if sous_effectif:
+        complement = f"<em class='{css_class}'>{label_texte}</em> et {sous_effectif}"
     else:
-        phrases.append("présente une situation <em>favorable</em>")
+        complement = f"<em class='{css_class}'>{label_texte}</em>"
 
-    pros = r.get("pros_pour_100k")
-    med_pros = master["pros_pour_100k"].median()
-    if pd.notna(pros) and pd.notna(med_pros) and med_pros > 0:
-        delta = (pros - med_pros) / med_pros * 100
-        if delta < -15:
-            phrases.append(
-                f"un <strong>sous-effectif médical de {abs(delta):.0f}\u202f%</strong> "
-                "sous la médiane nationale"
-            )
+    if nb_communes_critiques > 0:
+        commune_label = "commune" if nb_communes_critiques == 1 else "communes"
+        complement += f" et {nb_communes_critiques} {commune_label} en zone blanche"
 
-    nc = r.get("nb_communes_critiques")
-    if pd.notna(nc) and int(nc) > 0:
-        nc_int = int(nc)
-        commune_label = "commune" if nc_int == 1 else "communes"
-        phrases.append(
-            f"<strong>{nc_int} {commune_label} en zone blanche</strong>"
-        )
+    complement += "."
 
-    phrase = (
-        f"{r['Nom du département']} "
-        f"{' et '.join(phrases) if phrases else 'est dans la moyenne nationale'}."
-    )
+    phrase = f"{dept_nom} présente une situation {complement}"
 
     # APL DREES (réel si disponible, sinon absent)
     apl = r.get("apl_median_dept")
