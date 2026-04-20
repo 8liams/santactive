@@ -1306,12 +1306,12 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
             for pk, cfg in PATHO_TO_SPEC.items():
                 frag = cfg["patho_fragment"]
-                mask = dg_dept["patho_niv1"].str.contains(frag, case=False, na=False)
+                mask = dg_dept["patho_niv1"].str.contains(frag, case=False, na=False, regex=False)
                 if mask.any():
                     taux = float(dg_dept.loc[mask, "prev"].max())
                     if taux > 0:
                         top_pathos[pk] = taux
-                        nat_mask = nat_prev_median.index.str.contains(frag, case=False, na=False)
+                        nat_mask = nat_prev_median.index.str.contains(frag, case=False, na=False, regex=False)
                         nat_patho[pk] = float(nat_prev_median[nat_mask].median()) if nat_mask.any() else taux
 
     top_pathos_sorted = sorted(top_pathos.items(), key=lambda x: x[1], reverse=True)
@@ -1323,7 +1323,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
     # 1. Soins primaires
     for frag in SPEC_PRIMAIRES:
-        matches = agg[agg["specialite"].str.contains(frag, case=False, na=False)]
+        matches = agg[agg["specialite"].str.contains(frag, case=False, na=False, regex=False)]
         for _, row_s in matches.iterrows():
             if row_s["specialite"] not in seen_specs:
                 prioritaires.append(row_s["specialite"])
@@ -1333,7 +1333,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     for pk, taux in top_pathos_sorted[:5]:
         cfg = PATHO_TO_SPEC[pk]
         for spec_frag in cfg["specialites"]:
-            matches = agg[agg["specialite"].str.contains(spec_frag, case=False, na=False)]
+            matches = agg[agg["specialite"].str.contains(spec_frag, case=False, na=False, regex=False)]
             if not matches.empty:
                 for _, row_s in matches.iterrows():
                     if row_s["specialite"] not in seen_specs:
@@ -1390,7 +1390,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     def _row_html(spec_libelle: str, patho_label: str | None, patho_key: str | None,
                   idx: int, is_primary: bool = False) -> str:
         row_match = agg[agg["specialite"].str.contains(
-            spec_libelle.split("/")[0].strip(), case=False, na=False,
+            spec_libelle.split("/")[0].strip(), case=False, na=False, regex=False,
         )]
         if not row_match.empty:
             rs        = row_match.iloc[0]
