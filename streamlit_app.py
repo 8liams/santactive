@@ -100,7 +100,7 @@ def load_css(path: Path) -> None:
 load_css(STATIC_DIR / "style.css")
 
 # ─── DATA ─────────────────────────────────────────────────────────────────────
-master, medic, pros, immo, etabs, temps, env, patho, delais = load_all_data()
+master, pros, immo, etabs, temps, env, patho, delais = load_all_data()
 master = compute_scores(master)
 geojson = load_geojson()
 
@@ -220,7 +220,6 @@ with st.sidebar:
 # ─── CONTEXTE PARTAGÉ ─────────────────────────────────────────────────────────
 data = {
     "master":  master,
-    "medic":   medic,
     "pros":    pros,
     "immo":    immo,
     "etabs":   etabs,

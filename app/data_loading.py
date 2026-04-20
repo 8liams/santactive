@@ -16,7 +16,6 @@ from .config import (
     ETABS_FILE_ID,
     GEOJSON_URL,
     IMMO_FILE_ID,
-    MEDIC_FILE_ID,
     PATHO_FILE_ID,
     POP_FILE_ID,
     PROS_FILE_ID,
@@ -77,45 +76,60 @@ def load_all_data():
             )
 
     # ── Professionnels de santé ───────────────────────────────────────────────
-    pros = read_drive_csv(PROS_FILE_ID, sep=";", low_memory=False)
-    pros["dept"] = pros["code_departement"].apply(_zd)
-    pros_dept = pros.groupby("dept").agg(
+    _pros_raw = read_drive_csv(PROS_FILE_ID, sep=";", low_memory=False)
+    _pros_raw["dept"] = _pros_raw["code_departement"].apply(_zd)
+    pros_dept = _pros_raw.groupby("dept").agg(
         nb_pros        =("specialite_libelle", "count"),
         nb_med_gen     =("specialite_libelle", lambda x: (x == "Médecin généraliste").sum()),
         nb_infirmiers  =("specialite_libelle", lambda x: (x == "Infirmier").sum()),
         nb_pharmaciens =("specialite_libelle", lambda x: (x == "Pharmacien").sum()),
     ).reset_index()
+    # Trim : ne garder que les 2 colonnes utiles en aval (reco spécialistes)
+    pros = _pros_raw[["dept", "specialite_libelle"]].copy()
+    del _pros_raw
 
     # ── Établissements ────────────────────────────────────────────────────────
-    etabs = read_drive_csv(ETABS_FILE_ID, sep=";")
-    etabs["dept"] = etabs["code_departement"].apply(_zd)
-    etabs_dept = etabs.groupby("dept").agg(
+    _etabs_raw = read_drive_csv(ETABS_FILE_ID, sep=";")
+    _etabs_raw["dept"] = _etabs_raw["code_departement"].apply(_zd)
+    etabs_dept = _etabs_raw.groupby("dept").agg(
         nb_etabs     =("Rslongue", "count"),
         nb_hopitaux  =("categetab", lambda x: x.isin(
             ["Centre Hospitalier (C.H.)", "Centre Hospitalier Régional (C.H.R.)"]).sum()),
         nb_cliniques =("categetab", lambda x: x.str.contains(
             "Clinique|privé", na=False, case=False).sum()),
     ).reset_index()
+    # Trim : ne garder que les colonnes utiles pour la carte et la fiche commune
+    _etabs_cols = ["code_departement", "commune", "Rslongue", "categetab", "latitude", "longitude"]
+    etabs = _etabs_raw[[c for c in _etabs_cols if c in _etabs_raw.columns]].copy()
+    del _etabs_raw
 
     # ── Temps d'accès (médiane + p90, robuste aux outliers) ──────────────────
-    temps = read_drive_csv(TEMPS_FILE_ID, sep=";")
-    temps["dept"] = temps["code_departement"].apply(_zd)
-    temps_dept = temps.groupby("dept").agg(
+    _temps_raw = read_drive_csv(TEMPS_FILE_ID, sep=";")
+    _temps_raw["dept"] = _temps_raw["code_departement"].apply(_zd)
+    temps_dept = _temps_raw.groupby("dept").agg(
         temps_acces_median    =("temps_acces", "median"),
         temps_acces_p90       =("temps_acces", lambda x: x.quantile(0.90)),
         temps_acces_max       =("temps_acces", "max"),
         nb_communes           =("commune",     "count"),
         nb_communes_critiques =("temps_acces", lambda x: (x > 15).sum()),
     ).reset_index()
+    # Trim : ne garder que les colonnes utiles pour la carte commune + fiche commune
+    _temps_cols = ["code_departement", "commune", "temps_acces"]
+    temps = _temps_raw[[c for c in _temps_cols if c in _temps_raw.columns]].copy()
+    del _temps_raw
 
     # ── Immobilier — médiane ──────────────────────────────────────────────────
-    immo = read_drive_csv(IMMO_FILE_ID, sep=";", low_memory=False)
-    immo["dept"] = immo["code_departement"].apply(_zd)
-    immo_dept = immo.groupby("dept").agg(
+    _immo_raw = read_drive_csv(IMMO_FILE_ID, sep=";", low_memory=False)
+    _immo_raw["dept"] = _immo_raw["code_departement"].apply(_zd)
+    immo_dept = _immo_raw.groupby("dept").agg(
         prix_m2_moyen   =("prix_m2",        "median"),
         nb_transactions =("valeur_fonciere","count"),
         surface_moy     =("surface_m2",     "mean"),
     ).reset_index()
+    # Trim : ne garder que les 3 colonnes utiles pour la carte et la fiche commune
+    _immo_cols = ["code_departement", "commune", "prix_m2"]
+    immo = _immo_raw[[c for c in _immo_cols if c in _immo_raw.columns]].copy()
+    del _immo_raw
 
     # ── Environnement (granularité régionale — info only) ────────────────────
     env = read_drive_csv(ENV_FILE_ID, sep=";")
@@ -123,14 +137,19 @@ def load_all_data():
     env["enviro_score"] = pd.to_numeric(
         env["enviro_score"].astype(str).str.replace(",", "."), errors="coerce")
 
-    # ── Médicaments ───────────────────────────────────────────────────────────
-    medic = read_drive_csv(MEDIC_FILE_ID, sep=";")
-
     # ── Pathologies (jointure par code département "dept") ───────────────────
     try:
-        patho = read_drive_csv(PATHO_FILE_ID, sep=";", low_memory=False)
-        if "dept" in patho.columns:
-            patho["dept"] = patho["dept"].astype(str).str.zfill(2)
+        _patho_raw = read_drive_csv(PATHO_FILE_ID, sep=";", low_memory=False)
+        if "dept" in _patho_raw.columns:
+            _patho_raw["dept"] = _patho_raw["dept"].astype(str).str.zfill(2)
+        # Trim : ne garder que les 4 colonnes utiles
+        _patho_cols = ["dept", "patho_niv1", "Ntop", "Npop"]
+        patho = _patho_raw[[c for c in _patho_cols if c in _patho_raw.columns]].copy()
+        del _patho_raw
+        # Downcast pour économiser la RAM
+        for _c in ["Ntop", "Npop"]:
+            if _c in patho.columns:
+                patho[_c] = pd.to_numeric(patho[_c], errors="coerce").astype("float32")
     except Exception as e:
         patho = pd.DataFrame({"_error": [str(e)]})
 
@@ -181,8 +200,13 @@ def load_all_data():
     master["hopitaux_pour_100k"]   = master["nb_hopitaux"] / p100
     master["structures_pour_100k"] = (master["nb_hopitaux"] + master["nb_cliniques"]) / p100
 
+    # ── Downcast master — float64 → float32 pour réduire la RAM ─────────────
+    _float_cols = master.select_dtypes(include="float64").columns.tolist()
+    master[_float_cols] = master[_float_cols].astype("float32")
+
     delais_df = load_delais_rdv()
-    return master, medic, pros, immo, etabs, temps, env, patho, delais_df
+    # medic supprimé : non utilisé nulle part (économie ~50–100 Mo)
+    return master, pros, immo, etabs, temps, env, patho, delais_df
 
 
 @st.cache_data(show_spinner=False)
