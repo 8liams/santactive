@@ -1235,7 +1235,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     )
 
     dept_code  = str(r.get("dept", "")).zfill(2)
-    population = float(r.get("Population", 300_000) or 300_000)
+    population = float(r.get("population_num", 300_000) or 300_000)
     pros       = data.get("pros")
 
     if pros is None or pros.empty:
@@ -1259,7 +1259,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         .size().reset_index(name="nb_dept")
         .rename(columns={"specialite_libelle": "specialite"})
     )
-    pop_map = data["master"].set_index("dept")["Population"].to_dict()
+    pop_map = data["master"].set_index("dept")["population_num"].to_dict()
     nat_by_dept["pop"] = nat_by_dept["dept"].map(
         lambda x: float(pop_map.get(str(x), 300_000) or 300_000)
     )
