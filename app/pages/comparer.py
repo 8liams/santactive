@@ -122,12 +122,14 @@ def render(data: dict) -> None:
         rows_html += f'<tr><td class="metric-label">{label}</td>{cells}</tr>'
 
     st.markdown(
+        '<div class="sa-tbl-scroll">'
         '<table class="comparison-table-v2">'
         '<thead>'
         f'<tr><th class="metric-col">Indicateur</th>{header_cells}</tr>'
         '</thead>'
         f'<tbody>{rows_html}</tbody>'
         '</table>'
+        '</div>'
         '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
         'Les meilleures valeurs sont mises en évidence en vert.'
         '</p>',

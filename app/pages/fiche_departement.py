@@ -1086,6 +1086,7 @@ def render_offre_specialistes(r: pd.Series, data: dict) -> None:
         )
 
     st.markdown(
+        '<div class="sa-tbl-scroll">'
         '<table class="offre-table">'
         "<thead><tr>"
         "<th>Spécialité</th>"
@@ -1096,7 +1097,8 @@ def render_offre_specialistes(r: pd.Series, data: dict) -> None:
         '<th style="text-align:right;">Besoin*</th>'
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
-        "</table>",
+        "</table>"
+        "</div>",
         unsafe_allow_html=True,
     )
     st.markdown(

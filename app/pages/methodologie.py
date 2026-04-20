@@ -111,6 +111,7 @@ def render(data: dict) -> None:
     )
 
     st.markdown(
+        '<div class="sa-tbl-scroll">'
         '<table class="sources-table">'
         "<thead><tr>"
         "<th>Dimension</th><th>Poids</th><th>Source</th><th>Millésime</th>"
@@ -124,7 +125,8 @@ def render(data: dict) -> None:
         "<td>RPPS / DREES</td><td>Janv. 2026</td></tr>"
         "<tr><td><strong>Établissements FINESS</strong></td><td>30 %</td>"
         "<td>FINESS / DREES</td><td>Mars 2026</td></tr>"
-        "</tbody></table>",
+        "</tbody></table>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -180,6 +182,7 @@ def render(data: dict) -> None:
     )
 
     st.markdown(
+        '<div class="sa-tbl-scroll">'
         '<table class="sources-table">'
         "<thead><tr>"
         "<th>Indicateur</th><th>Ce qu'il mesure</th><th>Source</th>"
@@ -236,7 +239,8 @@ def render(data: dict) -> None:
         "<td>Calcul interne FINESS + INSEE</td><td>2026</td>"
         "<td>Trajet routier, pas temps d'attente aux urgences</td>"
         "</tr>"
-        "</tbody></table>",
+        "</tbody></table>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -271,6 +275,7 @@ def render(data: dict) -> None:
     )
 
     st.markdown(
+        '<div class="sa-tbl-scroll">'
         '<table class="sources-table">'
         "<thead><tr>"
         "<th>Spécialité</th><th>Délai médian national</th><th>Délai moyen national</th>"
@@ -285,7 +290,8 @@ def render(data: dict) -> None:
         "<tr><td>Cardiologue</td><td>50 jours</td><td>50 jours</td></tr>"
         "<tr><td>Dermatologue</td><td>52 jours</td><td>61 jours</td></tr>"
         "<tr><td>Ophtalmologue</td><td>52 jours</td><td>80 jours</td></tr>"
-        "</tbody></table>",
+        "</tbody></table>"
+        "</div>",
         unsafe_allow_html=True,
     )
 

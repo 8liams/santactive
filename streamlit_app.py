@@ -272,24 +272,3 @@ st.markdown(
     f'<nav class="sa-mobile-nav">{_nav_links}</nav>',
     unsafe_allow_html=True,
 )
-
-# Injection JS : wrapping des tables HTML pour scroll horizontal sans affecter les cartes
-st.markdown("""
-<script>
-(function() {
-    function wrapTables() {
-        document.querySelectorAll(
-            '[data-testid="stMarkdown"] table, [data-testid="stHtml"] table'
-        ).forEach(function(t) {
-            if (t.closest('.sa-tbl-scroll')) return;
-            var w = document.createElement('div');
-            w.className = 'sa-tbl-scroll';
-            t.parentNode.insertBefore(w, t);
-            w.appendChild(t);
-        });
-    }
-    wrapTables();
-    new MutationObserver(wrapTables).observe(document.body, {childList: true, subtree: true});
-})();
-</script>
-""", unsafe_allow_html=True)

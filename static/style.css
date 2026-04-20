@@ -1758,19 +1758,31 @@ div[data-testid="stRadio"] svg { display: none !important; }
         overflow-x: hidden !important;
     }
 
-    /* ── Tableaux : scroll horizontal UNIQUEMENT, pas de scroll vertical ───
-       Le wrapper .sa-tbl-scroll est injecté par JS (streamlit_app.py)        */
-    .sa-tbl-scroll {
-        overflow-x: auto !important;
-        overflow-y: visible !important;
-        -webkit-overflow-scrolling: touch !important;
-        max-width: 100% !important;
+    /* ── Empêcher le scroll horizontal de toute la page ──────────────────── */
+    body,
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"] {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
     }
-    /* Tableaux natifs Streamlit (dataframe) */
-    [data-testid="stDataFrame"],
-    [data-testid="stTable"] {
+
+    /* ── Wrapper explicite pour tables scrollables (.sa-tbl-scroll) ────────
+       Appliqué directement dans les fichiers Python sur chaque table HTML   */
+    .sa-tbl-scroll {
+        width: 100% !important;
+        max-width: 100% !important;
         overflow-x: auto !important;
-        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .sa-tbl-scroll table {
+        min-width: max-content !important;
+    }
+
+    /* ── Tableaux natifs Streamlit (st.dataframe) ─────────────────────────  */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         max-width: 100% !important;
     }
@@ -1797,9 +1809,33 @@ div[data-testid="stRadio"] svg { display: none !important; }
     /* ── Délai cards : 2 colonnes ────────────────────────────────────────── */
     .delai-grid { grid-template-columns: repeat(2, 1fr) !important; }
 
-    /* ── Boutons ─────────────────────────────────────────────────────────── */
+    /* ── Boutons généraux ────────────────────────────────────────────────── */
     .stButton > button,
     .stDownloadButton > button { width: 100% !important; margin-bottom: 8px !important; }
+
+    /* ── 3 boutons action (Comparer / Partager / Rapport PDF) — en ligne ───
+       :has(.stDownloadButton) cible UNIQUEMENT le bloc qui contient le PDF   */
+    [data-testid="stHorizontalBlock"]:has(.stDownloadButton) {
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        align-items: stretch !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.stDownloadButton) > [data-testid="stColumn"] {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.stDownloadButton) .stButton > button,
+    [data-testid="stHorizontalBlock"]:has(.stDownloadButton) .stDownloadButton > button {
+        font-size: 11px !important;
+        padding: 8px 4px !important;
+        width: 100% !important;
+        margin-bottom: 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        letter-spacing: 0 !important;
+    }
 
     /* ── Searchbox ───────────────────────────────────────────────────────── */
     [data-testid="stSearchbox"] input { font-size: 15px !important; padding: 13px 15px !important; }
