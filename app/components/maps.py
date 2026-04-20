@@ -209,6 +209,159 @@ def render_national_choropleth(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# CARTOUCHES DOM-TOM
+# ──────────────────────────────────────────────────────────────────────────────
+
+DOM_CONFIG = {
+    "971": {"nom": "Guadeloupe", "lat": 16.17,  "lon": -61.45, "zoom": 8},
+    "972": {"nom": "Martinique", "lat": 14.65,  "lon": -61.00, "zoom": 9},
+    "973": {"nom": "Guyane",     "lat":  4.00,  "lon": -53.00, "zoom": 5},
+    "974": {"nom": "La Réunion", "lat": -21.12, "lon":  55.53, "zoom": 9},
+    "976": {"nom": "Mayotte",    "lat": -12.78, "lon":  45.23, "zoom": 9},
+}
+
+
+def render_dom_cartouches(
+    master: pd.DataFrame,
+    geojson_dom: dict | None,
+    metric: str = "score_global",
+    colormap_name: str = "score",
+    reverse: bool = False,
+    height: int = 180,
+) -> None:
+    """Affiche 5 mini-cartes DOM en ligne sous la carte nationale."""
+    if geojson_dom is None:
+        return
+
+    # Prépare les données métriques par code département
+    data_map: dict[str, float] = {}
+    if not master.empty and metric in master.columns:
+        for _, row in master.iterrows():
+            code = str(row.get("dept", ""))
+            val = row.get(metric)
+            if pd.notna(val):
+                data_map[code] = float(val)
+
+    clean_values = [v for v in data_map.values() if pd.notna(v)]
+    if not clean_values:
+        return
+
+    vmin, vmax = min(clean_values), max(clean_values)
+    if vmin >= vmax:
+        vmax = vmin + 1.0
+
+    colors = COLORMAPS.get(colormap_name, COLORMAPS["score"])
+    if reverse:
+        colors = list(reversed(colors))
+    cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
+
+    # Filtre une fois toutes les features DOM du GeoJSON national
+    all_features = geojson_dom.get("features", [])
+    dom_features_by_code: dict[str, list] = {c: [] for c in DOM_CONFIG}
+    for feat in all_features:
+        code = str(feat["properties"].get("code", ""))
+        if code in DOM_CONFIG:
+            dom_features_by_code[code].append(feat)
+
+    cols = st.columns(5)
+
+    for i, (code_dom, cfg) in enumerate(DOM_CONFIG.items()):
+        with cols[i]:
+            # En-tête : nom + score
+            score_val = data_map.get(code_dom)
+            zone_row = master[master["dept"].astype(str) == code_dom]
+            zone = zone_row.iloc[0].get("zone_short", "") if not zone_row.empty else ""
+
+            zone_color = (
+                "#A51C30" if zone == "Critique"
+                else "#E8A838" if zone == "Intermédiaire"
+                else "#1B5E3F" if zone == "Favorable"
+                else "#9C9A92"
+            )
+            score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
+
+            st.markdown(
+                f'<div style="font-size:11px;font-weight:700;color:#0A1938;'
+                f'margin-bottom:4px;text-align:center;">{cfg["nom"]}</div>'
+                f'<div style="font-size:10px;text-align:center;margin-bottom:4px;">'
+                f'<span style="color:{zone_color};font-weight:600;">{score_display}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            features = dom_features_by_code.get(code_dom, [])
+            if not features:
+                st.markdown(
+                    f'<div style="height:{height}px;background:#F3F2EC;'
+                    f'border-radius:4px;display:flex;align-items:center;'
+                    f'justify-content:center;font-size:11px;color:#9C9A92;">'
+                    f'Carte indisponible</div>',
+                    unsafe_allow_html=True,
+                )
+                continue
+
+            dom_geojson = {"type": "FeatureCollection", "features": features}
+
+            # Pré-calcul couleurs
+            code_to_color: dict[str, str] = {}
+            for feat in features:
+                fcode = str(feat["properties"].get("code", ""))
+                val = data_map.get(fcode)
+                if val is not None:
+                    try:
+                        code_to_color[fcode] = cmap(val)
+                    except Exception:
+                        code_to_color[fcode] = "#E8E6DD"
+
+            def _style(feature, _ctc=code_to_color):
+                fcode = str(feature["properties"].get("code", ""))
+                color = _ctc.get(fcode, "#E8E6DD")
+                return {"fillColor": color, "color": "#FFFFFF",
+                        "weight": 0.8, "fillOpacity": 0.88}
+
+            def _highlight(feature):
+                return {"fillColor": "#0A1938", "color": "#0A1938",
+                        "weight": 1.5, "fillOpacity": 0.2}
+
+            m = folium.Map(
+                location=[cfg["lat"], cfg["lon"]],
+                zoom_start=cfg["zoom"],
+                tiles=TILE_URL,
+                attr=TILE_ATTR,
+                zoom_control=False,
+                scrollWheelZoom=False,
+                dragging=False,
+                doubleClickZoom=False,
+                touchZoom=False,
+            )
+
+            folium.GeoJson(
+                dom_geojson,
+                style_function=_style,
+                highlight_function=_highlight,
+                tooltip=folium.GeoJsonTooltip(
+                    fields=["code"],
+                    aliases=["Code"],
+                    localize=True,
+                    sticky=False,
+                    class_name="sa-tooltip",
+                ),
+            ).add_to(m)
+
+            event = st_folium(
+                m,
+                width=None,
+                height=height,
+                returned_objects=["last_object_clicked"],
+                key=f"dom_map_{code_dom}",
+            )
+
+            if event and event.get("last_object_clicked"):
+                from ..router import navigate
+                navigate("dept", dept_code=code_dom)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # CARTE COMMUNALE (zoom département)
 # ──────────────────────────────────────────────────────────────────────────────
 

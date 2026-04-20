@@ -272,6 +272,29 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             unsafe_allow_html=True,
         )
 
+    # ── Cartouches DOM-TOM ────────────────────────────────────────────────
+    from ..components.maps import render_dom_cartouches
+
+    st.markdown(
+        '<div style="margin-top:16px;padding-top:12px;'
+        'border-top:1px solid #E8E6DD;">'
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
+        'text-transform:uppercase;color:#9C9A92;margin-bottom:8px;">'
+        'DÉPARTEMENTS ET RÉGIONS D\'OUTRE-MER'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    render_dom_cartouches(
+        master=master,
+        geojson_dom=geojson,
+        metric=col_key,
+        colormap_name=cmap_name,
+        reverse=reverse_scale,
+        height=160,
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # KPI NATIONAUX
