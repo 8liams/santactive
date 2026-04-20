@@ -1243,24 +1243,25 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         return
 
     # ── Agrégation RPPS pour ce département ──────────────────────────────
-    pros_dept = pros[
-        pros["code_departement"].astype(str).str.zfill(2) == dept_code
-    ].copy()
+    # pros contient les colonnes : dept, specialite_libelle
+    pros_dept = pros[pros["dept"].astype(str) == dept_code].copy()
 
     agg = (
-        pros_dept.groupby("specialite").size()
+        pros_dept.groupby("specialite_libelle").size()
         .reset_index(name="nb")
+        .rename(columns={"specialite_libelle": "specialite"})
     )
     agg["pour_100k"] = (agg["nb"] / population * 100_000).round(1)
 
     # Médiane nationale par spécialité (densité médiane sur tous les depts)
     nat_by_dept = (
-        pros.groupby(["code_departement", "specialite"])
+        pros.groupby(["dept", "specialite_libelle"])
         .size().reset_index(name="nb_dept")
+        .rename(columns={"specialite_libelle": "specialite"})
     )
     pop_map = data["master"].set_index("dept")["Population"].to_dict()
-    nat_by_dept["pop"] = nat_by_dept["code_departement"].map(
-        lambda x: float(pop_map.get(str(x).zfill(2), 300_000) or 300_000)
+    nat_by_dept["pop"] = nat_by_dept["dept"].map(
+        lambda x: float(pop_map.get(str(x), 300_000) or 300_000)
     )
     nat_by_dept["densite"] = (
         nat_by_dept["nb_dept"] / nat_by_dept["pop"] * 100_000
