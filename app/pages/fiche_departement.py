@@ -315,6 +315,8 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
+    from ..scoring import get_score_breakdown
+
     st.html(
         '<div class="section-header">'
         '<div class="section-eyebrow">SCORECARD</div>'
@@ -323,6 +325,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         '</div>'
     )
 
+    # ── Barres comparatives sur les 3 sous-scores principaux ─────────────
     scores = [
         (f'Accès aux soins {info_tooltip("score_acces")}',
          "APL + temps de trajet médian",
@@ -365,6 +368,55 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         )
 
     st.markdown(f'<div class="scorecard-block">{rows_html}</div>', unsafe_allow_html=True)
+
+    # ── Tableau détail 6 dimensions Sant'active v2 ───────────────────────
+    breakdown = get_score_breakdown(r)
+
+    detail_rows = ""
+    for dim in breakdown:
+        if dim["score"] is None:
+            score_display = "N/D"
+            bar_width     = 0
+            color         = "#E8E6DD"
+            txt_color     = "#9C9A92"
+        else:
+            score_display = f"{dim['score']:.0f}/100"
+            bar_width     = int(dim["score"])
+            color = (
+                "#A51C30" if dim["score"] < 33
+                else "#E8A838" if dim["score"] < 67
+                else "#1B5E3F"
+            )
+            txt_color = color
+
+        detail_rows += (
+            f'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">'
+            f'<div style="width:170px;font-size:12px;color:#2B2B2B;font-weight:500;flex-shrink:0;">'
+            f'{dim["label"]}'
+            f'</div>'
+            f'<div style="flex:1;height:6px;background:#E8E6DD;border-radius:3px;overflow:hidden;">'
+            f'<div style="width:{bar_width}%;height:100%;background:{color};border-radius:3px;"></div>'
+            f'</div>'
+            f'<div style="width:55px;text-align:right;font-size:12px;color:{txt_color};font-weight:600;">'
+            f'{score_display}'
+            f'</div>'
+            f'<div style="width:36px;text-align:right;font-size:11px;color:#9C9A92;">'
+            f'{int(dim["weight"] * 100)}\u202f%'
+            f'</div>'
+            f'</div>'
+        )
+
+    st.markdown(
+        '<div style="margin-top:24px;padding:16px 20px;background:#F3F2EC;'
+        'border-radius:6px;">'
+        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;'
+        'text-transform:uppercase;color:#6B6B68;margin-bottom:14px;">'
+        "DÉTAIL · SANT'ACTIVE v2 · 6 DIMENSIONS"
+        '</div>'
+        f'{detail_rows}'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
