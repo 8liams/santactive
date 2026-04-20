@@ -315,108 +315,138 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
-    from ..scoring import get_score_breakdown
 
-    st.html(
+    st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">SCORECARD</div>'
-        '<h2 class="section-title">Où ce département <em>décroche</em>, '
-        'et où il tient bon.</h2>'
-        '</div>'
+        '<h2 class="section-title">'
+        'Où ce département <em>décroche,</em> et où il tient bon.</h2>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
-    # ── Barres comparatives sur les 3 sous-scores principaux ─────────────
-    scores = [
-        (f'Accès aux soins {info_tooltip("score_acces")}',
-         "APL + temps de trajet médian",
-         r.get("score_acces"), master["score_acces"]),
-        (f'Professionnels de santé {info_tooltip("score_pros")}',
-         "RPPS, hors remplaçants",
-         r.get("score_pros"), master["score_pros"]),
-        (f'Établissements {info_tooltip("score_etabs")}',
-         "Hôpitaux + cliniques FINESS",
-         r.get("score_etabs"), master["score_etabs"]),
-    ]
+    # ── Scores ────────────────────────────────────────────────────────────
+    score_acces  = float(r.get("score_acces",    50) or 50)
+    score_pros   = float(r.get("score_pros",     50) or 50)
+    score_etabs  = float(r.get("score_etabs",    50) or 50)
+    score_apl    = float(r.get("score_apl",      50) or 50)
+    score_temps  = float(r.get("score_temps",    50) or 50)
+    score_med    = float(r.get("score_medecins", 50) or 50)
+    score_senior = float(r.get("score_seniors",  50) or 50)
+    score_fonc   = float(r.get("score_foncier",  50) or 50)
 
-    rows_html = ""
-    for label, desc, val, series in scores:
-        if pd.isna(val):
-            continue
-        med = float(series.median())
-        q25 = float(series.quantile(0.25))
-        q75 = float(series.quantile(0.75))
-        val = float(val)
-        delta = val - med
-        color = "crit" if val < 33 else ("inter" if val < 66 else "fav")
-        delta_cls = "pos" if delta >= 0 else "neg"
+    val_acces  = float(r.get("apl_median_dept",      0) or 0)
+    val_pros   = float(r.get("med_gen_pour_100k",    0) or 0)
+    val_etabs  = float(r.get("structures_pour_100k", 0) or 0)
+    val_apl    = float(r.get("apl_median_dept",      0) or 0)
+    val_temps  = float(r.get("temps_acces_median",   0) or 0)
+    val_65     = float(r.get("pct_plus_65",          0) or 0)
+    val_prix   = float(r.get("prix_m2_moyen",        0) or 0)
 
-        rows_html += (
-            '<div class="score-row">'
-            '<div class="score-label">'
-            f'{label}<span class="desc">{desc}</span>'
-            '</div>'
-            '<div class="score-bar">'
-            f'<div class="score-bar-range" style="left:{q25:.1f}%;width:{q75-q25:.1f}%;"></div>'
-            f'<div class="score-bar-median" style="left:{med:.1f}%;"></div>'
-            f'<div class="score-bar-dept {color}" style="left:{val:.1f}%;"></div>'
-            '</div>'
-            '<div class="score-value">'
-            f'<span class="num">{val:.0f}</span>'
-            f'<span class="delta {delta_cls}">{delta:+.0f}\u202fpts vs médiane</span>'
-            '</div>'
-            '</div>'
+    def _render_bar(label, sublabel, score, raw_val, unit,
+                    tooltip_key=None, indent=False):
+        tip = info_tooltip(tooltip_key) if tooltip_key else ""
+        indent_css = (
+            "padding-left:28px;border-left:2px solid #E8E6DD;margin-left:8px;"
+            if indent else ""
         )
+        lbl_size   = "13px" if indent else "15px"
+        lbl_weight = "500"  if indent else "600"
+        num_size   = "20px" if indent else "26px"
+        mb         = "14px" if indent else "24px"
+        pos        = max(2, min(98, int(score)))
 
-    st.markdown(f'<div class="scorecard-block">{rows_html}</div>', unsafe_allow_html=True)
+        if score < 33:
+            dot_color = "#A51C30"
+        elif score < 67:
+            dot_color = "#C8922A"
+        else:
+            dot_color = "#1B5E3F"
 
-    # ── Détail 6 dimensions dans un expander ─────────────────────────────
-    breakdown = get_score_breakdown(r)
-
-    with st.expander("Voir le détail des 6 dimensions →", expanded=False):
-        rows_html = ""
-        for dim in breakdown:
-            if dim["score"] is None:
-                score_display = "N/D"
-                bar_width = 0
-                color = "#E8E6DD"
-            else:
-                score_display = f"{dim['score']:.0f}/100"
-                bar_width = int(dim["score"])
-                color = (
-                    "#A51C30" if dim["score"] < 33
-                    else "#E8A838" if dim["score"] < 67
-                    else "#1B5E3F"
-                )
-
-            rows_html += (
-                f'<div style="display:flex;align-items:center;gap:16px;'
-                f'padding:10px 0;border-bottom:1px solid #E8E6DD;">'
-                f'<div style="width:200px;font-size:13px;color:#2B2B2B;'
-                f'font-weight:500;flex-shrink:0;">{dim["label"]}</div>'
-                f'<div style="flex:1;height:4px;background:#E8E6DD;'
-                f'border-radius:2px;overflow:hidden;">'
-                f'<div style="width:{bar_width}%;height:100%;'
-                f'background:{color};border-radius:2px;"></div></div>'
-                f'<div style="width:60px;text-align:right;font-size:13px;'
-                f'color:{color};font-weight:600;flex-shrink:0;">{score_display}</div>'
-                f'<div style="width:32px;text-align:right;font-size:11px;'
-                f'color:#9C9A92;flex-shrink:0;">{int(dim["weight"] * 100)}%</div>'
-                f'</div>'
-            )
+        d       = int(score - 50)
+        d_str   = f"+{d}\u202fpts vs médiane" if d >= 0 else f"{d}\u202fpts vs médiane"
+        d_color = "#1B5E3F" if d >= 0 else "#A51C30"
+        val_str = (
+            f'<span style="color:#6B6B68;margin-left:6px;">·</span>'
+            f' <span style="color:#6B6B68;">{raw_val:.1f}\u202f{unit}</span>'
+            if raw_val else ""
+        )
 
         st.markdown(
-            f'<div style="padding:4px 0;">{rows_html}</div>',
+            f'<div style="margin-bottom:{mb};{indent_css}">'
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:baseline;margin-bottom:6px;">'
+            f'<div>'
+            f'<span style="font-size:{lbl_size};font-weight:{lbl_weight};'
+            f'color:#0A1938;">{label}</span>{tip}'
+            f'<div style="font-size:11px;color:#9C9A92;margin-top:2px;">'
+            f'{sublabel}{val_str}</div>'
+            f'</div>'
+            f'<div style="text-align:right;">'
+            f'<div style="font-size:{num_size};font-weight:300;'
+            f'color:#0A1938;line-height:1;">{int(score)}</div>'
+            f'<div style="font-size:11px;color:{d_color};'
+            f'font-weight:600;margin-top:2px;">{d_str}</div>'
+            f'</div>'
+            f'</div>'
+            f'<div style="position:relative;height:8px;border-radius:4px;'
+            f'background:linear-gradient(to right,'
+            f'#F5D0D0 0%,#F5D0D0 33%,'
+            f'#F0E8D8 33%,#F0E8D8 67%,'
+            f'#D0E8DC 67%,#D0E8DC 100%);">'
+            f'<div style="position:absolute;left:50%;top:-3px;'
+            f'width:1.5px;height:14px;background:#8B8B8B;'
+            f'transform:translateX(-50%);opacity:0.5;"></div>'
+            f'<div style="position:absolute;left:{pos}%;top:50%;'
+            f'transform:translate(-50%,-50%);'
+            f'width:14px;height:14px;border-radius:50%;'
+            f'background:white;border:2.5px solid {dot_color};'
+            f'box-shadow:0 1px 4px rgba(0,0,0,0.15);"></div>'
+            f'</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
-        st.markdown(
-            '<div style="margin-top:12px;font-size:11px;color:#9C9A92;line-height:1.6;">'
-            "Score Sant'active v2 · 6 dimensions normalisées en rang percentile national. "
-            "0\u202f= pire département · 100\u202f= meilleur. "
-            "Pondérations\u202f: APL 30\u202f% · Temps d'accès 20\u202f% · Médecins 20\u202f%"
-            " · Établissements 15\u202f% · Vieillissement 10\u202f% · Foncier 5\u202f%."
-            '</div>',
-            unsafe_allow_html=True,
-        )
+
+    # ── 3 barres principales + sous-dimensions ────────────────────────────
+    _render_bar("Accès aux soins", "APL + temps de trajet médian",
+                score_acces, val_acces, "/hab.", tooltip_key="apl")
+    _render_bar("Accessibilité APL", "Consultations disponibles / hab.",
+                score_apl, val_apl, "/hab.", indent=True)
+    _render_bar("Accessibilité physique", "Temps trajet établissement",
+                score_temps, val_temps, "min", indent=True)
+
+    _render_bar("Professionnels de santé", "RPPS, hors remplaçants",
+                score_pros, val_pros, "/100k", tooltip_key="med_100k")
+    _render_bar("Médecins généralistes /100k", "Densité RPPS janv. 2026",
+                score_med, val_pros, "/100k", indent=True)
+
+    _render_bar("Établissements", "Hôpitaux + cliniques FINESS",
+                score_etabs, val_etabs, "/100k")
+
+    # ── Séparateur + facteurs de contexte ────────────────────────────────
+    st.markdown(
+        '<div style="border-top:1px solid #E8E6DD;margin:8px 0 20px;"></div>'
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
+        'text-transform:uppercase;color:#9C9A92;margin-bottom:16px;">'
+        'FACTEURS DE CONTEXTE · poids dans le score global'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    _render_bar("Pression démographique", "Part des 65+ · demande de soins",
+                score_senior, val_65, "%")
+    _render_bar("Contexte foncier", "Prix m² · attractivité installation",
+                score_fonc, val_prix, "€/m²")
+
+    # ── Note ──────────────────────────────────────────────────────────────
+    st.markdown(
+        '<div style="margin-top:8px;font-size:11px;color:#9C9A92;line-height:1.6;">'
+        "Score Sant'active v2 · rang percentile national · "
+        "0\u202f= pire département · 100\u202f= meilleur · "
+        "La barre verticale grise indique la médiane nationale (50)."
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
