@@ -252,25 +252,44 @@ else:
 
 # ─── TOP NAV MOBILE — remplace la sidebar sur petit écran ────────────────────
 _nav_items = [
-    ("home",        "🏠", "Accueil"),
-    ("enjeux",      "⚡", "Enjeux"),
-    ("comparer",    "⇄",  "Comparer"),
-    ("methodologie","📋", "Méthodo"),
-    ("about",       "ℹ",  "À propos"),
+    ("home",        "Accueil"),
+    ("enjeux",      "Enjeux"),
+    ("comparer",    "Comparer"),
+    ("methodologie","Méthodo"),
+    ("about",       "À propos"),
 ]
 _nav_links = "".join(
-    f'<a href="?view={v}" class="sa-nav-active" title="{label}">'
-    f'<span class="sa-nav-icon">{icon}</span>'
+    f'<a href="?view={v}" target="_self" class="sa-nav-active" title="{label}">'
     f'<span class="sa-nav-label">{label}</span>'
     f'</a>'
     if v == view else
-    f'<a href="?view={v}" title="{label}">'
-    f'<span class="sa-nav-icon">{icon}</span>'
+    f'<a href="?view={v}" target="_self" title="{label}">'
     f'<span class="sa-nav-label">{label}</span>'
     f'</a>'
-    for v, icon, label in _nav_items
+    for v, label in _nav_items
 )
 st.markdown(
     f'<nav class="sa-mobile-nav">{_nav_links}</nav>',
     unsafe_allow_html=True,
 )
+
+# Injection JS : wrapping des tables HTML pour scroll horizontal sans affecter les cartes
+st.markdown("""
+<script>
+(function() {
+    function wrapTables() {
+        document.querySelectorAll(
+            '[data-testid="stMarkdown"] table, [data-testid="stHtml"] table'
+        ).forEach(function(t) {
+            if (t.closest('.sa-tbl-scroll')) return;
+            var w = document.createElement('div');
+            w.className = 'sa-tbl-scroll';
+            t.parentNode.insertBefore(w, t);
+            w.appendChild(t);
+        });
+    }
+    wrapTables();
+    new MutationObserver(wrapTables).observe(document.body, {childList: true, subtree: true});
+})();
+</script>
+""", unsafe_allow_html=True)

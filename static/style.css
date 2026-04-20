@@ -1758,33 +1758,42 @@ div[data-testid="stRadio"] svg { display: none !important; }
         overflow-x: hidden !important;
     }
 
-    /* ── Tableaux : scroll horizontal tactile ─────────────────────────────── */
-    /* Conteneurs Streamlit natifs */
+    /* ── Tableaux : scroll horizontal UNIQUEMENT, pas de scroll vertical ───
+       Le wrapper .sa-tbl-scroll est injecté par JS (streamlit_app.py)        */
+    .sa-tbl-scroll {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+    }
+    /* Tableaux natifs Streamlit (dataframe) */
     [data-testid="stDataFrame"],
     [data-testid="stTable"] {
         overflow-x: auto !important;
+        overflow-y: visible !important;
         -webkit-overflow-scrolling: touch !important;
         max-width: 100% !important;
-        display: block !important;
     }
-    /* Tables HTML injectées via st.markdown / st.html */
-    [data-testid="stMarkdown"] table,
-    [data-testid="stHtml"] table,
-    .comparison-table-v2,
-    .dept-rank-grid,
-    table {
-        display: block !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        max-width: 100% !important;
-        white-space: nowrap;
+
+    /* ── 3 boutons action en ligne compacte ────────────────────────────────── */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
     }
-    /* Wrapper pour les blocs contenant des tables (évite overflow invisible) */
-    [data-testid="stMarkdown"],
-    [data-testid="stHtml"] {
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        max-width: 100% !important;
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 !important;
+        min-width: 0 !important;
+        padding: 0 2px !important;
+    }
+    [data-testid="stHorizontalBlock"] .stButton > button,
+    [data-testid="stHorizontalBlock"] .stDownloadButton > button {
+        font-size: 11px !important;
+        padding: 7px 3px !important;
+        width: 100% !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        letter-spacing: 0 !important;
     }
 
     /* ── Hero ────────────────────────────────────────────────────────────── */
@@ -1837,29 +1846,27 @@ div[data-testid="stRadio"] svg { display: none !important; }
     }
     .sa-mobile-nav a {
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        color: rgba(255,255,255,0.50);
+        color: rgba(255,255,255,0.55);
         text-decoration: none;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 600;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
-        padding: 6px 4px;
+        padding: 0 4px;
         border-radius: 8px;
         transition: color 0.14s, background 0.14s;
         flex: 1;
         min-width: 0;
+        height: 100%;
         font-family: 'Marianne', 'Inter', sans-serif;
     }
     .sa-mobile-nav a:hover       { color: rgba(255,255,255,0.85); }
     .sa-mobile-nav a.sa-nav-active {
         color: #FFFFFF;
-        background: rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.12);
         border-radius: 6px;
     }
-    .sa-mobile-nav .sa-nav-icon  { font-size: 18px; line-height: 1; display: block; }
-    .sa-mobile-nav .sa-nav-label { display: block; line-height: 1; margin-top: 2px; white-space: nowrap; }
+    .sa-mobile-nav .sa-nav-label { display: block; white-space: nowrap; }
 }

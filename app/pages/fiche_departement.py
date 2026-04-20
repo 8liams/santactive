@@ -66,20 +66,20 @@ def render_topbar(r: pd.Series, data: dict) -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("⧉  Comparer avec…", use_container_width=True):
+        if st.button("Comparer avec…", use_container_width=True):
             st.session_state["compare_base"] = r["dept"]
             navigate("comparer")
     with col2:
-        if st.button("⇄  Partager ce lien", use_container_width=True):
+        if st.button("Partager ce lien", use_container_width=True):
             st.info(f"?view=dept&dept_code={r['dept']}")
     with col3:
-        with st.spinner("Génération du PDF…"):
+        with st.spinner("Génération…"):
             try:
                 recos = _generate_recommendations(r, data["master"], data)
                 pdf_bytes = generate_department_pdf(r, data["master"], recos, data)
                 dept_slug = str(r.get("Nom du département", "rapport")).lower().replace(" ", "_")
                 st.download_button(
-                    label="⬇  Rapport PDF",
+                    label="Rapport PDF",
                     data=pdf_bytes,
                     file_name=f"santactive_{dept_slug}.pdf",
                     mime="application/pdf",
