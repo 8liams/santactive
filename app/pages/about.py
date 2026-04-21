@@ -38,18 +38,6 @@ def _remove_dark_background(image_path: str, output_path: str,
 
 def render(data: dict) -> None:
 
-    # Logo Sant'active sobre en haut de page
-    _sa_b64 = _get_image_b64("static/brand/logo-santactive.png")
-    if _sa_b64:
-        st.markdown(f"""
-<div style="margin-bottom:32px;">
-    <img src="data:image/png;base64,{_sa_b64}"
-         style="width:100px;height:auto;mix-blend-mode:multiply;"
-         alt="Sant'active">
-    <div style="height:1px;background:#E8E6DD;margin-top:16px;"></div>
-</div>
-""", unsafe_allow_html=True)
-
     # Breadcrumb
     st.markdown(
         '<div class="fiche-topbar"><div class="breadcrumb">'
@@ -197,9 +185,9 @@ def render(data: dict) -> None:
     _esdata_b64 = _get_image_b64(_clean_path) or _get_image_b64("static/brand/logo-esdata.png")
     if _esdata_b64:
         st.markdown(f"""
-<div style="display:flex;justify-content:center;margin:24px 0 32px;">
+<div style="margin:8px 0 16px;">
     <img src="data:image/png;base64,{_esdata_b64}"
-         style="width:200px;height:auto;
+         style="width:160px;height:auto;
                 mix-blend-mode:multiply;
                 background:transparent;"
          alt="ESData — ESD Paris">
@@ -207,15 +195,10 @@ def render(data: dict) -> None:
 """, unsafe_allow_html=True)
     else:
         st.markdown("""
-<div style="text-align:center;padding:20px;
-            background:#F3F2EC;border-radius:6px;
-            font-size:18px;font-weight:700;color:#0A1938;
-            margin:24px 0 32px;">
+<div style="padding:12px 0;font-size:16px;font-weight:700;color:#0A1938;margin:8px 0 16px;">
     ESData · ESD Paris
 </div>
 """, unsafe_allow_html=True)
-
-    st.markdown("<div style='margin-top:24px;'>", unsafe_allow_html=True)
 
     membres = [
         {"nom": "Sarah Aït Ouhmad",    "linkedin": "https://www.linkedin.com/in/sarah-ait-ouhmad-76947b220/"},
