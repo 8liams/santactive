@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 from streamlit_searchbox import st_searchbox
@@ -10,6 +12,19 @@ from ..config import PALETTE
 from ..router import navigate
 from ..search import SearchResult, search_territory
 from ..components.tooltip import info_tooltip
+
+
+def _render_page_logo() -> None:
+    """Affiche le logo Sant'active en haut de page."""
+    logo_path = Path("static/brand/logo-santactive.png")
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if logo_path.exists():
+            st.image(str(logo_path), width=120)
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
+        unsafe_allow_html=True,
+    )
 
 # Caches module-level (appelés hors contexte render par le callback searchbox)
 _MASTER_CACHE: pd.DataFrame | None = None
@@ -74,6 +89,8 @@ def render(data: dict) -> None:
     _DATA_CACHE = data
     _COMMUNES_CACHE = None  # reset à chaque render pour forcer recalcul si données changent
     geojson = data.get("geojson")
+
+    _render_page_logo()
 
     # ── HERO ──────────────────────────────────────────────────────────────────
     st.markdown("""

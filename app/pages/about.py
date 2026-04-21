@@ -1,12 +1,29 @@
 """Page À propos — Sant'active."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 from ..router import navigate
 
 
+def _render_page_logo() -> None:
+    """Affiche le logo Sant'active en haut de page."""
+    logo_path = Path("static/brand/logo-santactive.png")
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if logo_path.exists():
+            st.image(str(logo_path), width=120)
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
+        unsafe_allow_html=True,
+    )
+
+
 def render(data: dict) -> None:
+
+    _render_page_logo()
 
     # Breadcrumb
     st.markdown(
@@ -138,15 +155,30 @@ def render(data: dict) -> None:
     )
 
     # ── SECTION 3 — L'ÉQUIPE ──────────────────────────────────────────────────
-    st.markdown(
-        '<div class="section-header" style="margin-top:48px;">'
-        '<div class="section-eyebrow">L\'ÉQUIPE</div>'
-        '<h2 class="section-title">'
-        'Mastère 1 Data <em>· ESD Paris.</em>'
-        '</h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+<div class="section-header" style="margin-top:56px;">
+    <div class="section-eyebrow">L'ÉQUIPE</div>
+    <h2 class="section-title">
+        Mastère 1 Data <em>· ESD Paris.</em>
+    </h2>
+</div>
+""", unsafe_allow_html=True)
+
+    logo_esdata = Path("static/brand/logo-esdata.png")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if logo_esdata.exists():
+            st.image(str(logo_esdata), use_container_width=True)
+        else:
+            st.markdown("""
+        <div style="text-align:center;padding:20px;
+                    background:#F3F2EC;border-radius:6px;
+                    font-size:16px;font-weight:700;color:#0A1938;">
+            ESData · ESD Paris
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:24px;'>", unsafe_allow_html=True)
 
     membres = [
         {"nom": "Sarah Aït Ouhmad",    "linkedin": "https://www.linkedin.com/in/sarah-ait-ouhmad-76947b220/"},

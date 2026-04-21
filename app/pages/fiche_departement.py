@@ -47,6 +47,122 @@ def render(data: dict) -> None:
 # TOPBAR
 # ──────────────────────────────────────────────────────────────────────────────
 
+def render_share_buttons(r: pd.Series) -> None:
+    """Boutons de partage : copie du lien + mail HTML préfait."""
+    import urllib.parse
+
+    dept_nom   = str(r.get("Nom du département", ""))
+    dept_code  = str(r.get("dept", "")).zfill(2)
+    score      = r.get("score_global")
+    rang       = r.get("rang_national")
+    apl        = r.get("apl_median_dept")
+    zone       = r.get("zone_short", "")
+    pct_65     = r.get("pct_plus_65")
+    med_100k   = r.get("med_gen_pour_100k")
+    etabs      = r.get("structures_pour_100k")
+    prix       = r.get("prix_m2_moyen")
+
+    score_str  = f"{float(score):.1f}/100" if score and pd.notna(score) else "N/D"
+    rang_str   = f"{int(rang)}/101"        if rang  and pd.notna(rang)  else "N/D"
+    apl_str    = f"{float(apl):.1f}"       if apl   and pd.notna(apl)   else "N/D"
+    desert_str = "Oui — désert médical officiel (APL < 2.5)" if apl and float(apl) < 2.5 else "Non"
+
+    base_url  = "https://santactive.streamlit.app"
+    fiche_url = f"{base_url}/?view=dept&dept_code={dept_code}"
+
+    subject = f"Sant'active — Fiche santé du département {dept_nom} ({dept_code})"
+
+    body = f"""Bonjour,
+
+Voici le diagnostic Sant'active pour le département {dept_nom} ({dept_code}).
+
+═══════════════════════════════════════
+INDICATEURS CLÉS — {dept_nom.upper()}
+═══════════════════════════════════════
+
+Score global Sant'active : {score_str}
+Rang national            : {rang_str} (rang 1 = situation la plus dégradée)
+Zone                     : {zone}
+
+APL (accessibilité médecins) : {apl_str} consult./an/hab.
+Désert médical officiel DREES : {desert_str}
+
+Médecins généralistes : {f"{float(med_100k):.0f} /100 000 hab." if med_100k and pd.notna(med_100k) else "N/D"}
+Établissements        : {f"{float(etabs):.1f} /100 000 hab." if etabs and pd.notna(etabs) else "N/D"}
+Part des 65+          : {f"{float(pct_65):.1f} %" if pct_65 and pd.notna(pct_65) else "N/D"}
+Prix médian /m²       : {f"{float(prix):.0f} €" if prix and pd.notna(prix) else "N/D"}
+
+═══════════════════════════════════════
+ACCÉDER À LA FICHE COMPLÈTE
+═══════════════════════════════════════
+
+{fiche_url}
+
+La fiche complète contient :
+- Scorecard détaillée (6 dimensions)
+- Carte des communes (prix m² et temps d'accès)
+- Plan d'action avec recommandations chiffrées
+- Top 5 pathologies et offre médicale associée
+- Délais d'accès aux spécialistes estimés
+
+═══════════════════════════════════════
+À PROPOS DE SANT'ACTIVE
+═══════════════════════════════════════
+
+Sant'active est un observatoire santé territorial open source
+développé par l'équipe ESData (ESD — École Supérieure du Digital,
+Mastère 1 Data, Paris, 2026) dans le cadre du défi Open Data University
+× Fondation Roche.
+
+Toutes les données sont issues de sources officielles françaises
+(INSEE, RPPS/DREES, FINESS, APL/ANCT, DVF, CNAM, DREES).
+
+Contact : santactive.esdata@gmail.com
+"""
+
+    body_encoded    = urllib.parse.quote(body)
+    subject_encoded = urllib.parse.quote(subject)
+    mailto_link     = f"mailto:?subject={subject_encoded}&body={body_encoded}"
+
+    copy_js = f"""
+    <script>
+    function copyFicheLink() {{
+        navigator.clipboard.writeText('{fiche_url}')
+            .then(() => {{
+                const btn = document.getElementById('copy-btn');
+                const orig = btn.innerHTML;
+                btn.innerHTML = 'Lien copié !';
+                btn.style.background = '#1B5E3F';
+                setTimeout(() => {{
+                    btn.innerHTML = orig;
+                    btn.style.background = '#1A3D8F';
+                }}, 2000);
+            }});
+    }}
+    </script>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">
+        <button id="copy-btn"
+                onclick="copyFicheLink()"
+                style="padding:12px 24px;background:#1A3D8F;color:white;
+                       border:none;border-radius:4px;font-size:14px;
+                       font-weight:500;cursor:pointer;
+                       font-family:Marianne,sans-serif;
+                       transition:background 0.2s;">
+            Copier le lien
+        </button>
+        <a href="{mailto_link}"
+           style="padding:12px 24px;background:white;color:#1A3D8F;
+                  border:1.5px solid #1A3D8F;border-radius:4px;
+                  font-size:14px;font-weight:500;text-decoration:none;
+                  font-family:Marianne,sans-serif;">
+            Envoyer par mail
+        </a>
+    </div>
+    """
+
+    st.markdown(copy_js, unsafe_allow_html=True)
+
+
 def render_topbar(r: pd.Series, data: dict) -> None:
     region_code = str(r.get("Code région", ""))
     region_name = str(r.get("Nom de la région", ""))
@@ -64,15 +180,14 @@ def render_topbar(r: pd.Series, data: dict) -> None:
         '</div>'
     )
 
-    col1, col2, col3 = st.columns(3)
+    render_share_buttons(r)
+
+    col1, col2 = st.columns(2)
     with col1:
         if st.button("Comparer avec…", use_container_width=True):
             st.session_state["compare_base"] = r["dept"]
             navigate("comparer")
     with col2:
-        if st.button("Partager ce lien", use_container_width=True):
-            st.info(f"?view=dept&dept_code={r['dept']}")
-    with col3:
         with st.spinner("Génération…"):
             try:
                 recos = _generate_recommendations(r, data["master"], data)

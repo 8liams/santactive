@@ -111,21 +111,29 @@ view = get_current_view()
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     # ── Brand block ──────────────────────────────────────────────────────────
-    st.markdown(
-        '<div style="text-align:center;padding-bottom:4px;">'
-        '<span style="font-family:Marianne,Inter,sans-serif;'
-        'font-size:18px;font-weight:700;color:#FFFFFF;letter-spacing:0.02em;">'
-        "Sant'active"
-        '</span><br>'
-        '<span style="font-size:10px;color:rgba(255,255,255,0.45);'
-        'letter-spacing:0.12em;text-transform:uppercase;">'
-        "Observatoire santé territorial"
-        '</span></div>',
-        unsafe_allow_html=True,
-    )
+    _sidebar_logo = Path("static/brand/logo-santactive.png")
+    if _sidebar_logo.exists():
+        st.sidebar.image(
+            str(_sidebar_logo),
+            width=140,
+            use_container_width=False,
+        )
+    else:
+        st.sidebar.markdown("""
+        <div style="font-size:18px;font-weight:700;color:white;
+                    padding:8px 0 4px;">Sant'active</div>
+        """, unsafe_allow_html=True)
+
+    st.sidebar.markdown("""
+<div style="font-size:10px;font-weight:600;letter-spacing:0.12em;
+            text-transform:uppercase;color:rgba(255,255,255,0.4);
+            margin-bottom:20px;">
+    OBSERVATOIRE SANTÉ TERRITORIAL
+</div>
+""", unsafe_allow_html=True)
     st.markdown(
         "<hr style='border:none;border-top:1px solid rgba(255,255,255,0.1);"
-        "margin:16px 0 20px;'>",
+        "margin:0 0 20px;'>",
         unsafe_allow_html=True,
     )
 
@@ -138,9 +146,9 @@ with st.sidebar:
     )
 
     _nav = [
-        ("Accueil",      "home",        "home"),
-        ("Enjeux",       "enjeux",      "enjeux"),
-        ("Comparaison",  "comparer",    "comparer"),
+        ("Accueil",           "home",     "home"),
+        ("À quoi ça sert ?",  "enjeux",   "enjeux"),
+        ("Comparaison",       "comparer", "comparer"),
     ]
     for label, target, v_key in _nav:
         is_active = view == v_key

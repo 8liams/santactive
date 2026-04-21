@@ -1,19 +1,36 @@
 """Page Enjeux — Pourquoi Sant'active existe."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
+
+
+def _render_page_logo() -> None:
+    """Affiche le logo Sant'active en haut de page."""
+    logo_path = Path("static/brand/logo-santactive.png")
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if logo_path.exists():
+            st.image(str(logo_path), width=120)
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
+        unsafe_allow_html=True,
+    )
 
 
 def render(data: dict) -> None:
 
+    _render_page_logo()
+
     st.markdown(
         '<div class="section-header">'
-        '<div class="section-eyebrow">CONTEXTE</div>'
-        '<h2 class="section-title">Un probl\u00e8me r\u00e9el, <em>des donn\u00e9es pour agir.</em></h2>'
+        '<div class="section-eyebrow">SANT\'ACTIVE · POUR QUI · POURQUOI</div>'
+        '<h2 class="section-title">À quoi sert Sant\'active, <em>et pour qui.</em></h2>'
         '<p class="section-lead">'
-        'La d\u00e9sertification m\u00e9dicale est une r\u00e9alit\u00e9 document\u00e9e. '
-        'Sant\u2019active transforme des donn\u00e9es ouvertes officielles '
-        'en diagnostics actionnables pour ceux qui d\u00e9cident.'
+        'Sant\'active transforme des données ouvertes officielles en diagnostics '
+        'actionnables pour ceux qui décident sur les territoires. '
+        'Voici les enjeux auxquels nous répondons et les profils qui utilisent l\'outil.'
         '</p>'
         '</div>',
         unsafe_allow_html=True,

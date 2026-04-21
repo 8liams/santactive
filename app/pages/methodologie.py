@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 from ..router import navigate
 from ..components.tooltip import info_tooltip
+
+
+def _render_page_logo() -> None:
+    """Affiche le logo Sant'active en haut de page."""
+    logo_path = Path("static/brand/logo-santactive.png")
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if logo_path.exists():
+            st.image(str(logo_path), width=120)
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Helpers HTML ──────────────────────────────────────────────────────────────
@@ -30,6 +45,8 @@ def _prose(*paragraphs: str) -> None:
 # ── Render principal ──────────────────────────────────────────────────────────
 
 def render(data: dict) -> None:
+
+    _render_page_logo()
 
     # Breadcrumb
     st.markdown(
@@ -472,12 +489,29 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "erreur de données, une incohérence ou souhaitez suggérer une amélioration, "
         "contactez l'équipe."
         "</p>"
-        "</div>"
-        '<div style="background:#F3F2EC;border-radius:4px;padding:32px;'
-        'text-align:center;">'
-        '<p style="font-size:18px;font-family:\'Instrument Serif\',serif;'
-        'margin-bottom:8px;">contact@santactive.fr</p>'
-        '<p style="font-size:13px;color:#6B6B68;">Réponse sous 72h ouvrées.</p>'
         "</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown("""
+<div style="margin-top:48px;padding:20px 24px;
+            background:#F3F2EC;border-radius:6px;
+            display:flex;align-items:center;
+            justify-content:space-between;flex-wrap:wrap;gap:16px;">
+    <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;
+                    text-transform:uppercase;color:#6B6B68;margin-bottom:6px;">
+            CONTACT · QUESTIONS MÉTHODOLOGIQUES
+        </div>
+        <div style="font-size:14px;color:#0A1938;">
+            Pour toute question sur les données, les calculs ou la méthodologie :
+        </div>
+    </div>
+    <a href="mailto:santactive.esdata@gmail.com"
+       style="padding:12px 24px;background:#1A3D8F;color:white;
+              border-radius:4px;text-decoration:none;font-size:14px;
+              font-weight:500;white-space:nowrap;">
+        santactive.esdata@gmail.com
+    </a>
+</div>
+""", unsafe_allow_html=True)
