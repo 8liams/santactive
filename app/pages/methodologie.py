@@ -2,25 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import streamlit as st
 
 from ..router import navigate
 from ..components.tooltip import info_tooltip
-
-
-def _render_page_logo() -> None:
-    """Affiche le logo Sant'active en haut de page."""
-    logo_path = Path("static/brand/logo-santactive.png")
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if logo_path.exists():
-            st.image(str(logo_path), width=120)
-    st.markdown(
-        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
-        unsafe_allow_html=True,
-    )
 
 
 # ── Helpers HTML ──────────────────────────────────────────────────────────────
@@ -45,8 +30,6 @@ def _prose(*paragraphs: str) -> None:
 # ── Render principal ──────────────────────────────────────────────────────────
 
 def render(data: dict) -> None:
-
-    _render_page_logo()
 
     # Breadcrumb
     st.markdown(

@@ -1951,3 +1951,28 @@ div[data-testid="stRadio"] svg { display: none !important; }
     }
     .sa-mobile-nav .sa-nav-label { display: block; white-space: nowrap; }
 }
+
+/* ─── LOGOS : transparence ────────────────────────────────────────────────── */
+/* Streamlit wraps images in a div with white background by default.
+   On neutralise ce comportement pour nos logos injectés en HTML. */
+.stImage > img {
+    background: transparent !important;
+}
+
+/* Images injectées via st.markdown HTML */
+img[alt="Sant'active"],
+img[alt="ESData — ESD Paris"] {
+    background: transparent !important;
+    display: block;
+}
+
+/* Sidebar : neutralise le fond blanc que Streamlit ajoute
+   autour des images dans st.sidebar.image() */
+[data-testid="stSidebar"] .stImage {
+    background: transparent !important;
+    padding: 0 !important;
+}
+[data-testid="stSidebar"] .stImage > img {
+    background: transparent !important;
+    border-radius: 8px;
+}

@@ -27,6 +27,20 @@ warnings.filterwarnings("ignore")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+
+def _get_image_b64(path: str) -> str:
+    """Convertit une image en base64 pour injection HTML inline.
+
+    Streamlit ne gère pas bien les PNG transparents dans st.image()
+    sur fond sombre. L'injection HTML inline via base64 contourne
+    ce problème et permet de contrôler les styles CSS.
+    """
+    p = Path(path)
+    if not p.exists():
+        return ""
+    with open(p, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
 _logo_path = STATIC_DIR / "brand" / "logo-santactive.png"
 st.set_page_config(
@@ -111,13 +125,17 @@ view = get_current_view()
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     # ── Brand block ──────────────────────────────────────────────────────────
-    _sidebar_logo = Path("static/brand/logo-santactive.png")
-    if _sidebar_logo.exists():
-        st.sidebar.image(
-            str(_sidebar_logo),
-            width=140,
-            use_container_width=False,
-        )
+    _logo_b64 = _get_image_b64("static/brand/logo-santactive.png")
+    if _logo_b64:
+        st.sidebar.markdown("""
+<div style="padding:16px 8px 4px;text-align:center;">
+    <img src="data:image/png;base64,{logo_b64}"
+         style="width:120px;height:auto;
+                mix-blend-mode:screen;
+                filter:brightness(1.1);"
+         alt="Sant'active">
+</div>
+""".format(logo_b64=_logo_b64), unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
         <div style="font-size:18px;font-weight:700;color:white;

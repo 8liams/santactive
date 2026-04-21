@@ -1,6 +1,7 @@
 """Page À propos — Sant'active."""
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import streamlit as st
@@ -8,22 +9,46 @@ import streamlit as st
 from ..router import navigate
 
 
-def _render_page_logo() -> None:
-    """Affiche le logo Sant'active en haut de page."""
-    logo_path = Path("static/brand/logo-santactive.png")
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if logo_path.exists():
-            st.image(str(logo_path), width=120)
-    st.markdown(
-        '<hr style="border:none;border-top:1px solid #E8E6DD;margin:12px 0 32px;">',
-        unsafe_allow_html=True,
-    )
+def _get_image_b64(path: str) -> str:
+    p = Path(path)
+    if not p.exists():
+        return ""
+    with open(p, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+
+def _remove_dark_background(image_path: str, output_path: str,
+                             threshold: int = 30) -> str:
+    """Supprime le fond noir/sombre d'un PNG via PIL."""
+    try:
+        import numpy as np
+        from PIL import Image
+
+        img = Image.open(image_path).convert("RGBA")
+        data = np.array(img)
+        r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+        dark_mask = (r.astype(int) + g.astype(int) + b.astype(int)) < (threshold * 3)
+        data[:, :, 3] = np.where(dark_mask, 0, a)
+        result = Image.fromarray(data)
+        result.save(output_path, "PNG")
+        return output_path
+    except ImportError:
+        return image_path
 
 
 def render(data: dict) -> None:
 
-    _render_page_logo()
+    # Logo Sant'active sobre en haut de page
+    _sa_b64 = _get_image_b64("static/brand/logo-santactive.png")
+    if _sa_b64:
+        st.markdown(f"""
+<div style="margin-bottom:32px;">
+    <img src="data:image/png;base64,{_sa_b64}"
+         style="width:100px;height:auto;mix-blend-mode:multiply;"
+         alt="Sant'active">
+    <div style="height:1px;background:#E8E6DD;margin-top:16px;"></div>
+</div>
+""", unsafe_allow_html=True)
 
     # Breadcrumb
     st.markdown(
@@ -164,19 +189,31 @@ def render(data: dict) -> None:
 </div>
 """, unsafe_allow_html=True)
 
-    logo_esdata = Path("static/brand/logo-esdata.png")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if logo_esdata.exists():
-            st.image(str(logo_esdata), use_container_width=True)
-        else:
-            st.markdown("""
-        <div style="text-align:center;padding:20px;
-                    background:#F3F2EC;border-radius:6px;
-                    font-size:16px;font-weight:700;color:#0A1938;">
-            ESData · ESD Paris
-        </div>
-        """, unsafe_allow_html=True)
+    # Logo ESData — suppression du fond noir via PIL au premier chargement
+    _clean_path = "static/brand/logo-esdata-clean.png"
+    if not Path(_clean_path).exists():
+        _remove_dark_background("static/brand/logo-esdata.png", _clean_path)
+
+    _esdata_b64 = _get_image_b64(_clean_path) or _get_image_b64("static/brand/logo-esdata.png")
+    if _esdata_b64:
+        st.markdown(f"""
+<div style="display:flex;justify-content:center;margin:24px 0 32px;">
+    <img src="data:image/png;base64,{_esdata_b64}"
+         style="width:200px;height:auto;
+                mix-blend-mode:multiply;
+                background:transparent;"
+         alt="ESData — ESD Paris">
+</div>
+""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+<div style="text-align:center;padding:20px;
+            background:#F3F2EC;border-radius:6px;
+            font-size:18px;font-weight:700;color:#0A1938;
+            margin:24px 0 32px;">
+    ESData · ESD Paris
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top:24px;'>", unsafe_allow_html=True)
 
