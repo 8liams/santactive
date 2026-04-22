@@ -83,7 +83,7 @@ def render(data: dict) -> None:
         Cartographier la santé,<br><em>territoire par territoire.</em>
     </h1>
     <p class="hero-lead">
-        Diagnostics, accès aux soins, démographie, pathologies et immobilier —
+        Diagnostics, accès aux soins, démographie, pathologies et immobilier,
         croisés en une seule fiche par territoire, destinée aux ARS, aux élus et
         aux professionnels de santé.
     </p>

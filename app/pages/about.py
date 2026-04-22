@@ -53,7 +53,7 @@ def render(data: dict) -> None:
         '<div class="section-header">'
         '<div class="section-eyebrow">LE PROJET</div>'
         '<h2 class="section-title">'
-        "Sant'active — <em>Cartographier la santé, territoire par territoire.</em>"
+        "Sant'active : <em>Cartographier la santé, territoire par territoire.</em>"
         '</h2>'
         '<p class="section-lead">'
         "Un outil d'aide à la décision territoriale sur l'accès aux soins en France, "
@@ -69,7 +69,7 @@ def render(data: dict) -> None:
         "La désertification médicale touche aujourd'hui près de "
         '<strong>87\u202f% du territoire français</strong> et prive des millions '
         "de personnes d'un accès équitable aux soins. Pourtant, les décideurs "
-        "— élus locaux, directeurs d'ARS, professionnels de santé — manquent "
+        "(élus locaux, directeurs d'ARS, professionnels de santé) manquent "
         "souvent d'un outil synthétique, lisible et fondé sur des données "
         "officielles pour orienter leurs décisions."
         '</p>'
@@ -79,7 +79,7 @@ def render(data: dict) -> None:
         "accès aux médecins, établissements de santé, délais estimés, "
         "démographie, pathologies chroniques et contexte immobilier. "
         "L'objectif est de transformer des données brutes en signaux "
-        "actionnables — des recommandations chiffrées, localisées, hiérarchisées."
+        "actionnables : des recommandations chiffrées, localisées, hiérarchisées."
         '</p>'
         '<p>'
         "Toutes les données utilisées sont en accès libre (open data). "

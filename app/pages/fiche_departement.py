@@ -65,7 +65,7 @@ def render_share_buttons(r: pd.Series) -> None:
     score_str  = f"{float(score):.1f}/100" if score and pd.notna(score) else "N/D"
     rang_str   = f"{int(rang)}/101"        if rang  and pd.notna(rang)  else "N/D"
     apl_str    = f"{float(apl):.1f}"       if apl   and pd.notna(apl)   else "N/D"
-    desert_str = "Oui — désert médical officiel (APL < 2.5)" if apl and float(apl) < 2.5 else "Non"
+    desert_str = "Oui, désert médical officiel (APL < 2.5)" if apl and float(apl) < 2.5 else "Non"
 
     base_url  = "https://santactive.streamlit.app"
     fiche_url = f"{base_url}/?view=dept&dept_code={dept_code}"
@@ -1744,7 +1744,7 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
             f'<div style="background:#FEE9E9;border:1px solid #A51C30;'
             f'border-radius:4px;padding:14px 18px;margin:0 0 24px;'
             f'font-size:14px;color:#5E0000;">'
-            f'<strong>Zone en désert médical</strong> — APL de {apl:.1f}\u202f/hab., '
+            f'<strong>Zone en désert médical.</strong> APL de {apl:.1f}\u202f/hab., '
             f'en dessous du seuil DREES de {APL_SEUIL_DESERT} '
             f'consultations/an/habitant. '
             f'Les délais estimés ci-dessous sont probablement sous-évalués.'

@@ -70,7 +70,7 @@ def render(data: dict) -> None:
     )
     _prose(
         "Le dashboard est destiné aux ARS, aux élus locaux et aux professionnels de "
-        "santé. Il ne produit pas de vérité absolue sur un territoire — il synthétise "
+        "santé. Il ne produit pas de vérité absolue sur un territoire, il synthétise "
         "des signaux disponibles pour orienter le diagnostic et la décision. Chaque "
         "indicateur est accompagné de sa source, de son millésime et de ses limites "
         "connues."
@@ -97,7 +97,7 @@ les zones prioritaires d'intervention.</p>
     st.html("""
 <div style="max-width:720px;font-size:14px;line-height:1.8;color:#2B2B2B;margin-bottom:32px;">
 <p>Chaque indicateur est normalisé en <strong>rang percentile</strong>
-sur les 101 départements — méthode standard utilisée par la DREES
+sur les 101 départements, méthode standard utilisée par la DREES
 dans ses propres publications. Un score de 50 correspond exactement
 à la médiane nationale. Un score de 100 correspond au meilleur
 département sur cette dimension. Un score de 0 au pire.</p>
