@@ -42,10 +42,14 @@ def _get_image_b64(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
-_logo_path = STATIC_DIR / "brand" / "logo-santactive.png"
+# Favicon : version fond blanc (le PNG original a un fond noir)
+_favicon_path = STATIC_DIR / "brand" / "logo-santactive-favicon.png"
+_logo_path    = STATIC_DIR / "brand" / "logo-santactive.png"
+_page_icon    = str(_favicon_path) if _favicon_path.exists() else (
+                str(_logo_path) if _logo_path.exists() else "🏥")
 st.set_page_config(
     page_title="Sant'active",
-    page_icon=str(_logo_path) if _logo_path.exists() else "🏥",
+    page_icon=_page_icon,
     layout="wide",
     initial_sidebar_state="auto",  # auto = rétractée sur mobile, ouverte sur desktop
     menu_items={
