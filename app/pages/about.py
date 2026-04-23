@@ -331,11 +331,6 @@ def render(data: dict) -> None:
             "https://data.ameli.fr/",
         ),
         (
-            "ANSM · Base des médicaments · 2025",
-            "Base nationale des médicaments — consommation et prescriptions",
-            "https://base-donnees-publique.medicaments.gouv.fr/",
-        ),
-        (
             "DREES · Études et Résultats n°1085 · 2018",
             "Enquête nationale sur les délais d'attente en médecine (40 000 personnes)",
             "https://drees.solidarites-sante.gouv.fr/publications/etudes-et-resultats/"

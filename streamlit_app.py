@@ -242,7 +242,7 @@ with st.sidebar:
         'margin:0;">'
         "Sources&nbsp;: INSEE 2021 · RPPS 2026<br>"
         "FINESS 2026 · DVF 2025<br>"
-        "ANSM · CNAM 2023 · DREES"
+        "CNAM 2023 · DREES"
         "</p></div>",
         unsafe_allow_html=True,
     )

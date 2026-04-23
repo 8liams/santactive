@@ -103,7 +103,7 @@ def _generate_weasyprint(dept_row, gauge_fig, radar_fig) -> bytes:
 
         <div class="footer">
             Dashboard Santé &amp; Territoires · Sources : INSEE 2021 · RPPS janv. 2026 ·
-            FINESS mars 2026 · DVF 2025 · ANSM · CNAM 2023
+            FINESS mars 2026 · DVF 2025 · CNAM 2023
         </div>
     </body></html>
     """
@@ -256,7 +256,7 @@ def _generate_reportlab(dept_row, gauge_fig, radar_fig) -> bytes:
         canvas.drawCentredString(
             A4[0] / 2, 1 * cm,
             "Dashboard Santé & Territoires · Sources : INSEE 2021 · "
-            "RPPS janv. 2026 · FINESS mars 2026 · DVF 2025 · ANSM · CNAM 2023",
+            "RPPS janv. 2026 · FINESS mars 2026 · DVF 2025 · CNAM 2023",
         )
         canvas.drawRightString(A4[0] - 2 * cm, 0.6 * cm,
                                f"Page {_doc.page}")
