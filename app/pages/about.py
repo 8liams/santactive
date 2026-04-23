@@ -356,6 +356,91 @@ def render(data: dict) -> None:
         )
     st.markdown(rows_html, unsafe_allow_html=True)
 
+    # VOC — sigles (sous les sources)
+    _voc: list[tuple[str, str, str | None]] = [
+        (
+            "FINESS",
+            "Fichier National des Établissements Sanitaires et Sociaux",
+            None,
+        ),
+        (
+            "DREES",
+            "Direction de la Recherche, des Études, de l'Évaluation et des "
+            "Statistiques",
+            "c'est la direction statistique du ministère de la Santé",
+        ),
+        (
+            "RPPS",
+            "Répertoire Partagé des Professionnels de Santé",
+            None,
+        ),
+        (
+            "DVF",
+            "Demandes de Valeurs Foncières",
+            None,
+        ),
+        (
+            "DGFiP",
+            "Direction Générale des Finances Publiques",
+            "c'est la direction du ministère des Finances qui gère la fiscalité "
+            "et le cadastre",
+        ),
+        (
+            "APL",
+            "Accessibilité Potentielle Localisée",
+            None,
+        ),
+        (
+            "ANCT",
+            "Agence Nationale de la Cohésion des Territoires",
+            None,
+        ),
+        (
+            "CNAM",
+            "Caisse Nationale d'Assurance Maladie",
+            None,
+        ),
+        (
+            "ANSM",
+            "Agence Nationale de Sécurité du Médicament",
+            None,
+        ),
+        (
+            "INSEE",
+            "Institut National de la Statistique et des Études Économiques",
+            None,
+        ),
+        (
+            "IRDES",
+            "Institut de Recherche et Documentation en Économie de la Santé",
+            None,
+        ),
+    ]
+    st.markdown(
+        '<div class="section-header" style="margin-top:40px;">'
+        '<div class="section-eyebrow">VOC</div>'
+        '<h2 class="section-title">Sigles <em>et acronymes.</em></h2>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    _voc_html = (
+        '<div style="max-width:720px;margin-top:8px;'
+        'font-size:14px;line-height:1.75;color:#2B2B2B;">'
+    )
+    for abbr, label, extra in _voc:
+        _voc_html += (
+            '<div style="padding:10px 0;border-bottom:1px solid #E8E6DD;">'
+            f'<span style="font-weight:700;color:#0A1938;">{abbr}</span>'
+            f" — {label}"
+        )
+        if extra:
+            _voc_html += (
+                f'<span style="color:#6B6B68;"> · {extra}</span>'
+            )
+        _voc_html += "</div>"
+    _voc_html += "</div>"
+    st.markdown(_voc_html, unsafe_allow_html=True)
+
     # ── SECTION 5 — LIENS ─────────────────────────────────────────────────────
     st.markdown(
         '<div class="section-header" style="margin-top:48px;">'
