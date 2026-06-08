@@ -502,6 +502,42 @@ div[data-testid="stExpander"] > div {
 .fiche-topbar .sep { color: #C9C6BA; margin: 0 8px; }
 .fiche-topbar .current { color: #0A0A0A; font-weight: 500; }
 
+/* ─── Barre de partage fiche ─────────────────────────────────────────────── */
+.fiche-share-bar {
+    background: linear-gradient(135deg, #F8F7F3 0%, #F3F2EC 100%);
+    border: 1px solid #E8E6DD;
+    border-left: 4px solid #1A3D8F;
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+}
+.fiche-share-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.fiche-share-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #1A3D8F;
+}
+.fiche-share-title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 400;
+    color: #0A1938;
+    letter-spacing: -0.01em;
+}
+.fiche-share-lead {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #6B6B68;
+    margin: 0 0 4px;
+}
+
 /* ─── Header fiche ───────────────────────────────────────────────────────── */
 .fiche-header {
     padding: 40px 0 32px;
@@ -1349,6 +1385,33 @@ div[data-testid="stRadio"] svg { display: none !important; }
     background: #E3EFE8;
 }
 .comparison-table-v2 .cell-na { color: #9C9A92; }
+.comparison-table-national .cell-national-ref {
+    background: #F3F2EC;
+    font-weight: 600;
+    color: #0A1938;
+}
+.comparison-table-national .col-national,
+.comparison-table-national .col-lecture {
+    text-align: left;
+}
+.comparison-table-national .cell-lecture {
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #4A4A4A;
+    max-width: 280px;
+}
+.comparison-table-national .cell-above-nat {
+    color: #1B5E3F;
+    background: #E3EFE8;
+}
+.comparison-table-national .cell-below-nat {
+    color: #A51C30;
+    background: #FBEEF0;
+}
+.comparison-table-national .cell-at-nat {
+    color: #6B6B68;
+}
 
 /* ─── KPI card (fiche commune contexte départemental) ─────────────────────── */
 .kpi-card {

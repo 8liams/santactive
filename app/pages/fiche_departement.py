@@ -10,6 +10,7 @@ import streamlit as st
 from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
 from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
+from ..components.share_bar import dept_share_context, render_fiche_share_bar
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate
@@ -49,128 +50,11 @@ def render(data: dict) -> None:
 # TOPBAR
 # ──────────────────────────────────────────────────────────────────────────────
 
-def render_share_buttons(r: pd.Series) -> None:
-    """Boutons de partage : copie du lien + mail HTML préfait."""
-    import urllib.parse
-
-    dept_nom   = str(r.get("Nom du département", ""))
-    dept_code  = str(r.get("dept", "")).zfill(2)
-    score      = r.get("score_global")
-    rang       = r.get("rang_national")
-    apl        = r.get("apl_median_dept")
-    zone       = r.get("zone_short", "")
-    pct_65     = r.get("pct_plus_65")
-    med_100k   = r.get("med_gen_pour_100k")
-    etabs      = r.get("structures_pour_100k")
-    prix       = r.get("prix_m2_moyen")
-
-    score_str  = f"{float(score):.1f}/100" if score and pd.notna(score) else "N/D"
-    nb_classes = int(r.get("nb_classes", 101) or 101)
-    rang_aff   = fmt_rang_affichage(rang, nb_classes) if rang and pd.notna(rang) else "N/D"
-    rang_str   = f"{rang_aff}/{nb_classes}" if rang_aff != "N/D" else "N/D"
-    apl_str    = f"{float(apl):.1f}"       if apl   and pd.notna(apl)   else "N/D"
-    desert_str = "Oui, désert médical officiel (APL < 2.5)" if apl and float(apl) < 2.5 else "Non"
-
-    base_url  = "https://santactive.streamlit.app"
-    fiche_url = f"{base_url}/?view=dept&dept_code={dept_code}"
-
-    subject = f"Sant'active — Fiche santé du département {dept_nom} ({dept_code})"
-
-    body = f"""Bonjour,
-
-Voici le diagnostic Sant'active pour le département {dept_nom} ({dept_code}).
-
-═══════════════════════════════════════
-INDICATEURS CLÉS — {dept_nom.upper()}
-═══════════════════════════════════════
-
-Score global Sant'active : {score_str}
-Indice de fragilité nationale : {rang_str} (100 = situation la plus dégradée)
-Zone                     : {zone}
-
-APL (accessibilité médecins) : {apl_str} consult./an/hab.
-Désert médical officiel DREES : {desert_str}
-
-Médecins généralistes : {f"{float(med_100k):.0f} /100 000 hab." if med_100k and pd.notna(med_100k) else "N/D"}
-Établissements        : {f"{float(etabs):.1f} /100 000 hab." if etabs and pd.notna(etabs) else "N/D"}
-Part des 65+          : {f"{float(pct_65):.1f} %" if pct_65 and pd.notna(pct_65) else "N/D"}
-Prix médian /m²       : {f"{float(prix):.0f} €" if prix and pd.notna(prix) else "N/D"}
-
-═══════════════════════════════════════
-ACCÉDER À LA FICHE COMPLÈTE
-═══════════════════════════════════════
-
-{fiche_url}
-
-La fiche complète contient :
-- Scorecard détaillée (6 dimensions)
-- Carte des communes (prix m² et temps d'accès)
-- Plan d'action avec recommandations chiffrées
-- Top 5 pathologies et offre médicale associée
-- Délais d'accès aux spécialistes estimés
-
-═══════════════════════════════════════
-À PROPOS DE SANT'ACTIVE
-═══════════════════════════════════════
-
-Sant'active est un observatoire santé territorial open source
-développé par l'équipe ESData (ESD — École Supérieure du Digital,
-Mastère 1 Data, Paris, 2026) dans le cadre du défi Open Data University
-× Fondation Roche.
-
-Toutes les données sont issues de sources officielles françaises
-(INSEE, RPPS/DREES, FINESS, APL/ANCT, DVF, CNAM, DREES).
-
-Contact : santactive.esdata@gmail.com
-"""
-
-    body_encoded    = urllib.parse.quote(body)
-    subject_encoded = urllib.parse.quote(subject)
-    mailto_link     = f"mailto:?subject={subject_encoded}&body={body_encoded}"
-
-    copy_js = f"""
-    <script>
-    function copyFicheLink() {{
-        navigator.clipboard.writeText('{fiche_url}')
-            .then(() => {{
-                const btn = document.getElementById('copy-btn');
-                const orig = btn.innerHTML;
-                btn.innerHTML = 'Lien copié !';
-                btn.style.background = '#1B5E3F';
-                setTimeout(() => {{
-                    btn.innerHTML = orig;
-                    btn.style.background = '#1A3D8F';
-                }}, 2000);
-            }});
-    }}
-    </script>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">
-        <button id="copy-btn"
-                onclick="copyFicheLink()"
-                style="padding:12px 24px;background:#1A3D8F;color:white;
-                       border:none;border-radius:4px;font-size:14px;
-                       font-weight:500;cursor:pointer;
-                       font-family:Marianne,sans-serif;
-                       transition:background 0.2s;">
-            Copier le lien
-        </button>
-        <a href="{mailto_link}"
-           style="padding:12px 24px;background:white;color:#1A3D8F;
-                  border:1.5px solid #1A3D8F;border-radius:4px;
-                  font-size:14px;font-weight:500;text-decoration:none;
-                  font-family:Marianne,sans-serif;">
-            Envoyer par mail
-        </a>
-    </div>
-    """
-
-    st.markdown(copy_js, unsafe_allow_html=True)
-
-
 def render_topbar(r: pd.Series, data: dict) -> None:
     region_code = str(r.get("Code région", ""))
     region_name = str(r.get("Nom de la région", ""))
     dept_name = str(r["Nom du département"])
+    dept_code = str(r.get("dept", "")).zfill(2)
 
     st.html(
         '<div class="fiche-topbar">'
@@ -184,29 +68,33 @@ def render_topbar(r: pd.Series, data: dict) -> None:
         '</div>'
     )
 
-    render_share_buttons(r)
+    share = dept_share_context(r)
+    pdf_bytes: bytes | None = None
+    pdf_error: str | None = None
+    try:
+        recos = _generate_recommendations(r, data["master"], data)
+        pdf_bytes = generate_department_pdf(r, data["master"], recos, data)
+    except Exception as exc:
+        pdf_error = str(exc)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Comparer avec…", use_container_width=True):
+    dept_slug = dept_name.lower().replace(" ", "_").replace("'", "")
+
+    def _compare_btn() -> None:
+        if st.button("Comparer avec…", use_container_width=True, key="dept_compare_btn"):
             st.session_state["compare_base"] = r["dept"]
             navigate("comparer")
-    with col2:
-        with st.spinner("Génération…"):
-            try:
-                recos = _generate_recommendations(r, data["master"], data)
-                pdf_bytes = generate_department_pdf(r, data["master"], recos, data)
-                dept_slug = str(r.get("Nom du département", "rapport")).lower().replace(" ", "_")
-                st.download_button(
-                    label="Rapport PDF",
-                    data=pdf_bytes,
-                    file_name=f"santactive_{dept_slug}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    type="primary",
-                )
-            except Exception as _pdf_err:
-                st.error(f"Erreur PDF : {_pdf_err}")
+
+    render_fiche_share_bar(
+        fiche_url=share["fiche_url"],
+        email_subject=share["email_subject"],
+        email_body=share["email_body"],
+        share_title=share["share_title"],
+        pdf_bytes=pdf_bytes,
+        pdf_filename=f"santactive_{dept_slug}.pdf",
+        pdf_error=pdf_error,
+        extra_col=_compare_btn,
+        key_prefix=f"dept_share_{dept_code}",
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

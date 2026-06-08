@@ -9,6 +9,28 @@ import streamlit as st
 from ..config import PALETTE, PLOTLY_TEMPLATE
 from ..router import navigate
 
+# Médiane APL nationale (ANCT 2023) — même référence que l'accueil et les fiches dept.
+APL_NATIONAL_REF = 2.9
+
+COMPARE_METRICS: list[tuple[str, str, str, str]] = [
+    ("Score global",         "score_global",          ".1f", "/100"),
+    ("APL (DREES)",          "apl_median_dept",       ".1f", "/hab."),
+    ("Temps d'accès médian", "temps_acces_median",    ".1f", " min"),
+    ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
+    ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
+    ("Prix médian m²",       "prix_m2_moyen",         ".0f", " €"),
+    ("Part des 65+",         "pct_plus_65",           ".1f", " %"),
+    ("Communes > 15 min",    "nb_communes_critiques", ".0f", ""),
+]
+
+# Indicateurs où une valeur plus basse est favorable — comparaison inter-départements
+COMPARE_LOWER_IS_BETTER = {"temps_acces_median", "nb_communes_critiques"}
+
+# Indicateurs où une valeur plus basse est favorable vs la médiane nationale
+NATIONAL_LOWER_IS_BETTER = {
+    "temps_acces_median", "nb_communes_critiques", "pct_plus_65", "prix_m2_moyen",
+}
+
 
 def render(data: dict) -> None:
     master: pd.DataFrame = data["master"]
@@ -74,16 +96,7 @@ def render(data: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    metrics = [
-        ("Score global",         "score_global",          ".1f", "/100"),
-        ("APL (DREES)",          "apl_median_dept",       ".1f", "/hab."),
-        ("Temps d'accès médian", "temps_acces_median",    ".1f", " min"),
-        ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
-        ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
-        ("Prix médian m²",       "prix_m2_moyen",         ".0f", " €"),
-        ("Part des 65+",         "pct_plus_65",           ".1f", " %"),
-        ("Communes > 15 min",    "nb_communes_critiques", ".0f", ""),
-    ]
+    metrics = COMPARE_METRICS
 
     header_cells = ""
     for d in selected:
@@ -98,8 +111,8 @@ def render(data: dict) -> None:
             f'</th>'
         )
 
-    # Indicateurs inversés (plus bas = meilleur)
-    lower_is_better = {"temps_acces_median", "nb_communes_critiques"}
+    # Indicateurs inversés (plus bas = meilleur) — comparaison inter-départements
+    lower_is_better = COMPARE_LOWER_IS_BETTER
 
     rows_html = ""
     for label, col, fmt, unit in metrics:
@@ -236,6 +249,9 @@ def render(data: dict) -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # ── RÉFÉRENCE NATIONALE ───────────────────────────────────────────────────
+    _render_national_reference_table(master, comp_df, selected, metrics)
+
     # ── LIENS VERS LES FICHES ─────────────────────────────────────────────────
     st.markdown(
         '<div class="section-header">'
@@ -257,6 +273,224 @@ def render(data: dict) -> None:
                 use_container_width=True,
             ):
                 navigate("dept", dept_code=dept_code_val)
+
+
+def _national_reference(master: pd.DataFrame, col: str) -> float | None:
+    """Référence nationale — médiane sur tous les départements (APL = ANCT 2,9)."""
+    if col == "apl_median_dept":
+        return APL_NATIONAL_REF
+    if col not in master.columns:
+        return None
+    val = pd.to_numeric(master[col], errors="coerce").median()
+    return float(val) if pd.notna(val) else None
+
+
+def _join_dept_names(names: list[str]) -> str:
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} et {names[1]}"
+    return ", ".join(names[:-1]) + f" et {names[-1]}"
+
+
+def _position_vs_national(
+    value: float,
+    nat: float,
+    col: str,
+    *,
+    tol_ratio: float = 0.02,
+) -> str:
+    """Retourne 'better', 'worse' ou 'at' par rapport à la médiane nationale."""
+    higher_better = col not in NATIONAL_LOWER_IS_BETTER
+    tol = max(abs(nat) * tol_ratio, 1e-9)
+    if abs(value - nat) <= tol:
+        return "at"
+    if higher_better:
+        return "better" if value > nat else "worse"
+    return "better" if value < nat else "worse"
+
+
+def _lecture_nationale(
+    label: str,
+    col: str,
+    nat: float | None,
+    dept_values: dict[str, float],
+    selected: list[str],
+) -> str:
+    """Génère une phrase courte de lecture vs médiane nationale."""
+    if nat is None or pd.isna(nat):
+        return "Référence nationale indisponible."
+
+    better, worse, at = [], [], []
+    for name in selected:
+        v = dept_values.get(name)
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            continue
+        pos = _position_vs_national(float(v), nat, col)
+        if pos == "better":
+            better.append(name)
+        elif pos == "worse":
+            worse.append(name)
+        else:
+            at.append(name)
+
+    n = len(better) + len(worse) + len(at)
+    if n == 0:
+        return "Données insuffisantes pour cette comparaison."
+
+    names_all = _join_dept_names(selected[:4])
+
+    if col == "apl_median_dept":
+        if better and not worse:
+            return f"{_join_dept_names(better)} atteint la médiane nationale."
+        if worse and not better:
+            if len(worse) == len(selected):
+                return "Aucun département n'atteint la médiane nationale."
+            return f"{_join_dept_names(worse)} reste sous la médiane nationale."
+        if at and not better and not worse:
+            return f"{names_all} se situe à la médiane nationale."
+        return f"{_join_dept_names(better)} au-dessus, {_join_dept_names(worse)} en dessous."
+
+    if col == "temps_acces_median":
+        if worse and not better:
+            if len(worse) == 1:
+                return f"{worse[0]} reste moins accessible que la médiane nationale."
+            return f"{_join_dept_names(worse)} restent moins accessibles que la médiane nationale."
+        if better and not worse:
+            return f"{_join_dept_names(better)} est plus accessible que la médiane nationale."
+        if at and not better and not worse:
+            return f"{names_all} est proche de la médiane nationale."
+
+    if col == "med_gen_pour_100k":
+        if len(better) == 1 and not worse:
+            return f"{better[0]} dépasse la référence nationale."
+        if better and not worse:
+            return f"{_join_dept_names(better)} dépassent la référence nationale."
+        if worse and not better:
+            if len(worse) == len(selected):
+                return "Aucun département ne dépasse la référence nationale."
+            return f"{_join_dept_names(worse)} reste sous la référence nationale."
+
+    if col == "score_global":
+        if worse and not better:
+            if len(worse) == len(selected):
+                if len(selected) == 2:
+                    return "Les deux départements se situent sous la médiane nationale."
+                return "Tous les départements sélectionnés sont sous la médiane nationale."
+            return f"{_join_dept_names(worse)} se situe sous la médiane nationale."
+        if better and not worse:
+            return f"{_join_dept_names(better)} se situe au-dessus de la médiane nationale."
+        if at and not better and not worse:
+            return f"{names_all} est proche de la médiane nationale."
+
+    # Lecture générique
+    if better and not worse:
+        return f"{_join_dept_names(better)} est au-dessus de la médiane nationale."
+    if worse and not better:
+        if len(worse) == len(selected):
+            return "Aucun département n'atteint la médiane nationale."
+        return f"{_join_dept_names(worse)} reste sous la médiane nationale."
+    if at and not better and not worse:
+        return f"{names_all} est proche de la médiane nationale."
+    return f"Écarts contrastés entre les départements sélectionnés."
+
+
+def _render_national_reference_table(
+    master: pd.DataFrame,
+    comp_df: pd.DataFrame,
+    selected: list[str],
+    metrics: list[tuple[str, str, str, str]],
+) -> None:
+    st.markdown(
+        '<div class="section-header">'
+        '<div class="section-eyebrow">RÉFÉRENCE NATIONALE</div>'
+        '<h2 class="section-title">Par rapport à la <em>France.</em></h2>'
+        '<p class="section-lead">Médiane nationale sur l\'ensemble des départements. '
+        'Permet de situer chaque territoire au-delà de la comparaison directe.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    dept_headers = ""
+    for d in selected:
+        dept_code_val = ""
+        rows_d = comp_df[comp_df["Nom du département"] == d]
+        if not rows_d.empty:
+            dept_code_val = rows_d.iloc[0]["dept"]
+        dept_headers += (
+            f'<th>'
+            f'<div class="col-dept-name">{d}</div>'
+            f'<div class="col-dept-code">{dept_code_val}</div>'
+            f'</th>'
+        )
+
+    rows_html = ""
+    for label, col, fmt, unit in metrics:
+        if col not in comp_df.columns:
+            continue
+        nat = _national_reference(master, col)
+        values = comp_df.set_index("Nom du département")[col]
+        dept_vals: dict[str, float] = {}
+        for d in selected:
+            v = values.get(d)
+            if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                dept_vals[d] = float(v)
+
+        if nat is None or pd.isna(nat):
+            nat_cell = '<td class="cell-na">—</td>'
+        else:
+            nat_cell = (
+                f'<td class="cell-national-ref">{format(nat, fmt)}{unit}</td>'
+            )
+
+        dept_cells = ""
+        for d in selected:
+            v = values.get(d)
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                dept_cells += '<td class="cell-na">—</td>'
+                continue
+            pos = _position_vs_national(float(v), nat, col) if nat is not None else None
+            klass = {
+                "better": "cell-above-nat",
+                "worse": "cell-below-nat",
+                "at": "cell-at-nat",
+            }.get(pos or "", "")
+            dept_cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
+
+        lecture = _lecture_nationale(label, col, nat, dept_vals, selected)
+        rows_html += (
+            f'<tr>'
+            f'<td class="metric-label">{label}</td>'
+            f'{nat_cell}'
+            f'{dept_cells}'
+            f'<td class="cell-lecture">{lecture}</td>'
+            f'</tr>'
+        )
+
+    st.markdown(
+        '<div class="sa-tbl-scroll">'
+        '<table class="comparison-table-v2 comparison-table-national">'
+        '<thead>'
+        '<tr>'
+        '<th class="metric-col">Indicateur</th>'
+        '<th class="metric-col col-national">Réf. nationale</th>'
+        f'{dept_headers}'
+        '<th class="metric-col col-lecture">Lecture</th>'
+        '</tr>'
+        '</thead>'
+        f'<tbody>{rows_html}</tbody>'
+        '</table>'
+        '</div>'
+        '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
+        'Référence nationale = médiane calculée sur les 101 départements '
+        '(APL\u202f: médiane ANCT 2023, 2,9\u202f/hab.). '
+        'Vert = au-dessus de la médiane (ou en dessous si l\'indicateur est '
+        ' défavorable), rouge = en dessous.'
+        '</p>',
+        unsafe_allow_html=True,
+    )
 
 
 def _hex_to_rgb(hex_color: str) -> str:

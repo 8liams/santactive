@@ -132,11 +132,11 @@ with st.sidebar:
     _logo_b64 = _get_image_b64("static/brand/logo-santactive.png")
     if _logo_b64:
         st.sidebar.markdown("""
-<div style="padding:16px 8px 4px;text-align:center;">
+<div style="padding:12px 8px 4px;text-align:center;">
     <img src="data:image/png;base64,{logo_b64}"
-         style="width:120px;height:auto;
+         style="width:130px;height:auto;
                 mix-blend-mode:screen;
-                filter:brightness(1.1);"
+                filter:brightness(1.05);"
          alt="Sant'active">
 </div>
 """.format(logo_b64=_logo_b64), unsafe_allow_html=True)

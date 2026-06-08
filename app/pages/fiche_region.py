@@ -10,6 +10,8 @@ from ..action_impact import (
     render_amplitude_region_html,
 )
 from ..components import render_national_choropleth
+from ..components.share_bar import region_share_context, render_fiche_share_bar
+from ..pdf_export import generate_region_pdf
 from ..region_pilotage import (
     _patho_metrics,
     build_territoire_card,
@@ -65,6 +67,9 @@ def render(data: dict) -> None:
     )
 
     render_topbar(region_name)
+    render_share_section(
+        region_name, region_code_val, region_depts, summary, priorities, leviers
+    )
     render_hero(region_depts, region_name, summary, publics)
     render_ou_agir(priorities, region_depts, data)
     render_pour_qui(publics)
@@ -84,6 +89,42 @@ def render_topbar(region_name: str) -> None:
         f'<span class="current">{region_name}</span>'
         f'</div></div>',
         unsafe_allow_html=True,
+    )
+
+
+def render_share_section(
+    region_name: str,
+    region_code: str,
+    region_depts: pd.DataFrame,
+    summary: dict,
+    priorities: pd.DataFrame,
+    leviers: list[dict],
+) -> None:
+    share = region_share_context(region_name, region_code, region_depts, summary)
+    pdf_bytes: bytes | None = None
+    pdf_error: str | None = None
+    try:
+        pdf_bytes = generate_region_pdf(
+            region_name, region_code, region_depts, summary, priorities, leviers
+        )
+    except Exception as exc:
+        pdf_error = str(exc)
+
+    slug = (
+        region_name.lower()
+        .replace(" ", "_")
+        .replace("-", "_")
+        .replace("'", "")
+    )
+    render_fiche_share_bar(
+        fiche_url=share["fiche_url"],
+        email_subject=share["email_subject"],
+        email_body=share["email_body"],
+        share_title=share["share_title"],
+        pdf_bytes=pdf_bytes,
+        pdf_filename=f"santactive_region_{slug}.pdf",
+        pdf_error=pdf_error,
+        key_prefix=f"region_share_{region_code}",
     )
 
 

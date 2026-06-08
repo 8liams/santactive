@@ -599,3 +599,162 @@ def generate_department_pdf(
     cb = _page_cb(dept_name)
     doc.build(story, onFirstPage=cb, onLaterPages=cb)
     return buf.getvalue()
+
+
+def generate_region_pdf(
+    region_name: str,
+    region_code: str,
+    region_depts: pd.DataFrame,
+    summary: dict,
+    priorities: pd.DataFrame,
+    leviers: list[dict],
+) -> bytes:
+    """Génère un rapport PDF synthétique pour une fiche région."""
+    buf = io.BytesIO()
+    nb_depts = len(region_depts)
+    nb_crit  = int((region_depts["zone_short"] == "Critique").sum())
+    pop_tot  = region_depts["population_num"].sum()
+    apl_med  = region_depts["apl_median_dept"].median()
+    ecart    = region_depts["score_global"].max() - region_depts["score_global"].min()
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=MARGIN + 4 * mm,
+        bottomMargin=18 * mm,
+        title=f"Sant'active — {region_name}",
+        author="Sant'active",
+    )
+    story: list = []
+
+    # Couverture
+    cov = Table([[
+        Paragraph(
+            '<font color="white" size="9"><b>SANT\'ACTIVE</b></font>'
+            '<font color="white" size="8">  ·  Pilotage régional ARS</font>',
+            _s("cov_l", fontName="Helvetica-Bold", fontSize=9, textColor=BLANC),
+        ),
+        Paragraph(
+            f'<font color="white" size="8">Rapport · {date.today().strftime("%d %B %Y")}</font>',
+            _s("cov_r", fontSize=8, alignment=TA_RIGHT, textColor=BLANC),
+        ),
+    ]], colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
+    cov.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BLEU_NUIT),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+    ]))
+    story.append(cov)
+    story.append(Spacer(1, 16))
+    story.append(Paragraph(
+        f'<b><font size="28" color="#{_hex(BLEU_NUIT)}">{region_name}</font></b>',
+        _s("rg_title", fontName="Helvetica-Bold", fontSize=28, textColor=BLEU_NUIT, leading=32),
+    ))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        f'<font size="11" color="#666666">Code région {region_code} · '
+        f'{nb_depts} départements</font>',
+        _s("rg_sub", fontSize=11, textColor=GRIS_TXT),
+    ))
+    story.append(Spacer(1, 18))
+
+    # KPIs région
+    _section_heading("Synthèse régionale", story)
+    kpi_data = [
+        ("Départements", str(nb_depts)),
+        ("Zone critique", str(nb_crit)),
+        ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
+        ("APL médian", _fmt(apl_med, "{:.1f}") + " /hab."),
+        ("Écart intra-régional", _fmt(ecart, "{:.0f}") + " pts"),
+        ("Tension principale", str(summary.get("tension_principale", "—"))[:40]),
+    ]
+    rows = []
+    for i in range(0, len(kpi_data), 2):
+        pair = kpi_data[i:i + 2]
+        row_cells = []
+        for lbl, val in pair:
+            row_cells.append(Paragraph(
+                f'<font size="8" color="#999999">{lbl.upper()}</font><br/>'
+                f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">{val}</font></b>',
+                _s(f"kpi_{lbl[:3]}", fontSize=14, leading=18),
+            ))
+        while len(row_cells) < 2:
+            row_cells.append(Paragraph("", _s("kpi_e", fontSize=8)))
+        rows.append(row_cells)
+    k_tbl = Table(rows, colWidths=[CONTENT_W / 2, CONTENT_W / 2])
+    k_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), GRIS_CLAIR),
+        ("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORD),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    story.append(k_tbl)
+    story.append(Spacer(1, 16))
+
+    # Territoires prioritaires
+    _section_heading("Territoires prioritaires", story)
+    prio_rows = [[
+        Paragraph('<b><font size="9" color="white">Rang</font></b>',
+                  _s("ph0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
+        Paragraph('<b><font size="9" color="white">Département</font></b>',
+                  _s("ph1", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
+        Paragraph('<b><font size="9" color="white">Priorité</font></b>',
+                  _s("ph2", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
+        Paragraph('<b><font size="9" color="white">Lecture</font></b>',
+                  _s("ph3", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
+    ]]
+    for _, row in priorities.head(12).iterrows():
+        prio_rows.append([
+            Paragraph(f'<font size="9">{int(row.get("priorite_rang", 0)):02d}</font>',
+                      _s("pr0", fontSize=9, alignment=TA_CENTER)),
+            Paragraph(f'<font size="9">{row.get("Nom du département", "")}</font>',
+                      _s("pr1", fontSize=9)),
+            Paragraph(f'<font size="9">{row.get("priorite", "")}</font>',
+                      _s("pr2", fontSize=9)),
+            Paragraph(
+                f'<font size="8" color="#666666">{str(row.get("lecture_rapide", ""))[:120]}</font>',
+                _s("pr3", fontSize=8, textColor=GRIS_TXT),
+            ),
+        ])
+    p_tbl = Table(
+        prio_rows,
+        colWidths=[CONTENT_W * 0.08, CONTENT_W * 0.22, CONTENT_W * 0.22, CONTENT_W * 0.48],
+    )
+    p_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BLEU_NUIT),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [BLANC, GRIS_CLAIR]),
+        ("GRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(p_tbl)
+    story.append(Spacer(1, 16))
+
+    # Leviers
+    if leviers:
+        _section_heading("Leviers d'action recommandés", story)
+        for i, lev in enumerate(leviers[:4], 1):
+            titre = lev.get("intitule", lev.get("titre", lev.get("title", "")))
+            story.append(Paragraph(
+                f'<b><font size="11" color="#{_hex(BLEU_NUIT)}">{titre}</font></b>',
+                _s(f"lv{i}", fontName="Helvetica-Bold", fontSize=11, textColor=BLEU_NUIT, spaceAfter=4),
+            ))
+            desc = lev.get("justification", lev.get("description", lev.get("prose", "")))
+            if desc:
+                story.append(Paragraph(
+                    str(desc)[:500],
+                    _s(f"lvd{i}", fontSize=9, textColor=GRIS_TXT, leading=13),
+                ))
+            story.append(Spacer(1, 8))
+
+    cb = _page_cb(region_name)
+    doc.build(story, onFirstPage=cb, onLaterPages=cb)
+    return buf.getvalue()
