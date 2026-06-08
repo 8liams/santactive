@@ -374,16 +374,6 @@ def _national_reference(master: pd.DataFrame, col: str) -> float | None:
     return float(val) if pd.notna(val) else None
 
 
-def _join_dept_names(names: list[str]) -> str:
-    if not names:
-        return ""
-    if len(names) == 1:
-        return names[0]
-    if len(names) == 2:
-        return f"{names[0]} et {names[1]}"
-    return ", ".join(names[:-1]) + f" et {names[-1]}"
-
-
 def _position_vs_national(
     value: float,
     nat: float,

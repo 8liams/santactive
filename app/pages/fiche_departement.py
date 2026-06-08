@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 import unicodedata
 
 import pandas as pd
@@ -16,7 +18,7 @@ from ..components.nav import NavCrumb, internal_href, render_breadcrumb
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate, navigate_compare
-from ..scoring import fmt_rang_affichage
+from ..scoring import fmt_rang_affichage, rang_affichage
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ def render(data: dict) -> None:
 
     render_topbar(r, data)
     render_header(r, master)
-    render_diagnostic(r, master)
+    render_diagnostic(r, master, data)
     render_recommandations(r, master, data)
     render_scorecard(r, master)
     render_carte_communale(r, data)
@@ -161,6 +163,259 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
 # 2. DIAGNOSTIC
 # ──────────────────────────────────────────────────────────────────────────────
 
+_AUDIO_VOICE = "fr-FR-DeniseNeural"
+_AUDIO_DISCLAIMER = (
+    "Ces éléments constituent une aide à la décision "
+    "et doivent être complétés par l'expertise locale."
+)
+_FEMININE_DEPTS = {
+    "Manche", "Marne", "Meuse", "Sarthe", "Vienne", "Loire", "Drôme",
+    "Savoie", "Corse", "Dordogne", "Charente", "Corrèze", "Creuse",
+    "Haute-Loire", "Haute-Marne", "Haute-Saône", "Haute-Vienne",
+    "Seine-Maritime", "Seine-et-Marne",
+}
+_LEVER_SHORT_HINTS: list[tuple[str, str]] = [
+    ("maison de santé", "l'offre de proximité"),
+    ("télémédecine", "les solutions numériques"),
+    ("seniors", "les solutions numériques pour les seniors"),
+    ("attractivité", "l'attractivité médicale"),
+    ("navettes", "les transports sanitaires"),
+    ("prévention", "la prévention et le dépistage"),
+    ("pédiatrique", "l'offre pédiatrique"),
+    ("antennes", "le renforcement des antennes de soins"),
+    ("vigilance", "un plan de vigilance territoriale"),
+    ("bonnes pratiques", "le maintien des acquis"),
+]
+
+
+def _dept_label_for_speech(nom: str) -> str:
+    """Libellé oral « du Cher », « de Loir-et-Cher », « de l'Ain »…"""
+    nom = nom.strip()
+    if not nom:
+        return "inconnu"
+    if nom in _FEMININE_DEPTS:
+        return f"de la {nom}"
+    if nom[0].upper() in "AEIOUY":
+        return f"de l'{nom}"
+    if "-" in nom or " " in nom or "'" in nom:
+        return f"de {nom}"
+    return f"du {nom}"
+
+
+def _national_fragility_index(
+    row: pd.Series,
+    master: pd.DataFrame,
+) -> tuple[int | None, int]:
+    ranked = (
+        master.dropna(subset=["score_global"])
+        .sort_values("score_global")
+        .reset_index(drop=True)
+    )
+    matches = ranked.index[ranked["dept"] == row["dept"]].tolist()
+    rang_num = matches[0] + 1 if matches else None
+    nb_total = len(ranked)
+    affichage = rang_affichage(rang_num, nb_total) if rang_num else None
+    return affichage, nb_total
+
+
+def _medical_offer_sentence(row: pd.Series, master: pd.DataFrame) -> str | None:
+    """Constat sur l'offre médicale (hors APL déjà traité en amont)."""
+    apl = row.get("apl_median_dept")
+    if pd.notna(apl) and float(apl) < 2.5:
+        return None
+
+    med = row.get("med_gen_pour_100k")
+    med_nat = (
+        float(master["med_gen_pour_100k"].median())
+        if "med_gen_pour_100k" in master.columns
+        else None
+    )
+    if pd.notna(med) and med_nat is not None and pd.notna(med_nat):
+        med_f = float(med)
+        if med_f < med_nat * 0.9:
+            return (
+                f"La densité de médecins généralistes reste limitée, "
+                f"avec {med_f:.0f} pour 100 000 habitants."
+            )
+        if med_f >= med_nat:
+            return (
+                f"L'offre en médecins généralistes demeure correcte "
+                f"({med_f:.0f} pour 100 000 habitants)."
+            )
+    return None
+
+
+def _short_lever(title: str) -> str:
+    t = title.strip().rstrip(".")
+    if not t:
+        return ""
+    lower = t.lower()
+    for hint, short in _LEVER_SHORT_HINTS:
+        if hint in lower:
+            return short
+    chunk = t.split(",")[0].split(".")[0]
+    if len(chunk) > 72:
+        chunk = chunk[:69].rsplit(" ", 1)[0] + "…"
+    return chunk[0].lower() + chunk[1:] if chunk else t.lower()
+
+
+def build_audio_diagnostic_text(
+    row: pd.Series,
+    master: pd.DataFrame,
+    recommendations: list[dict],
+) -> str:
+    """Synthèse vocale 30–45 s à partir des données déjà affichées."""
+    parts: list[str] = []
+    dept_nom = str(row.get("Nom du département", "ce département"))
+
+    parts.append(
+        f"Diagnostic Sant'active pour le département {_dept_label_for_speech(dept_nom)}."
+    )
+
+    zone = str(row.get("zone_short", "")).strip()
+    score = row.get("score_global")
+    if zone and zone not in ("", "N/D"):
+        if pd.notna(score):
+            parts.append(
+                f"Le territoire est classé en zone {zone.lower()}, "
+                f"avec un score global de {float(score):.1f} sur 100."
+            )
+        else:
+            parts.append(f"Le territoire est classé en zone {zone.lower()}.")
+    elif pd.notna(score):
+        parts.append(f"Le score global s'élève à {float(score):.1f} sur 100.")
+
+    frag, total = _national_fragility_index(row, master)
+    if frag is not None:
+        parts.append(
+            f"L'indice de fragilité nationale affiché est de {frag} sur {total}."
+        )
+
+    apl = row.get("apl_median_dept")
+    if pd.notna(apl):
+        apl_f = float(apl)
+        if apl_f < 2.5:
+            level = "très faible" if apl_f < 1.5 else "faible"
+            parts.append(
+                f"L'accessibilité aux médecins généralistes est {level} : "
+                f"l'APL atteint {apl_f:.1f} consultation par habitant, "
+                f"sous le seuil DREES de 2,5."
+            )
+        else:
+            parts.append(
+                f"L'APL atteint {apl_f:.1f} consultation par habitant, "
+                f"au-dessus du seuil DREES de 2,5."
+            )
+
+    nb_comm = row.get("nb_communes_critiques")
+    if pd.notna(nb_comm) and int(nb_comm) > 0:
+        n = int(nb_comm)
+        if n == 1:
+            parts.append("Le département compte 1 commune éloignée des soins.")
+        else:
+            parts.append(
+                f"Le département compte {n} communes éloignées des soins."
+            )
+
+    pct_65 = row.get("pct_plus_65")
+    if pd.notna(pct_65):
+        parts.append(
+            f"{float(pct_65):.1f} % de la population a 65 ans et plus."
+        )
+
+    med_sentence = _medical_offer_sentence(row, master)
+    if med_sentence:
+        parts.append(med_sentence)
+
+    levers = [
+        _short_lever(str(rec.get("title", "")))
+        for rec in recommendations[:2]
+        if rec.get("title")
+    ]
+    levers = [lev for lev in levers if lev]
+    if len(levers) >= 2:
+        parts.append(
+            f"Les principaux leviers proposés concernent {levers[0]} "
+            f"et {levers[1]}."
+        )
+    elif len(levers) == 1:
+        parts.append(f"Le principal levier proposé concerne {levers[0]}.")
+
+    parts.append(_AUDIO_DISCLAIMER)
+    return " ".join(parts)
+
+
+async def _synthesize_edge_tts(text: str, voice: str) -> bytes:
+    import edge_tts
+
+    communicate = edge_tts.Communicate(text, voice)
+    buffer = io.BytesIO()
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            buffer.write(chunk["data"])
+    return buffer.getvalue()
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def generate_audio_summary(text: str, voice: str = _AUDIO_VOICE) -> bytes:
+    """Génère l'audio MP3 via edge-tts (cache Streamlit sur le texte)."""
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, _synthesize_edge_tts(text, voice)).result(
+            timeout=120
+        )
+
+
+def _render_audio_diagnostic(
+    row: pd.Series,
+    master: pd.DataFrame,
+    data: dict,
+) -> None:
+    """Bouton et lecteur audio — génération à la demande uniquement."""
+    dept_code = str(row.get("dept", "")).zfill(2)
+    req_key = f"audio_diag_req_{dept_code}"
+    btn_key = f"audio_diag_btn_{dept_code}"
+
+    st.markdown(
+        '<div style="margin-top:18px;padding-top:16px;border-top:1px solid #E8E6DD;">'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "🔊 Écouter le diagnostic",
+        key=btn_key,
+        type="secondary",
+    ):
+        st.session_state[req_key] = True
+
+    if not st.session_state.get(req_key):
+        return
+
+    recommendations = _generate_recommendations(row, master, data)
+    audio_text = build_audio_diagnostic_text(row, master, recommendations)
+
+    with st.expander("Voir le texte lu", expanded=False):
+        st.write(audio_text)
+
+    try:
+        with st.spinner("Génération de la synthèse vocale…"):
+            audio_bytes = generate_audio_summary(audio_text)
+        if audio_bytes:
+            st.audio(audio_bytes, format="audio/mp3")
+        else:
+            raise ValueError("audio vide")
+    except Exception:
+        st.markdown(
+            '<p style="font-size:13px;color:#6B6B68;margin-top:8px;">'
+            "Lecture audio indisponible pour le moment. "
+            "Le texte du diagnostic reste disponible ci-dessous."
+            "</p>",
+            unsafe_allow_html=True,
+        )
+
+
 def _get_situation_label(r: pd.Series) -> tuple[str, str]:
     """Retourne (label_css, label_texte) selon les indicateurs réels.
 
@@ -220,7 +475,7 @@ def _get_sous_effectif(r: pd.Series) -> str | None:
     return None
 
 
-def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
+def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
     """Phrase éditoriale + APL en chiffre géant (vraies données DREES)."""
     dept_nom = str(r.get("Nom du département", "Ce département"))
     css_class, label_texte = _get_situation_label(r)
@@ -311,6 +566,8 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
                 '</div>',
                 unsafe_allow_html=True,
             )
+
+    _render_audio_diagnostic(r, master, data)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
