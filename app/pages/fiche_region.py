@@ -412,6 +412,45 @@ def render_comment_agir(leviers: list[dict]) -> None:
 
 # ── Données détaillées (accordéon) ────────────────────────────────────────────
 
+def _region_ui_css() -> str:
+    """Correctifs UI scoped fiche région."""
+    return """
+<style>
+/* Fix icône Material Streamlit affichée en texte (_arrowright) */
+div[data-testid="stExpander"] > details > summary {
+    list-style: none !important;
+}
+div[data-testid="stExpander"] > details > summary::-webkit-details-marker {
+    display: none !important;
+}
+div[data-testid="stExpander"] summary [data-testid="stIconMaterial"],
+div[data-testid="stExpander"] summary span[data-testid="stIconMaterial"],
+div[data-testid="stExpander"] summary > span:first-child,
+div[data-testid="stExpander"] summary > div:first-child {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: absolute !important;
+    pointer-events: none !important;
+}
+div[data-testid="stExpander"] summary::before {
+    content: '▸  ' !important;
+    color: #1A3D8F !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+}
+div[data-testid="stExpander"] details[open] > summary::before {
+    content: '▾  ' !important;
+}
+</style>
+"""
+
+
 def render_donnees_detaillees(
     region_depts: pd.DataFrame,
     region_name: str,
@@ -419,8 +458,9 @@ def render_donnees_detaillees(
     delais_region: pd.DataFrame,
     priorities: pd.DataFrame,
 ) -> None:
+    st.markdown(_region_ui_css(), unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-header" style="margin-top:56px;">'
+        '<div class="section-header" style="margin-top:48px;margin-bottom:8px;">'
         '<div class="section-eyebrow">EXPLORATION</div>'
         '</div>',
         unsafe_allow_html=True,
