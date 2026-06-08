@@ -503,8 +503,7 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         "Cette carte identifie les communes où une implantation ou une action "
         "de santé pourrait avoir le plus d\u2019impact, en croisant "
         "l\u2019éloignement aux soins et les conditions d\u2019implantation. "
-        "Survolez une commune pour voir le détail — les points rouges "
-        "signalent les établissements de santé."
+        "Survolez une commune pour voir le détail."
         '</p>'
         '</div>',
         unsafe_allow_html=True,
@@ -666,16 +665,21 @@ def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:
         score = row.get("score_opportunite")
         temps = row.get("temps_acces")
         prix = row.get("prix_m2")
+        pop = row.get("population")
         score_str = f"{float(score):.0f}/100" if pd.notna(score) else "—"
         temps_str = f"{float(temps):.1f} min" if pd.notna(temps) else "—"
         prix_str = (
             f"{float(prix):,.0f} €/m²".replace(",", "\u202f") if pd.notna(prix) else "—"
+        )
+        pop_str = (
+            f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "—"
         )
         rows_html += (
             f'<tr>'
             f'<td class="cell-rank">{i + 1}</td>'
             f'<td class="metric-label">{row.get("commune", "—")}</td>'
             f'<td>{score_str}</td>'
+            f'<td>{pop_str}</td>'
             f'<td>{temps_str}</td>'
             f'<td>{prix_str}</td>'
             f'</tr>'
@@ -689,6 +693,7 @@ def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:
         '<th class="metric-col">Rang</th>'
         '<th class="metric-col">Commune</th>'
         '<th class="metric-col">Score d\u2019opportunité</th>'
+        '<th class="metric-col">Population</th>'
         '<th class="metric-col">Temps d\u2019accès</th>'
         '<th class="metric-col">Prix médian</th>'
         '</tr>'
