@@ -1403,6 +1403,12 @@ div[data-testid="stRadio"] svg { display: none !important; }
     background: #E3EFE8;
 }
 .comparison-table-v2 .cell-na { color: #9C9A92; }
+.comparison-table-v2 .cell-rank {
+    text-align: center;
+    font-weight: 600;
+    color: #6B6B68;
+    font-variant-numeric: tabular-nums;
+}
 .comparison-table-national .cell-national-ref {
     background: #F3F2EC;
     font-weight: 600;

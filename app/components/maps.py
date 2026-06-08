@@ -416,7 +416,7 @@ def _fetch_communes_geojson(dept_code: str) -> dict | None:
     """Récupère le GeoJSON communal depuis geo.api.gouv.fr."""
     url = (
         f"https://geo.api.gouv.fr/departements/{dept_code}/communes"
-        "?fields=code,nom,centre,contour&format=geojson&geometry=contour"
+        "?fields=code,nom,centre,contour,population&format=geojson&geometry=contour"
     )
     try:
         resp = requests.get(url, timeout=20)
@@ -436,6 +436,12 @@ def render_commune_choropleth(
     height: int = 540,
     etabs_overlay=None,
     key: str = "commune_map",
+    *,
+    discrete: bool = False,
+    color_col: str = "color_hex",
+    tooltip_fields: list[str] | None = None,
+    tooltip_aliases: list[str] | None = None,
+    legend_items: list[tuple[str, str]] | None = None,
 ):
     """Carte communale — couleurs pré-calculées pour éviter les bugs branca."""
     st.markdown(_tooltip_style(), unsafe_allow_html=True)
@@ -459,6 +465,17 @@ def render_commune_choropleth(
         .to_dict()
     )
 
+    extra_cols = [
+        c for c in data_by_commune.columns
+        if c not in {"code_commune", value_col}
+    ]
+    props_by_code: dict[str, dict] = {}
+    for _, row in data_by_commune.dropna(subset=["code_commune"]).iterrows():
+        code = str(row["code_commune"]).zfill(5)
+        props_by_code[code] = {
+            col: row[col] for col in extra_cols if col in row.index and pd.notna(row[col])
+        }
+
     total_geo = len(geojson["features"])
     total_matched = sum(
         1 for f in geojson["features"]
@@ -477,28 +494,38 @@ def render_commune_choropleth(
         st.info("Aucune valeur disponible pour cet indicateur.")
         return None
 
-    vmin, vmax = min(clean_values), max(clean_values)
-    if vmin >= vmax:
-        vmax = vmin + 1.0
-
-    colors = COLORMAPS.get(colormap_name, COLORMAPS["prix"])
-    cmap = LinearColormap(
-        colors=colors,
-        vmin=vmin,
-        vmax=vmax,
-        caption=f"{metric_label} ({unit})" if unit else metric_label,
-    )
-
-    # Pré-calcul des couleurs hex par code commune (évite tout appel dans _style)
     code_to_color: dict[str, str] = {}
-    for feat in geojson["features"]:
-        code = feat["properties"]["code"]
-        val = val_map.get(code)
-        if val is not None:
-            try:
-                code_to_color[code] = cmap(float(val))
-            except Exception:
-                code_to_color[code] = "#E8E6DD"
+    cmap = None
+
+    if discrete:
+        color_map = (
+            data_by_commune.dropna(subset=["code_commune"])
+            .set_index("code_commune")[color_col]
+            .to_dict()
+        )
+        for code, color in color_map.items():
+            code_to_color[str(code).zfill(5)] = str(color)
+    else:
+        vmin, vmax = min(clean_values), max(clean_values)
+        if vmin >= vmax:
+            vmax = vmin + 1.0
+
+        colors = COLORMAPS.get(colormap_name, COLORMAPS["prix"])
+        cmap = LinearColormap(
+            colors=colors,
+            vmin=vmin,
+            vmax=vmax,
+            caption=f"{metric_label} ({unit})" if unit else metric_label,
+        )
+
+        for feat in geojson["features"]:
+            code = feat["properties"]["code"]
+            val = val_map.get(code)
+            if val is not None:
+                try:
+                    code_to_color[code] = cmap(float(val))
+                except Exception:
+                    code_to_color[code] = "#E8E6DD"
 
     # Enrichit props pour le tooltip
     import copy
@@ -506,9 +533,13 @@ def render_commune_choropleth(
     for feat in geojson_enriched["features"]:
         code = feat["properties"]["code"]
         val = val_map.get(code)
+        extras = props_by_code.get(code, {})
+        for prop_key, prop_val in extras.items():
+            feat["properties"][prop_key] = prop_val
         if val is not None and not pd.isna(val):
             feat["properties"]["val_display"] = (
                 f"{float(val):,.0f}\u202f{unit}".replace(",", "\u202f")
+                if unit else f"{float(val):,.1f}".replace(",", "\u202f")
             )
             feat["properties"]["has_data"] = "oui"
         else:
@@ -547,9 +578,16 @@ def render_commune_choropleth(
         return {"fillColor": "#0A1938", "color": "#0A1938",
                 "weight": 1.5, "fillOpacity": 0.2}
 
+    if tooltip_fields and tooltip_aliases:
+        t_fields = tooltip_fields
+        t_aliases = tooltip_aliases
+    else:
+        t_fields = ["nom", "code", "val_display"]
+        t_aliases = ["Commune", "Code INSEE", metric_label]
+
     tooltip = folium.GeoJsonTooltip(
-        fields=["nom", "code", "val_display"],
-        aliases=["Commune", "Code INSEE", metric_label],
+        fields=t_fields,
+        aliases=t_aliases,
         localize=True,
         sticky=False,
         class_name="sa-tooltip",
@@ -562,8 +600,31 @@ def render_commune_choropleth(
         tooltip=tooltip,
     ).add_to(m)
 
-    # Légende colormap en bas à droite
-    cmap.add_to(m)
+    # Légende
+    if cmap is not None:
+        cmap.add_to(m)
+    elif legend_items:
+        legend_html = (
+            '<div style="font-family:Marianne,sans-serif;font-size:11px;'
+            'background:white;padding:10px 12px;border-radius:3px;'
+            'border:1px solid #C9C6BA;line-height:1.6;">'
+            f'<div style="font-weight:600;margin-bottom:6px;color:#0A1938;">'
+            f'{metric_label}</div>'
+        )
+        for label, color in legend_items:
+            legend_html += (
+                f'<div><span style="display:inline-block;width:12px;height:12px;'
+                f'background:{color};margin-right:6px;border-radius:2px;'
+                f'vertical-align:middle;"></span>{label}</div>'
+            )
+        legend_html += "</div>"
+        m.get_root().html.add_child(
+            folium.Element(
+                '<div class="leaflet-bottom leaflet-right" style="pointer-events:none;">'
+                '<div class="leaflet-control" style="margin-bottom:28px;margin-right:12px;">'
+                f"{legend_html}</div></div>"
+            )
+        )
 
     # Overlay établissements
     if etabs_overlay is not None and not etabs_overlay.empty:
