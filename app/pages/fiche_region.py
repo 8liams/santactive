@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import streamlit as st
 
@@ -21,7 +23,7 @@ from ..region_pilotage import (
     compute_region_summary,
     compute_specialites_tension,
 )
-from ..components.nav import NavCrumb, dept_link_button, render_breadcrumb
+from ..components.nav import NavCrumb, dept_link_html, render_breadcrumb
 from ..router import navigate
 
 # Affichage uniquement — les calculs internes restent inchangés
@@ -316,34 +318,16 @@ def render_ou_agir(
         bg = "#FEF9F9" if label in ("Priorité immédiate", "Priorité forte") else "white"
 
         st.markdown(
-            f'<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr 72px;'
-            f'background:{bg};">',
+            f'<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr;'
+            f'background:{bg};">'
+            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{rang:02d}</span>'
+            f'{dept_link_html(dept_code, str(row["Nom du département"]))}'
+            f'{_priorite_badge(internal)}'
+            f'<span style="font-size:12px;color:#6B6B68;line-height:1.45;">'
+            f'{html.escape(str(row["lecture_rapide"]))}</span>'
+            f'</div>',
             unsafe_allow_html=True,
         )
-        c_rank, c_name, c_prio, c_lecture = st.columns(
-            [0.4, 2.4, 1.0, 3.2], gap="small"
-        )
-        with c_rank:
-            st.markdown(
-                f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">'
-                f'{rang:02d}</span>',
-                unsafe_allow_html=True,
-            )
-        with c_name:
-            dept_link_button(
-                dept_code,
-                str(row["Nom du département"]),
-                key=f"prio_dept_{dept_code}",
-            )
-        with c_prio:
-            st.markdown(_priorite_badge(internal), unsafe_allow_html=True)
-        with c_lecture:
-            st.markdown(
-                f'<span style="font-size:12px;color:#6B6B68;line-height:1.45;">'
-                f'{row["lecture_rapide"]}</span>',
-                unsafe_allow_html=True,
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Focus top 3
@@ -666,48 +650,20 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
         bg = "#FEF9F9" if zone == "Critique" else "white"
 
         st.markdown(
-            f'<div style="padding:4px 0;background:{bg};'
-            f'border-bottom:1px solid #F0EDE5;"></div>',
+            f'<div class="dept-table-nav-row dept-table-nav-row--rank" '
+            f'style="background:{bg};">'
+            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{i:02d}</span>'
+            f'{dept_link_html(dept_code, str(dept_name))}'
+            f'<span style="font-size:12px;color:#9C9A92;">{dept_code}</span>'
+            f'<span class="fiche-zone-badge {badge_cls}" '
+            f'style="font-size:10px;padding:3px 8px;justify-self:start;">{zone}</span>'
+            f'<span style="text-align:right;font-weight:600;color:{score_color};">'
+            f'{score_str}</span>'
+            f'<span style="text-align:right;font-size:12px;color:#6B6B68;">'
+            f'{pop_str}</span>'
+            f'</div>',
             unsafe_allow_html=True,
         )
-        c1, c2, c3, c4, c5, c6 = st.columns(
-            [0.35, 2.0, 0.55, 1.0, 0.7, 0.9], gap="small"
-        )
-        with c1:
-            st.markdown(
-                f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">'
-                f'{i:02d}</span>',
-                unsafe_allow_html=True,
-            )
-        with c2:
-            dept_link_button(
-                dept_code,
-                dept_name,
-                key=f"rank_dept_{dept_code}",
-            )
-        with c3:
-            st.markdown(
-                f'<span style="font-size:12px;color:#9C9A92;">{dept_code}</span>',
-                unsafe_allow_html=True,
-            )
-        with c4:
-            st.markdown(
-                f'<span class="fiche-zone-badge {badge_cls}" '
-                f'style="font-size:10px;padding:3px 8px;">{zone}</span>',
-                unsafe_allow_html=True,
-            )
-        with c5:
-            st.markdown(
-                f'<span style="text-align:right;display:block;font-weight:600;'
-                f'color:{score_color};">{score_str}</span>',
-                unsafe_allow_html=True,
-            )
-        with c6:
-            st.markdown(
-                f'<span style="text-align:right;display:block;font-size:12px;'
-                f'color:#6B6B68;">{pop_str}</span>',
-                unsafe_allow_html=True,
-            )
     st.markdown("</div>", unsafe_allow_html=True)
 
 

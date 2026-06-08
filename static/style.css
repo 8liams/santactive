@@ -549,72 +549,39 @@ div[data-testid="stExpander"] > div {
     margin-bottom: 4px;
     border-bottom: 1px solid #E8E6DD;
 }
-.fiche-topbar .breadcrumb { font-size: 13px; color: #6B6B68; }
-.fiche-topbar .breadcrumb a { color: #6B6B68; text-decoration: none; }
-.fiche-topbar .breadcrumb a:hover { color: #2E6BE6; }
+.fiche-topbar .breadcrumb {
+    font-size: 13px;
+    color: #6B6B68;
+    line-height: 1.5;
+}
+.fiche-topbar .breadcrumb a {
+    color: #6B6B68;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+.fiche-topbar .breadcrumb a:hover {
+    color: #2E6BE6;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
 .fiche-topbar .sep { color: #C9C6BA; margin: 0 8px; }
 .fiche-topbar .current { color: #0A0A0A; font-weight: 500; }
 
-/* Fil d'Ariane — boutons Streamlit stylés en liens */
-.breadcrumb-nav {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0;
-    font-size: 13px;
-}
-.breadcrumb-nav .breadcrumb-sep {
-    color: #C9C6BA;
-    margin: 0 6px;
-    line-height: 2rem;
-}
-.breadcrumb-nav .breadcrumb-current {
+/* Liens département dans les tableaux région */
+.dept-table-link {
     color: #0A0A0A;
+    text-decoration: none;
+    font-size: 14px;
     font-weight: 500;
-    line-height: 2rem;
+    line-height: 1.4;
 }
-.breadcrumb-nav .stButton {
-    margin: 0 !important;
+.dept-table-link:hover {
+    color: #1A3D8F;
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
-.breadcrumb-nav .stButton > button {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: #6B6B68 !important;
-    font-size: 13px !important;
-    font-weight: 400 !important;
-    padding: 0 2px !important;
-    min-height: 2rem !important;
-    height: auto !important;
-    line-height: 1.4 !important;
-}
-.breadcrumb-nav .stButton > button:hover {
-    color: #2E6BE6 !important;
-    background: transparent !important;
-    border: none !important;
-}
-
-/* Lignes tableau cliquables — bouton département */
-.dept-table-nav .stButton {
-    margin: 0 !important;
-}
-.dept-table-nav .stButton > button {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: #0A0A0A !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    padding: 0 !important;
-    min-height: auto !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    width: 100% !important;
-}
-.dept-table-nav .stButton > button:hover {
-    color: #1A3D8F !important;
-    background: transparent !important;
-    text-decoration: underline !important;
+.dept-table-nav-row--rank {
+    grid-template-columns: 40px 1.6fr 0.6fr 1fr 0.7fr 0.9fr;
 }
 .dept-table-nav-row {
     display: grid;
