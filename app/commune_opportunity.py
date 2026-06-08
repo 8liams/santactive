@@ -16,7 +16,11 @@ _OPPORTUNITY_LEVELS: list[tuple[float, str, str]] = [
 ]
 
 _WEIGHTS_WITH_POP = (0.50, 0.30, 0.20)   # temps, prix inverse, population
-_WEIGHTS_NO_POP = (0.60, 0.40)           # temps, prix inverse
+_WEIGHTS_NO_POP = (0.60, 0.40)           # temps, prix inverse (secours)
+
+# Plancher relatif pour le top 10 — évite de prioriser les hameaux / micro-communes
+_MIN_POP_FLOOR = 300
+_MIN_POP_QUANTILE = 0.20
 
 _NAME_PREFIXES = ("L ", "LE ", "LA ", "LES ")
 
@@ -155,10 +159,9 @@ def build_commune_opportunity_df(
         higher_is_better=False,
     )
 
-    has_pop = (
-        "population" in df.columns
-        and df["population"].notna().sum() >= max(3, len(df) // 2)
-    )
+    n_pop = int(df["population"].notna().sum()) if "population" in df.columns else 0
+    n_needed = min(len(df), max(3, int(len(df) * 0.5)))
+    has_pop = "population" in df.columns and n_pop >= n_needed
     if has_pop:
         pct_pop = percentile_rank(
             pd.to_numeric(df["population"], errors="coerce"),
@@ -168,9 +171,11 @@ def build_commune_opportunity_df(
         df["score_opportunite"] = (
             w_t * pct_temps + w_p * pct_prix + w_pop * pct_pop
         ).round(1)
+        df["score_inclut_population"] = True
     else:
         w_t, w_p = _WEIGHTS_NO_POP
         df["score_opportunite"] = (w_t * pct_temps + w_p * pct_prix).round(1)
+        df["score_inclut_population"] = False
 
     level_data = df["score_opportunite"].apply(
         lambda s: opportunite_level(float(s)) if pd.notna(s) else ("—", "#E8E6DD")
@@ -179,3 +184,37 @@ def build_commune_opportunity_df(
     df["color_hex"] = level_data.apply(lambda x: x[1])
     df["value"] = df["score_opportunite"]
     return df
+
+
+def min_population_for_action_ranking(pop_series: pd.Series) -> float:
+    """Seuil minimal relatif au département pour le classement action."""
+    clean = pd.to_numeric(pop_series, errors="coerce").dropna()
+    if clean.empty:
+        return _MIN_POP_FLOOR
+    return max(_MIN_POP_FLOOR, float(clean.quantile(_MIN_POP_QUANTILE)))
+
+
+def top_communes_for_action(
+    comm_data: pd.DataFrame,
+    *,
+    limit: int = 10,
+) -> pd.DataFrame:
+    """Top communes pour l'action — exclut les micro-communes du classement."""
+    if comm_data.empty or "score_opportunite" not in comm_data.columns:
+        return pd.DataFrame()
+
+    candidates = comm_data.dropna(subset=["score_opportunite"]).copy()
+    if candidates.empty:
+        return pd.DataFrame()
+
+    if "population" in candidates.columns and candidates["population"].notna().any():
+        seuil = min_population_for_action_ranking(candidates["population"])
+        candidates = candidates[
+            pd.to_numeric(candidates["population"], errors="coerce").fillna(0) >= seuil
+        ]
+
+    return (
+        candidates.sort_values("score_opportunite", ascending=False)
+        .head(limit)
+        .reset_index(drop=True)
+    )

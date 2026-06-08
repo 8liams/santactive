@@ -490,9 +490,10 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         build_commune_code_lookup,
         build_commune_opportunity_df,
         opportunity_legend_items,
+        top_communes_for_action,
     )
     from ..components import render_commune_choropleth
-    from ..components.maps import _fetch_communes_geojson
+    from ..components.maps import _fetch_communes_geojson, fetch_communes_population
 
     st.markdown(
         '<div class="section-header">'
@@ -533,15 +534,16 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     name_to_code, code_to_name = build_commune_code_lookup(
         communes_gj.get("features", [])
     )
-    population_by_code: dict[str, float] = {}
-    for feat in communes_gj.get("features", []):
-        code = feat.get("properties", {}).get("code", "")
-        pop = feat.get("properties", {}).get("population")
-        if code and pop is not None:
-            try:
-                population_by_code[str(code).zfill(5)] = float(pop)
-            except (TypeError, ValueError):
-                pass
+    population_by_code = fetch_communes_population(dept_code)
+    if not population_by_code:
+        for feat in communes_gj.get("features", []):
+            code = feat.get("properties", {}).get("code", "")
+            pop = feat.get("properties", {}).get("population")
+            if code and pop is not None:
+                try:
+                    population_by_code[str(code).zfill(5)] = float(pop)
+                except (TypeError, ValueError):
+                    pass
 
     temps: pd.DataFrame = data["temps"]
     immo: pd.DataFrame = data["immo"]
@@ -621,9 +623,14 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         legend_items=opportunity_legend_items(),
     )
 
+    score_uses_pop = (
+        "score_inclut_population" in comm_data.columns
+        and bool(comm_data["score_inclut_population"].any())
+    )
     st.caption(
-        f"{matched} communes analysées (croisement temps d'accès + prix immobilier) "
-        "· survolez pour afficher le détail."
+        f"{matched} communes analysées (croisement temps d'accès + prix immobilier"
+        + (", pondéré par la population INSEE" if score_uses_pop else "")
+        + ") · survolez pour afficher le détail."
     )
 
     _render_top_communes_opportunite(comm_data)
@@ -631,20 +638,25 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
 
 def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:
     """Top 10 communes par score d'opportunité d'implantation."""
-    top = (
-        comm_data.dropna(subset=["score_opportunite"])
-        .sort_values("score_opportunite", ascending=False)
-        .head(10)
-        .reset_index(drop=True)
-    )
+    from ..commune_opportunity import top_communes_for_action
+
+    top = top_communes_for_action(comm_data, limit=10)
     if top.empty:
         return
+
+    pop_note = (
+        "Le score intègre la population communale (INSEE, 20\u202f% du calcul) : "
+        "une commune éloignée des soins mais très peu habitée ne remonte pas "
+        "au même rang qu\u2019une commune de taille comparable. "
+        "Les micro-communes sont exclues de ce classement."
+    )
 
     st.markdown(
         '<div class="section-header" style="margin-top:32px;">'
         '<div class="section-eyebrow">PRIORISATION LOCALE</div>'
         '<h2 class="section-title">Top 10 communes à fort '
         '<em>potentiel d\u2019action.</em></h2>'
+        f'<p class="section-lead">{pop_note}</p>'
         '</div>',
         unsafe_allow_html=True,
     )

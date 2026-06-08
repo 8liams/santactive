@@ -412,6 +412,33 @@ DEPT_CENTER = {
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def fetch_communes_population(dept_code: str) -> dict[str, float]:
+    """Population communale INSEE via geo.api.gouv.fr (code INSEE → habitants)."""
+    url = (
+        f"https://geo.api.gouv.fr/departements/{dept_code}/communes"
+        "?fields=code,population&format=json"
+    )
+    try:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        rows = resp.json()
+    except Exception:
+        return {}
+
+    pop_map: dict[str, float] = {}
+    for row in rows:
+        code = row.get("code")
+        pop = row.get("population")
+        if not code or pop is None:
+            continue
+        try:
+            pop_map[str(code).zfill(5)] = float(pop)
+        except (TypeError, ValueError):
+            continue
+    return pop_map
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_communes_geojson(dept_code: str) -> dict | None:
     """Récupère le GeoJSON communal depuis geo.api.gouv.fr."""
     url = (
