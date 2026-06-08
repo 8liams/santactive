@@ -248,12 +248,3 @@ def render_fiche_share_bar(
     if extra_col is not None and n_cols == 4:
         with cols[3]:
             extra_col()
-
-    with st.expander("Lien direct", expanded=False):
-        st.text_input(
-            "URL de la fiche",
-            value=fiche_url,
-            disabled=True,
-            label_visibility="collapsed",
-            key=f"{key_prefix}_url_field",
-        )

@@ -213,9 +213,6 @@ def render_hero(
     apl_med = region_depts["apl_median_dept"].median()
     apl_str = f"{apl_med:.1f}" if pd.notna(apl_med) else "—"
 
-    ecart = region_depts["score_global"].max() - region_depts["score_global"].min()
-    ecart_str = f"{ecart:.0f}" if pd.notna(ecart) else "—"
-
     pop_fmt = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "—"
 
     st.markdown(
@@ -241,10 +238,6 @@ def render_hero(
         f'<div class="fiche-meta-item">'
         f'<span class="label">APL MÉDIAN</span>'
         f'<span class="value">{apl_str}<span class="small">/hab.</span></span>'
-        f'</div>'
-        f'<div class="fiche-meta-item">'
-        f'<span class="label">ÉCART INTRA-RÉGIONAL</span>'
-        f'<span class="value">{ecart_str}<span class="small">pts</span></span>'
         f'</div>'
         f'</div></div>',
         unsafe_allow_html=True,

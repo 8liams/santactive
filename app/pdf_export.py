@@ -615,7 +615,6 @@ def generate_region_pdf(
     nb_crit  = int((region_depts["zone_short"] == "Critique").sum())
     pop_tot  = region_depts["population_num"].sum()
     apl_med  = region_depts["apl_median_dept"].median()
-    ecart    = region_depts["score_global"].max() - region_depts["score_global"].min()
 
     doc = SimpleDocTemplate(
         buf,
@@ -669,7 +668,6 @@ def generate_region_pdf(
         ("Zone critique", str(nb_crit)),
         ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
         ("APL médian", _fmt(apl_med, "{:.1f}") + " /hab."),
-        ("Écart intra-régional", _fmt(ecart, "{:.0f}") + " pts"),
         ("Tension principale", str(summary.get("tension_principale", "—"))[:40]),
     ]
     rows = []
