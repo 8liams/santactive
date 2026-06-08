@@ -23,10 +23,6 @@ COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Communes > 15 min",    "nb_communes_critiques", ".0f", ""),
 ]
 
-# Indicateurs où une valeur plus basse est favorable — comparaison inter-territoires
-COMPARE_LOWER_IS_BETTER = {"temps_acces_median", "nb_communes_critiques"}
-
-# Indicateurs où une valeur plus basse est favorable vs la médiane nationale
 NATIONAL_LOWER_IS_BETTER = {
     "temps_acces_median", "nb_communes_critiques", "pct_plus_65", "prix_m2_moyen",
 }
@@ -117,13 +113,37 @@ def render(data: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    territory_mode = st.radio(
-        "Niveau territorial",
-        options=["Départements", "Régions"],
-        horizontal=True,
-        key="comparer_territory_mode",
+    st.markdown(
+        '<p class="comparer-level-hint">'
+        'Comparer des <strong>départements</strong> ou des <strong>régions</strong>'
+        '</p>',
+        unsafe_allow_html=True,
     )
-    is_region = territory_mode == "Régions"
+
+    if "comparer_territory_kind" not in st.session_state:
+        st.session_state["comparer_territory_kind"] = "dept"
+
+    toggle_col1, toggle_col2, _ = st.columns([1.15, 1.15, 4.7])
+    with toggle_col1:
+        if st.button(
+            "Départements",
+            type="primary" if st.session_state["comparer_territory_kind"] == "dept" else "secondary",
+            use_container_width=True,
+            key="comparer_btn_dept",
+        ):
+            st.session_state["comparer_territory_kind"] = "dept"
+            st.rerun()
+    with toggle_col2:
+        if st.button(
+            "Régions",
+            type="primary" if st.session_state["comparer_territory_kind"] == "region" else "secondary",
+            use_container_width=True,
+            key="comparer_btn_region",
+        ):
+            st.session_state["comparer_territory_kind"] = "region"
+            st.rerun()
+
+    is_region = st.session_state["comparer_territory_kind"] == "region"
     kind = "region" if is_region else "dept"
 
     if is_region:
@@ -170,65 +190,10 @@ def render(data: dict) -> None:
         comp_df = source_df[source_df["Nom du département"].isin(selected)].copy()
 
     metrics = COMPARE_METRICS
-    lower_is_better = COMPARE_LOWER_IS_BETTER
 
-    # ── TABLEAU SYNOPTIQUE ────────────────────────────────────────────────────
-    st.markdown(
-        '<div class="section-header">'
-        '<div class="section-eyebrow">TABLEAU SYNOPTIQUE</div>'
-        '<h2 class="section-title">Les chiffres <em>côte à côte.</em></h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    header_cells = ""
-    for name in selected:
-        code_val = _territory_code(comp_df, name, is_region)
-        header_cells += (
-            f'<th>'
-            f'<div class="col-dept-name">{name}</div>'
-            f'<div class="col-dept-code">{code_val}</div>'
-            f'</th>'
-        )
-
-    rows_html = ""
-    for label, col, fmt, unit in metrics:
-        if col not in comp_df.columns:
-            continue
-        values = comp_df.set_index(name_col)[col]
-        valid_vals = values.dropna()
-        if valid_vals.empty:
-            continue
-        best_val = valid_vals.min() if col in lower_is_better else valid_vals.max()
-        cells = ""
-        for name in selected:
-            v = values.get(name)
-            if pd.isna(v) if not isinstance(v, float) else (v != v):
-                cells += '<td class="cell-na">—</td>'
-            else:
-                is_best = abs(v - best_val) < 1e-9
-                klass = "cell-best" if is_best else ""
-                cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
-        rows_html += f'<tr><td class="metric-label">{label}</td>{cells}</tr>'
-
-    st.markdown(
-        '<div class="sa-tbl-scroll">'
-        '<table class="comparison-table-v2">'
-        '<thead>'
-        f'<tr><th class="metric-col">Indicateur</th>{header_cells}</tr>'
-        '</thead>'
-        f'<tbody>{rows_html}</tbody>'
-        '</table>'
-        '</div>'
-        '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
-        'Les meilleures valeurs sont mises en évidence en vert.'
-        + (
-            ' Agrégats régionaux\u202f: médiane des départements pour l\'APL, '
-            'moyennes pondérées par la population pour les autres indicateurs.'
-            if is_region else ''
-        )
-        + '</p>',
-        unsafe_allow_html=True,
+    # ── TABLEAU COMPARATIF (avec référence nationale) ─────────────────────────
+    _render_comparison_table(
+        master, comp_df, selected, metrics, name_col=name_col, kind=kind,
     )
 
     # ── RADAR COMPARATIF ──────────────────────────────────────────────────────
@@ -306,11 +271,6 @@ def render(data: dict) -> None:
         margin=dict(l=80, r=80, t=20, b=60),
     )
     st.plotly_chart(fig, use_container_width=True)
-
-    # ── RÉFÉRENCE NATIONALE ───────────────────────────────────────────────────
-    _render_national_reference_table(
-        master, comp_df, selected, metrics, name_col=name_col, kind=kind,
-    )
 
     # ── LIENS VERS LES FICHES ─────────────────────────────────────────────────
     st.markdown(
@@ -503,7 +463,7 @@ def _lecture_nationale(
     return f"Écarts contrastés entre les {unit} sélectionnés."
 
 
-def _render_national_reference_table(
+def _render_comparison_table(
     master: pd.DataFrame,
     comp_df: pd.DataFrame,
     selected: list[str],
@@ -512,17 +472,23 @@ def _render_national_reference_table(
     name_col: str = "Nom du département",
     kind: str = "dept",
 ) -> None:
+    is_region = kind == "region"
+    region_note = (
+        ' Agrégats régionaux\u202f: médiane des départements pour l\'APL, '
+        'moyennes pondérées par la population pour les autres indicateurs.'
+        if is_region else ''
+    )
+
     st.markdown(
         '<div class="section-header">'
-        '<div class="section-eyebrow">RÉFÉRENCE NATIONALE</div>'
-        '<h2 class="section-title">Par rapport à la <em>France.</em></h2>'
-        '<p class="section-lead">Médiane nationale sur l\'ensemble des départements. '
-        'Permet de situer chaque territoire au-delà de la comparaison directe.</p>'
+        '<div class="section-eyebrow">TABLEAU COMPARATIF</div>'
+        '<h2 class="section-title">Les chiffres <em>côte à côte.</em></h2>'
+        '<p class="section-lead">Comparaison directe entre les territoires sélectionnés, '
+        'avec la médiane nationale en référence.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    is_region = kind == "region"
     dept_headers = ""
     for name in selected:
         code_val = _territory_code(comp_df, name, is_region)
@@ -594,7 +560,8 @@ def _render_national_reference_table(
         'Référence nationale = médiane calculée sur les 101 départements '
         '(APL\u202f: médiane ANCT 2023, 2,9\u202f/hab.). '
         'Vert = au-dessus de la médiane (ou en dessous si l\'indicateur est '
-        ' défavorable), rouge = en dessous.'
+        'défavorable), rouge = en dessous.'
+        f'{region_note}'
         '</p>',
         unsafe_allow_html=True,
     )
