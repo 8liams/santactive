@@ -7,7 +7,11 @@ import streamlit as st
 
 from ..components import render_national_choropleth
 from ..region_pilotage import (
+    _patho_metrics,
+    build_territoire_card,
     compute_dept_priorities,
+    compute_leviers_action,
+    compute_publics_prioritaires,
     compute_region_summary,
     compute_specialites_tension,
 )
@@ -97,8 +101,8 @@ def render(data: dict) -> None:
     )
 
     # ── SECTIONS ──────────────────────────────────────────────────────────────
-    render_diagnostic_region(region_depts, region_name)
     render_priorites_action(region_depts, region_name, data)
+    render_diagnostic_region(region_depts, region_name)
     render_region_map(region_depts, data.get("geojson"))
     render_ranking_depts(region_depts)
 
@@ -268,15 +272,265 @@ _LEVEL_BADGE: dict[str, str] = {
     "prioritaire": "inter",
     "très prioritaire": "crit",
     "candidat expérimentation": "crit",
+    "élevée": "inter",
+    "majeure": "crit",
+    "à étudier": "fav",
+    "pertinent": "inter",
+    "très pertinent": "inter",
 }
+
+
+def _region_pilotage_css() -> str:
+    """Styles V2 — pilotage ARS, lecture rapide, responsive."""
+    return """
+<style>
+.region-v2-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+.region-v2-kpi {
+    padding: 20px;
+    background: #FAFAF8;
+    border: 1px solid #E8E6DD;
+    border-radius: 8px;
+    min-width: 0;
+}
+.region-v2-kpi .label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9C9A92;
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+.region-v2-kpi .value {
+    display: block;
+    font-size: 20px;
+    font-weight: 500;
+    color: #0A1938;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+.region-v2-kpi .value.text {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
+}
+.region-prio-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; }
+.region-prio-table-v2 { min-width: 480px; }
+.region-prio-head-v2,
+.region-prio-row-v2 {
+    display: grid;
+    grid-template-columns: 40px minmax(120px, 1fr) minmax(110px, 0.9fr) minmax(160px, 1.5fr);
+    gap: 16px;
+    padding: 14px 18px;
+    align-items: center;
+}
+.region-prio-head-v2 {
+    background: #F3F2EC;
+    border-radius: 6px 6px 0 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #6B6B68;
+    text-transform: uppercase;
+}
+.region-prio-row-v2 {
+    border-bottom: 1px solid #F0EDE5;
+    text-decoration: none;
+    color: inherit;
+}
+.region-prio-row-v2:hover { background: #FAFAF8; }
+.region-prio-dept {
+    font-size: 15px;
+    font-weight: 500;
+    color: #0A0A0A;
+    word-wrap: break-word;
+}
+.region-prio-lecture {
+    font-size: 13px;
+    color: #6B6B68;
+    line-height: 1.5;
+}
+.region-territoire-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: 20px;
+    margin-top: 8px;
+}
+.region-territoire-card {
+    background: white;
+    border: 1px solid #E8E6DD;
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 0;
+}
+.region-territoire-card .card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #F0EDE5;
+}
+.region-territoire-card .card-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #0A1938;
+}
+.region-territoire-card .card-rang {
+    font-size: 11px;
+    font-weight: 700;
+    color: #9C9A92;
+    letter-spacing: 0.06em;
+}
+.region-card-block { margin-bottom: 16px; }
+.region-card-block:last-child { margin-bottom: 0; }
+.region-card-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9C9A92;
+    margin-bottom: 8px;
+}
+.region-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.region-tag {
+    display: inline-block;
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 5px 10px;
+    border-radius: 4px;
+    background: #F3F2EC;
+    color: #4A4A4A;
+    word-break: break-word;
+}
+.region-tag.frag { background: #FEF3F3; color: #8B2635; }
+.region-tag.atout { background: #F0F7F3; color: #1B5E3F; }
+.region-tag.public { background: #EEF2FA; color: #1A3D8F; }
+.region-tag.muted { background: #F3F2EC; color: #9C9A92; font-style: italic; }
+.region-level-badge,
+.region-badge-cell .fiche-zone-badge {
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal !important;
+    line-height: 1.35;
+    word-break: break-word;
+}
+.region-public-table-wrap { overflow-x: auto; margin-top: 8px; }
+.region-public-table-v2 { min-width: 600px; }
+.region-public-row-v2 {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.2fr) minmax(90px, 0.8fr) minmax(120px, 1fr) minmax(90px, 0.7fr) minmax(100px, 0.9fr);
+    gap: 14px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #F0EDE5;
+    align-items: start;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.region-public-head-v2 {
+    background: #F3F2EC;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #6B6B68;
+    text-transform: uppercase;
+    border-radius: 6px 6px 0 0;
+}
+.region-lever-list { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+.region-lever-item {
+    background: white;
+    border: 1px solid #E8E6DD;
+    border-radius: 8px;
+    padding: 20px 22px;
+}
+.region-lever-flow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.region-lever-step {
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #FAFAF8;
+    min-width: 0;
+    word-wrap: break-word;
+}
+.region-lever-step.tension { border-left: 3px solid #A51C30; }
+.region-lever-step.public { border-left: 3px solid #1A3D8F; }
+.region-lever-step.action { border-left: 3px solid #1B5E3F; background: #F0F7F3; font-weight: 500; }
+.region-lever-arrow { color: #C4C2B8; font-size: 16px; text-align: center; }
+.region-lever-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    font-size: 12px;
+    color: #6B6B68;
+    padding-top: 12px;
+    border-top: 1px solid #F0EDE5;
+}
+.region-spec-table { min-width: 480px; }
+.region-spec-head,
+.region-spec-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1.3fr) 70px 70px minmax(100px, 1fr);
+    gap: 12px;
+    padding: 14px 18px;
+    align-items: center;
+}
+.region-spec-head {
+    background: #F3F2EC;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #6B6B68;
+    text-transform: uppercase;
+    border-radius: 6px 6px 0 0;
+}
+.region-spec-row { border-bottom: 1px solid #F0EDE5; font-size: 13px; }
+@media screen and (max-width: 900px) {
+    .region-lever-flow {
+        grid-template-columns: 1fr;
+    }
+    .region-lever-arrow { display: none; }
+}
+@media screen and (max-width: 768px) {
+    .region-prio-table-v2 { min-width: 100%; }
+    .region-public-table-v2 { min-width: 520px; }
+}
+</style>
+"""
 
 
 def _level_badge(label: str) -> str:
     cls = _LEVEL_BADGE.get(label, "inter")
     return (
-        f'<span class="fiche-zone-badge {cls}" '
-        f'style="font-size:10px;padding:3px 8px;white-space:nowrap;">{label}</span>'
+        f'<span class="fiche-zone-badge {cls} region-level-badge" '
+        f'style="font-size:10px;padding:3px 8px;">{label}</span>'
     )
+
+
+def _tags_html(items: list[str], css_class: str = "") -> str:
+    if not items:
+        return '<span class="region-tag muted">n.d.</span>'
+    cls = f" {css_class}" if css_class else ""
+    return "".join(f'<span class="region-tag{cls}">{x}</span>' for x in items)
+
+
+def _fmt_pop(n: int) -> str:
+    return f"{n:,}".replace(",", "\u202f")
 
 
 def render_priorites_action(
@@ -284,190 +538,262 @@ def render_priorites_action(
     region_name: str,
     data: dict,
 ) -> None:
-    """Bloc pilotage ARS : fragilité, impact, faisabilité, priorité."""
+    """Pilotage ARS V2 : territoires → publics → problèmes → leviers."""
     region_code = str(region_depts.iloc[0].get("Code région", ""))
 
+    st.markdown(_region_pilotage_css(), unsafe_allow_html=True)
+
+    priorities = compute_dept_priorities(region_depts, data.get("patho"))
+    delais_region = compute_specialites_tension(data.get("delais"), region_code)
+    publics = compute_publics_prioritaires(region_depts, data.get("patho"), priorities)
+    summary = compute_region_summary(
+        priorities, region_depts, delais_region, publics=publics
+    )
+    leviers = compute_leviers_action(
+        region_depts, priorities, data.get("patho"), delais_region
+    )
+
+    # ── En-tête pilotage ──────────────────────────────────────────────────────
     st.markdown(
         '<div class="section-header">'
-        '<div class="section-eyebrow">PILOTAGE ARS</div>'
-        '<h2 class="section-title">Priorités d\'action <em>régionales.</em></h2>'
-        '<p class="section-lead">Repérer les territoires où une action publique ou '
-        'philanthropique peut être utile, ciblée et déployable.</p>'
+        '<div class="section-eyebrow">PILOTAGE TERRITORIAL</div>'
+        '<h2 class="section-title">Où agir, pour qui, <em>comment.</em></h2>'
+        '<p class="section-lead">Aide à la décision pour déployer une action publique, '
+        'philanthropique ou une expérimentation de santé dans la région.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    priorities = compute_dept_priorities(region_depts, data.get("patho"))
-    delais_region = compute_specialites_tension(data.get("delais"), region_code)
-    summary = compute_region_summary(priorities, region_depts, delais_region)
+    pop_prio = summary.get("pop_territoires_prioritaires", 0)
+    pop_prio_str = _fmt_pop(pop_prio) if pop_prio > 0 else "n.d."
 
-    # ── Résumé régional ───────────────────────────────────────────────────────
     st.markdown(
-        f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));'
-        f'gap:16px;margin-bottom:32px;">'
-        f'<div class="fiche-meta-item" style="padding:16px;background:#FAFAF8;'
-        f'border:1px solid #E8E6DD;border-radius:6px;">'
-        f'<span class="label">DÉPARTEMENT LE PLUS PRIORITAIRE</span>'
-        f'<span class="value" style="font-size:18px;">{summary["dept_top"]}</span>'
+        f'<div class="region-v2-summary">'
+        f'<div class="region-v2-kpi">'
+        f'<span class="label">Population en territoires prioritaires</span>'
+        f'<span class="value">{pop_prio_str}</span>'
         f'</div>'
-        f'<div class="fiche-meta-item" style="padding:16px;background:#FAFAF8;'
-        f'border:1px solid #E8E6DD;border-radius:6px;">'
-        f'<span class="label">DÉPARTEMENTS PRIORITAIRES</span>'
-        f'<span class="value">{summary["nb_prioritaires"]}</span>'
+        f'<div class="region-v2-kpi">'
+        f'<span class="label">Départements prioritaires</span>'
+        f'<span class="value">{summary.get("nb_depts_prioritaires", 0)}</span>'
         f'</div>'
-        f'<div class="fiche-meta-item" style="padding:16px;background:#FAFAF8;'
-        f'border:1px solid #E8E6DD;border-radius:6px;">'
-        f'<span class="label">CANDIDATS EXPÉRIMENTATION</span>'
-        f'<span class="value">{summary["nb_experimentation"]}</span>'
+        f'<div class="region-v2-kpi">'
+        f'<span class="label">Tension régionale principale</span>'
+        f'<span class="value text">{summary["tension_principale"].capitalize()}.</span>'
         f'</div>'
-        f'<div class="fiche-meta-item" style="padding:16px;background:#FAFAF8;'
-        f'border:1px solid #E8E6DD;border-radius:6px;">'
-        f'<span class="label">TENSION RÉGIONALE PRINCIPALE</span>'
-        f'<span class="value" style="font-size:14px;line-height:1.4;">'
-        f'{summary["tension_principale"].capitalize()}.</span>'
+        f'<div class="region-v2-kpi">'
+        f'<span class="label">Public principal concerné</span>'
+        f'<span class="value text">{summary.get("public_principal", "n.d.")}</span>'
         f'</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Tableau de priorisation ───────────────────────────────────────────────
+    # ── 1. Territoires prioritaires — tableau simplifié ───────────────────────
     st.markdown(
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9C9A92;margin:0 0 12px;">'
-        'TABLEAU DE PRIORISATION</div>',
-        unsafe_allow_html=True,
-    )
-
-    cols = (
-        "40px 1.2fr 90px 88px 88px 88px 110px 1.4fr"
-    )
-    table_html = (
-        f'<div class="sa-tbl-scroll"><div style="min-width:920px;">'
-        f'<div style="display:grid;grid-template-columns:{cols};'
-        f'gap:0 10px;padding:8px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-        f'font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6B6B68;'
-        f'text-transform:uppercase;align-items:center;">'
-        f'<span>Rang</span><span>Département</span><span>Zone</span>'
-        f'<span>Fragilité</span><span>Impact</span><span>Faisabilité</span>'
-        f'<span>Priorité</span><span>Lecture rapide</span>'
-        f'</div>'
-    )
-
-    for _, row in priorities.iterrows():
-        dept_code = row["dept"]
-        dept_name = row["Nom du département"]
-        zone = str(row.get("zone_short", "—"))
-        zone_cls = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
-        rang = int(row["priorite_rang"])
-        bg = "#FEF9F9" if row["priorite"] in ("très prioritaire", "candidat expérimentation") else "white"
-
-        table_html += (
-            f'<a href="?view=dept&dept_code={dept_code}" '
-            f'style="display:grid;grid-template-columns:{cols};gap:0 10px;'
-            f'padding:10px 16px;background:{bg};border-bottom:1px solid #F0EDE5;'
-            f'text-decoration:none;color:inherit;align-items:center;">'
-            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{rang:02d}</span>'
-            f'<span style="font-size:14px;font-weight:500;color:#0A0A0A;">{dept_name}</span>'
-            f'<span><span class="fiche-zone-badge {zone_cls}" '
-            f'style="font-size:10px;padding:3px 8px;">{zone}</span></span>'
-            f'<span>{_level_badge(row["fragilite"])}</span>'
-            f'<span>{_level_badge(row["impact"])}</span>'
-            f'<span>{_level_badge(row["faisabilite"])}</span>'
-            f'<span>{_level_badge(row["priorite"])}</span>'
-            f'<span style="font-size:12px;color:#6B6B68;line-height:1.4;">'
-            f'{row["lecture_rapide"]}</span>'
-            f'</a>'
-        )
-
-    table_html += "</div></div>"
-    st.markdown(table_html, unsafe_allow_html=True)
-
-    # ── Focus top 3 ─────────────────────────────────────────────────────────
-    top3 = priorities.head(3)
-    if not top3.empty:
-        st.markdown(
-            '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-            'text-transform:uppercase;color:#9C9A92;margin:40px 0 16px;">'
-            'FOCUS — TROIS TERRITOIRES À TRAITER EN PRIORITÉ</div>',
-            unsafe_allow_html=True,
-        )
-        cols_ui = st.columns(min(3, len(top3)))
-        for i, (_, row) in enumerate(top3.iterrows()):
-            with cols_ui[i]:
-                raisons_html = "".join(
-                    f'<li style="margin-bottom:6px;">{r}</li>'
-                    for r in row.get("raisons", [])
-                )
-                st.markdown(
-                    f'<div class="reco-card">'
-                    f'<span class="reco-priority p1">Rang {int(row["priorite_rang"]):02d}</span>'
-                    f'<div class="reco-title">{row["Nom du département"]}</div>'
-                    f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;">'
-                    f'{_level_badge(row["priorite"])}'
-                    f'{_level_badge(row["fragilite"])}'
-                    f'{_level_badge(row["impact"])}'
-                    f'{_level_badge(row["faisabilite"])}'
-                    f'</div>'
-                    f'<ul style="font-size:12px;color:#4A4A4A;line-height:1.55;'
-                    f'padding-left:18px;margin:0 0 14px;">{raisons_html}</ul>'
-                    f'<div class="reco-prose">{row["synthese"]}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-    # ── Spécialités sous tension ──────────────────────────────────────────────
-    st.markdown(
-        '<div class="section-header" style="margin-top:48px;">'
-        '<div class="section-eyebrow">PARCOURS DE SOINS</div>'
-        '<h2 class="section-title">Spécialités <em>sous tension</em> dans la région.</h2>'
-        '<p class="section-lead">Délais médians DREES par spécialité — données régionales '
-        f'{region_name}.</p>'
+        '<div class="section-header" style="margin-top:8px;">'
+        '<div class="section-eyebrow">ÉTAPE 1 — TERRITOIRES</div>'
+        '<h2 class="section-title">Territoires <em>prioritaires.</em></h2>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    if delais_region.empty:
-        st.info(
-            "Données régionales de délais non disponibles pour cette région. "
-            "Les estimations départementales restent accessibles via chaque fiche département."
+    table_html = (
+        '<div class="region-prio-table-wrap"><div class="region-prio-table-v2">'
+        '<div class="region-prio-head-v2">'
+        '<span>Rang</span><span>Département</span><span>Priorité</span>'
+        '<span>Lecture rapide</span>'
+        '</div>'
+    )
+    for _, row in priorities.iterrows():
+        dept_code = row["dept"]
+        rang = int(row["priorite_rang"])
+        bg = (
+            "#FEF9F9"
+            if row["priorite"] in ("très prioritaire", "candidat expérimentation")
+            else "white"
         )
+        table_html += (
+            f'<a href="?view=dept&dept_code={dept_code}" class="region-prio-row-v2" '
+            f'style="background:{bg};">'
+            f'<span style="font-size:13px;font-weight:700;color:#9C9A92;">{rang:02d}</span>'
+            f'<span class="region-prio-dept">{row["Nom du département"]}</span>'
+            f'<span>{_level_badge(row["priorite"])}</span>'
+            f'<span class="region-prio-lecture">{row["lecture_rapide"]}</span>'
+            f'</a>'
+        )
+    table_html += "</div></div>"
+    st.markdown(table_html, unsafe_allow_html=True)
+
+    # ── Cartes territoires (top 3) ────────────────────────────────────────────
+    top3 = priorities.head(3)
+    if not top3.empty:
+        st.markdown(
+            '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
+            'text-transform:uppercase;color:#9C9A92;margin:32px 0 16px;">'
+            'Territoires à cibler en priorité</div>',
+            unsafe_allow_html=True,
+        )
+        cards_html = '<div class="region-territoire-grid">'
+        patho_map = _patho_metrics(
+            data.get("patho"),
+            region_depts["dept"].astype(str).str.zfill(2).tolist(),
+        )
+
+        for _, row in top3.iterrows():
+            code = str(row["dept"]).zfill(2)
+            profile = build_territoire_card(
+                row, patho_map.get(code), region_depts
+            )
+            cards_html += (
+                f'<div class="region-territoire-card">'
+                f'<div class="card-head">'
+                f'<span class="card-title">{row["Nom du département"]}</span>'
+                f'<span class="card-rang">Rang {int(row["priorite_rang"]):02d}</span>'
+                f'</div>'
+                f'<div style="margin-bottom:16px;">{_level_badge(row["priorite"])}</div>'
+                f'<div class="region-card-block">'
+                f'<div class="region-card-label">Fragilités principales</div>'
+                f'<div class="region-tags">{_tags_html(profile["fragilites"], "frag")}</div>'
+                f'</div>'
+                f'<div class="region-card-block">'
+                f'<div class="region-card-label">Atouts mobilisables</div>'
+                f'<div class="region-tags">{_tags_html(profile["atouts"], "atout")}</div>'
+                f'</div>'
+                f'<div class="region-card-block">'
+                f'<div class="region-card-label">Public principal concerné</div>'
+                f'<div class="region-tags">{_tags_html(profile["publics"], "public")}</div>'
+                f'</div>'
+                f'</div>'
+            )
+        cards_html += "</div>"
+        st.markdown(cards_html, unsafe_allow_html=True)
+
+    # ── 2. Publics prioritaires ───────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-header" style="margin-top:56px;">'
+        '<div class="section-eyebrow">ÉTAPE 2 — POPULATIONS</div>'
+        '<h2 class="section-title">Publics <em>prioritaires.</em></h2>'
+        '<p class="section-lead">Populations et pathologies qui justifient une intervention '
+        '— données CNAM et INSEE.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not publics:
+        st.info("Données CNAM ou démographiques insuffisantes pour identifier les publics prioritaires.")
     else:
-        spec_cols = (
-            "1.4fr 80px 80px 100px"
+        pub_html = (
+            '<div class="region-public-table-wrap"><div class="region-public-table-v2">'
+            '<div class="region-public-row-v2 region-public-head-v2">'
+            '<span>Public / pathologie</span><span>Importance</span>'
+            '<span>Départements concernés</span><span>Prévalence</span><span>Volume</span>'
+            '</div>'
         )
+        for pub in publics[:7]:
+            depts_str = ", ".join(pub.get("depts", [])) or "n.d."
+            pub_html += (
+                f'<div class="region-public-row-v2">'
+                f'<span style="font-weight:500;color:#0A1938;">{pub["label"]}</span>'
+                f'<span style="color:#4A4A4A;">{pub.get("importance", pub.get("priorite", "n.d."))}</span>'
+                f'<span style="color:#4A4A4A;">{depts_str}</span>'
+                f'<span style="color:#6B6B68;">{pub.get("prev", "n.d.")}</span>'
+                f'<span style="color:#6B6B68;">{pub.get("volume", "n.d.")}</span>'
+                f'</div>'
+            )
+        pub_html += "</div></div>"
+        st.markdown(pub_html, unsafe_allow_html=True)
+
+    # ── 3. Problématiques majeures — spécialités sous tension ─────────────────
+    st.markdown(
+        '<div class="section-header" style="margin-top:56px;">'
+        '<div class="section-eyebrow">ÉTAPE 3 — PROBLÉMATIQUES</div>'
+        '<h2 class="section-title">Parcours de soins <em>sous tension.</em></h2>'
+        '<p class="section-lead">Délais régionaux DREES — {region_name}.</p>'
+        '</div>'.format(region_name=region_name),
+        unsafe_allow_html=True,
+    )
+
+    if delais_region.empty:
+        st.info("Données régionales de délais indisponibles pour cette région.")
+    else:
         spec_html = (
-            f'<div class="sa-tbl-scroll"><div style="min-width:480px;">'
-            f'<div style="display:grid;grid-template-columns:{spec_cols};'
-            f'gap:0 12px;padding:8px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-            f'font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6B6B68;'
-            f'text-transform:uppercase;">'
-            f'<span>Spécialité</span>'
-            f'<span style="text-align:right;">Médian</span>'
-            f'<span style="text-align:right;">P75</span>'
-            f'<span>Tension</span>'
-            f'</div>'
+            '<div class="region-prio-table-wrap"><div class="region-spec-table">'
+            '<div class="region-spec-head">'
+            '<span>Spécialité</span>'
+            '<span style="text-align:right;">Délai médian</span>'
+            '<span style="text-align:right;">P75</span>'
+            '<span>Levier recommandé</span>'
+            '</div>'
         )
-        for _, srow in delais_region.iterrows():
+        for _, srow in delais_region.head(8).iterrows():
             p75 = srow.get("delai_jours_p75")
-            p75_str = f"{int(p75)}\u202fj" if pd.notna(p75) else "—"
+            p75_str = f"{int(p75)}\u202fj" if pd.notna(p75) else "n.d."
             spec_html += (
-                f'<div style="display:grid;grid-template-columns:{spec_cols};'
-                f'gap:0 12px;padding:10px 16px;background:white;'
-                f'border-bottom:1px solid #F0EDE5;align-items:center;">'
-                f'<span style="font-size:14px;font-weight:500;">{srow["specialite"]}</span>'
-                f'<span style="text-align:right;font-size:14px;font-weight:600;">'
+                f'<div class="region-spec-row">'
+                f'<span style="font-weight:500;">{srow["specialite"]}</span>'
+                f'<span style="text-align:right;font-weight:600;">'
                 f'{int(srow["delai_jours_median"])}\u202fj</span>'
-                f'<span style="text-align:right;font-size:12px;color:#6B6B68;">{p75_str}</span>'
-                f'<span>{_level_badge(srow["tension"])}</span>'
+                f'<span style="text-align:right;color:#6B6B68;">{p75_str}</span>'
+                f'<span style="color:#1B5E3F;font-weight:500;">'
+                f'{srow.get("levier", "parcours coordonné")}</span>'
                 f'</div>'
             )
         spec_html += "</div></div>"
         st.markdown(spec_html, unsafe_allow_html=True)
 
+    # ── 4. Leviers d'action — problème → action ───────────────────────────────
+    st.markdown(
+        '<div class="section-header" style="margin-top:56px;">'
+        '<div class="section-eyebrow">ÉTAPE 4 — ACTIONS</div>'
+        '<h2 class="section-title">Leviers <em>recommandés.</em></h2>'
+        '<p class="section-lead">De la tension observée à l\'action proposée — '
+        'générés à partir du profil territorial de la région.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not leviers:
+        st.info("Aucun levier identifié avec les données disponibles pour cette région.")
+    else:
+        lever_html = '<div class="region-lever-list">'
+        for lev in leviers:
+            depts_str = ", ".join(lev.get("depts", [])) or "n.d."
+            lever_html += (
+                f'<div class="region-lever-item">'
+                f'<div class="region-lever-flow">'
+                f'<div class="region-lever-step tension">'
+                f'<strong style="display:block;font-size:9px;letter-spacing:0.08em;'
+                f'text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">'
+                f'Tension observée</strong>{lev.get("tension", "—")}'
+                f'</div>'
+                f'<div class="region-lever-arrow">→</div>'
+                f'<div class="region-lever-step public">'
+                f'<strong style="display:block;font-size:9px;letter-spacing:0.08em;'
+                f'text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">'
+                f'Public concerné</strong>{lev["public_cible"]}'
+                f'</div>'
+                f'<div class="region-lever-arrow">→</div>'
+                f'<div class="region-lever-step action">'
+                f'<strong style="display:block;font-size:9px;letter-spacing:0.08em;'
+                f'text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">'
+                f'Levier recommandé</strong>{lev["intitule"].capitalize()}'
+                f'</div>'
+                f'</div>'
+                f'<div class="region-lever-meta">'
+                f'<span><strong>Famille\u202f:</strong> {lev["famille"]}</span>'
+                f'<span><strong>Territoires\u202f:</strong> {depts_str}</span>'
+                f'<span>{_level_badge(lev["pertinence"])}</span>'
+                f'</div>'
+                f'</div>'
+            )
+        lever_html += "</div>"
+        st.markdown(lever_html, unsafe_allow_html=True)
+
     # ── Note méthodologique ───────────────────────────────────────────────────
     st.markdown(
-        '<div style="margin-top:24px;padding:14px 18px;background:#F3F2EC;'
-        'border-radius:4px;font-size:12px;color:#6B6B68;line-height:1.6;">'
+        '<div style="margin-top:40px;padding:16px 20px;background:#F3F2EC;'
+        'border-radius:6px;font-size:12px;color:#6B6B68;line-height:1.6;">'
         '<strong style="color:#2B2B2B;">Note méthodologique.</strong> '
         'Cette priorisation est un outil d\'aide à la décision. Elle ne remplace pas '
         'l\'expertise locale d\'une ARS. Elle croise la fragilité sanitaire, le volume '
