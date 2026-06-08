@@ -209,12 +209,22 @@ def _densite_faisabilite_score(densite: pd.Series) -> pd.Series:
     return (1.0 - dist.clip(0, 1)).fillna(0.5)
 
 
+def _composite_score(signals: dict[str, pd.Series]) -> pd.Series:
+    """Moyenne pondérée des signaux alignés sur le même index (labels, pas positions)."""
+    index = next(iter(signals.values())).index
+
+    def _row(idx) -> float:
+        return _weighted_mean({k: _num(v.loc[idx]) for k, v in signals.items()})
+
+    return pd.Series([_row(i) for i in index], index=index)
+
+
 def compute_dept_priorities(
     region_depts: pd.DataFrame,
     patho: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Calcule les 4 dimensions de priorisation pour chaque département de la région."""
-    df = region_depts.copy()
+    df = region_depts.copy().reset_index(drop=True)
     dept_codes = df["dept"].astype(str).str.zfill(2).tolist()
     patho_map = _patho_metrics(patho, dept_codes)
 
@@ -227,9 +237,7 @@ def compute_dept_priorities(
         "communes":   _signal_rank(df["nb_communes_critiques"], higher_is_worse=True),
         "seniors":    _signal_rank(df["pct_plus_65"], higher_is_worse=True),
     }
-    df["_frag_score"] = df.index.map(
-        lambda i: _weighted_mean({k: _num(v.iloc[i]) for k, v in frag_signals.items()})
-    )
+    df["_frag_score"] = _composite_score(frag_signals)
     desert_bonus = df["apl_median_dept"].apply(
         lambda x: 0.12 if pd.notna(x) and float(x) < APL_SEUIL_DESERT else 0.0
     )
@@ -254,9 +262,7 @@ def compute_dept_priorities(
         "patho":    _signal_rank(prev_max, higher_is_worse=True),
         "patients": _signal_rank(ntop, higher_is_worse=True),
     }
-    df["_impact_score"] = df.index.map(
-        lambda i: _weighted_mean({k: _num(v.iloc[i]) for k, v in impact_signals.items()})
-    )
+    df["_impact_score"] = _composite_score(impact_signals)
 
     # ── Faisabilité d'action ──────────────────────────────────────────────────
     relais = (
@@ -276,9 +282,7 @@ def compute_dept_priorities(
         "prix":     _signal_rank(df["prix_m2_moyen"], higher_is_worse=False),
         "densite":  _densite_faisabilite_score(pd.to_numeric(df["densite"], errors="coerce")),
     }
-    df["_fais_score"] = df.index.map(
-        lambda i: _weighted_mean({k: _num(v.iloc[i]) for k, v in fais_signals.items()})
-    )
+    df["_fais_score"] = _composite_score(fais_signals)
 
     # ── Niveaux lisibles ────────────────────────────────────────────────────────
     df["fragilite"] = df["_frag_score"].apply(lambda s: _score_to_level(s, FRAG_LABELS))
