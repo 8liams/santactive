@@ -401,18 +401,78 @@ def _position_vs_national(
     return "better" if value < nat else "worse"
 
 
-def _lecture_nationale(
-    label: str,
+def _interpretation_scenario(better: list[str], worse: list[str], at: list[str]) -> str:
+    """Retourne all_better | all_worse | all_at | mixed selon les positions vs référence."""
+    if better and worse:
+        return "mixed"
+    if worse:
+        return "all_worse"
+    if better:
+        return "all_better"
+    return "all_at"
+
+
+_INTERPRETATIONS: dict[str, dict[str, str]] = {
+    "score_global": {
+        "all_better": "Profil sanitaire global plus favorable que la référence nationale.",
+        "all_worse": "Situation sanitaire globalement plus fragile que la référence nationale.",
+        "all_at": "Profil sanitaire proche de la référence nationale.",
+        "mixed": "Profils sanitaires contrastés entre les territoires sélectionnés.",
+    },
+    "apl_median_dept": {
+        "all_better": "Accès aux médecins plus favorable que la moyenne nationale.",
+        "all_worse": "Accès aux soins de ville plus contraint que la moyenne nationale.",
+        "all_at": "Accessibilité aux médecins proche de la référence nationale.",
+        "mixed": "Contraste marqué de l'accessibilité aux soins de ville entre les territoires.",
+    },
+    "temps_acces_median": {
+        "all_better": "Temps de trajet vers les soins inférieur à la moyenne nationale.",
+        "all_worse": "Éloignement plus marqué des établissements de santé.",
+        "all_at": "Proximité des établissements proche de la référence nationale.",
+        "mixed": "Écarts sensibles de proximité des établissements entre territoires.",
+    },
+    "med_gen_pour_100k": {
+        "all_better": "Offre médicale supérieure à la moyenne nationale.",
+        "all_worse": "Densité médicale inférieure à la moyenne nationale.",
+        "all_at": "Densité médicale proche de la référence nationale.",
+        "mixed": "Densité médicale inégale entre les territoires comparés.",
+    },
+    "structures_pour_100k": {
+        "all_better": "Maillage hospitalier relativement dense.",
+        "all_worse": "Offre hospitalière plus limitée que la référence nationale.",
+        "all_at": "Maillage hospitalier proche de la référence nationale.",
+        "mixed": "Maillage hospitalier contrasté entre les territoires sélectionnés.",
+    },
+    "prix_m2_moyen": {
+        "all_better": "Conditions d'installation potentiellement favorables pour les professionnels.",
+        "all_worse": "Foncier plus contraint que la moyenne nationale.",
+        "all_at": "Coût foncier proche de la référence nationale.",
+        "mixed": "Conditions d'installation foncière contrastées entre territoires.",
+    },
+    "pct_plus_65": {
+        "all_better": "Pression démographique liée au vieillissement plus modérée.",
+        "all_worse": "Pression démographique liée au vieillissement plus élevée.",
+        "all_at": "Structure démographique proche de la référence nationale.",
+        "mixed": "Pression du vieillissement contrastée entre les territoires.",
+    },
+    "nb_communes_critiques": {
+        "all_better": "Isolement territorial limité.",
+        "all_worse": "Part importante de communes éloignées des soins.",
+        "all_at": "Isolement territorial proche de la référence nationale.",
+        "mixed": "Écarts marqués d'isolement territorial entre les territoires.",
+    },
+}
+
+
+def _interpretation_territoriale(
     col: str,
     nat: float | None,
     dept_values: dict[str, float],
     selected: list[str],
-    *,
-    kind: str = "dept",
 ) -> str:
-    """Génère une phrase courte de lecture vs médiane nationale."""
+    """Phrase interprétative métier vs référence nationale (règles déterministes)."""
     if nat is None or pd.isna(nat):
-        return "Référence nationale indisponible."
+        return "Référence nationale indisponible pour cet indicateur."
 
     better, worse, at = [], [], []
     for name in selected:
@@ -427,66 +487,22 @@ def _lecture_nationale(
         else:
             at.append(name)
 
-    n = len(better) + len(worse) + len(at)
-    if n == 0:
-        return "Données insuffisantes pour cette comparaison."
+    if not better and not worse and not at:
+        return "Données insuffisantes pour interpréter cet indicateur."
 
-    names_all = _join_dept_names(selected[:4])
-    unit = _territory_label(kind, plural=True)
+    phrases = _INTERPRETATIONS.get(col)
+    if not phrases:
+        scenario = _interpretation_scenario(better, worse, at)
+        if scenario == "mixed":
+            return "Écarts contrastés entre les territoires sélectionnés."
+        if scenario == "all_better":
+            return "Situation plus favorable que la référence nationale."
+        if scenario == "all_worse":
+            return "Situation plus contrainte que la référence nationale."
+        return "Situation proche de la référence nationale."
 
-    if col == "apl_median_dept":
-        if better and not worse:
-            return f"{_join_dept_names(better)} atteint la médiane nationale."
-        if worse and not better:
-            if len(worse) == len(selected):
-                return f"Aucun des {unit} sélectionnés n'atteint la médiane nationale."
-            return f"{_join_dept_names(worse)} reste sous la médiane nationale."
-        if at and not better and not worse:
-            return f"{names_all} se situe à la médiane nationale."
-        return f"{_join_dept_names(better)} au-dessus, {_join_dept_names(worse)} en dessous."
-
-    if col == "temps_acces_median":
-        if worse and not better:
-            if len(worse) == 1:
-                return f"{worse[0]} reste moins accessible que la médiane nationale."
-            return f"{_join_dept_names(worse)} restent moins accessibles que la médiane nationale."
-        if better and not worse:
-            return f"{_join_dept_names(better)} est plus accessible que la médiane nationale."
-        if at and not better and not worse:
-            return f"{names_all} est proche de la médiane nationale."
-
-    if col == "med_gen_pour_100k":
-        if len(better) == 1 and not worse:
-            return f"{better[0]} dépasse la référence nationale."
-        if better and not worse:
-            return f"{_join_dept_names(better)} dépassent la référence nationale."
-        if worse and not better:
-            if len(worse) == len(selected):
-                return f"Aucun des {unit} sélectionnés ne dépasse la référence nationale."
-            return f"{_join_dept_names(worse)} reste sous la référence nationale."
-
-    if col == "score_global":
-        if worse and not better:
-            if len(worse) == len(selected):
-                if len(selected) == 2:
-                    return f"Les deux {unit} se situent sous la médiane nationale."
-                return f"Tous les {unit} sélectionnés sont sous la médiane nationale."
-            return f"{_join_dept_names(worse)} se situe sous la médiane nationale."
-        if better and not worse:
-            return f"{_join_dept_names(better)} se situe au-dessus de la médiane nationale."
-        if at and not better and not worse:
-            return f"{names_all} est proche de la médiane nationale."
-
-    # Lecture générique
-    if better and not worse:
-        return f"{_join_dept_names(better)} est au-dessus de la médiane nationale."
-    if worse and not better:
-        if len(worse) == len(selected):
-            return f"Aucun des {unit} sélectionnés n'atteint la médiane nationale."
-        return f"{_join_dept_names(worse)} reste sous la médiane nationale."
-    if at and not better and not worse:
-        return f"{names_all} est proche de la médiane nationale."
-    return f"Écarts contrastés entre les {unit} sélectionnés."
+    scenario = _interpretation_scenario(better, worse, at)
+    return phrases[scenario]
 
 
 def _render_comparison_table(
@@ -558,13 +574,13 @@ def _render_comparison_table(
             }.get(pos or "", "")
             dept_cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
 
-        lecture = _lecture_nationale(label, col, nat, dept_vals, selected, kind=kind)
+        interpretation = _interpretation_territoriale(col, nat, dept_vals, selected)
         rows_html += (
             f'<tr>'
             f'<td class="metric-label">{label}</td>'
             f'{nat_cell}'
             f'{dept_cells}'
-            f'<td class="cell-lecture">{lecture}</td>'
+            f'<td class="cell-lecture">{interpretation}</td>'
             f'</tr>'
         )
 
@@ -576,7 +592,7 @@ def _render_comparison_table(
         '<th class="metric-col">Indicateur</th>'
         '<th class="metric-col col-national">Réf. nationale</th>'
         f'{dept_headers}'
-        '<th class="metric-col col-lecture">Lecture</th>'
+        '<th class="metric-col col-lecture">Interprétation</th>'
         '</tr>'
         '</thead>'
         f'<tbody>{rows_html}</tbody>'
