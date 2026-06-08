@@ -119,8 +119,24 @@ def load_css(path: Path) -> None:
 load_css(STATIC_DIR / "style.css")
 
 # ─── DATA ─────────────────────────────────────────────────────────────────────
-master, pros, immo, etabs, temps, env, patho, delais = load_all_data()
-master = compute_scores(master)
+try:
+    master, pros, immo, etabs, temps, env, patho, delais = load_all_data()
+    master = compute_scores(master)
+except KeyError as exc:
+    st.error(
+        "Impossible de charger les données (structure CSV inattendue). "
+        "Rechargez la page dans quelques instants. "
+        f"Détail technique : colonne ou clé manquante `{exc}`."
+    )
+    st.stop()
+except Exception as exc:
+    st.error(
+        "Impossible de charger les données depuis Google Drive. "
+        "Rechargez la page dans quelques instants."
+    )
+    st.exception(exc)
+    st.stop()
+
 geojson = load_geojson()
 
 # ─── ROUTING — init depuis URL ─────────────────────────────────────────────────

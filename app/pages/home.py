@@ -80,12 +80,12 @@ def render(data: dict) -> None:
 <div class="home-hero">
     <div class="hero-eyebrow">Observatoire · 101 départements · 35 000 communes</div>
     <h1 class="hero-title">
-        Cartographier la santé,<br><em>territoire par territoire.</em>
+        La santé de votre territoire,<br><em>en un seul regard.</em>
     </h1>
     <p class="hero-lead">
-        Diagnostics, accès aux soins, démographie, pathologies et immobilier,
-        croisés en une seule fiche par territoire, destinée aux ARS, aux élus et
-        aux professionnels de santé.
+        Données de diagnostic, d'accès aux soins, de démographie et de pathologies
+        consolidées en une fiche territoriale pour les ARS, les élus et les
+        professionnels de santé.
     </p>
 </div>
 """, unsafe_allow_html=True)
