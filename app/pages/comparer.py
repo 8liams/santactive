@@ -509,7 +509,7 @@ def _render_comparison_table(
                 dept_vals[name] = float(v)
 
         if nat is None or pd.isna(nat):
-            nat_cell = '<td class="cell-na">—</td>'
+            nat_cell = '<td class="cell-na">N/D</td>'
         else:
             nat_cell = (
                 f'<td class="cell-national-ref">{format(nat, fmt)}{unit}</td>'
@@ -519,7 +519,7 @@ def _render_comparison_table(
         for name in selected:
             v = values.get(name)
             if v is None or (isinstance(v, float) and pd.isna(v)):
-                dept_cells += '<td class="cell-na">—</td>'
+                dept_cells += '<td class="cell-na">N/D</td>'
                 continue
             pos = _position_vs_national(float(v), nat, col) if nat is not None else None
             klass = {

@@ -29,8 +29,8 @@ def render(data: dict) -> None:
     etabs: pd.DataFrame  = data["etabs"]
 
     dept_row    = master[master["dept"] == dept_code]
-    dept_name   = dept_row.iloc[0]["Nom du département"] if not dept_row.empty else "—"
-    region_name = dept_row.iloc[0]["Nom de la région"]   if not dept_row.empty else "—"
+    dept_name   = dept_row.iloc[0]["Nom du département"] if not dept_row.empty else "N/D"
+    region_name = dept_row.iloc[0]["Nom de la région"]   if not dept_row.empty else "N/D"
     region_code = str(dept_row.iloc[0]["Code région"])    if not dept_row.empty else ""
 
     # ── TOPBAR ────────────────────────────────────────────────────────────────
@@ -104,19 +104,19 @@ def render(data: dict) -> None:
     with c1:
         render_kpi_card(
             "Prix médian /m²",
-            f"{prix_m2:.0f}\u202f€" if prix_m2 and pd.notna(prix_m2) else "—",
+            f"{prix_m2:.0f}\u202f€" if prix_m2 and pd.notna(prix_m2) else "N/D",
             "Source DVF 2025" if prix_m2 else "Non disponible",
         )
     with c2:
         render_kpi_card(
             "Temps d'accès médical",
-            f"{temps_acces:.1f}\u202fmin" if temps_acces and pd.notna(temps_acces) else "—",
+            f"{temps_acces:.1f}\u202fmin" if temps_acces and pd.notna(temps_acces) else "N/D",
             "Vers établissement le + proche" if temps_acces else "Non disponible",
         )
     with c3:
         render_kpi_card(
             "Transactions 2025",
-            str(nb_trans) if nb_trans else "—",
+            str(nb_trans) if nb_trans else "N/D",
             "Ventes immobilières",
         )
     with c4:

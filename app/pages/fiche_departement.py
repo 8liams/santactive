@@ -98,7 +98,7 @@ def render_topbar(r: pd.Series, data: dict) -> None:
 
 def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     score = r.get("score_global")
-    zone = str(r.get("zone_short", "—"))
+    zone = str(r.get("zone_short", "N/D"))
 
     # Rang national
     ranked = (
@@ -107,20 +107,20 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         .reset_index(drop=True)
     )
     rang_idx = ranked.index[ranked["dept"] == r["dept"]].tolist()
-    rang_num = rang_idx[0] + 1 if rang_idx else "—"
+    rang_num = rang_idx[0] + 1 if rang_idx else "N/D"
     nb_total = len(ranked)
 
     pop = r.get("population_num", 0)
-    pop_str = f"{int(pop):,}\u202fhab.".replace(",", "\u202f") if pd.notna(pop) and pop else "—"
+    pop_str = f"{int(pop):,}\u202fhab.".replace(",", "\u202f") if pd.notna(pop) and pop else "N/D"
 
     typologie_labels = {
         "urbain_dense": "Urbain dense",
         "urbain":       "Urbain",
         "peri_urbain":  "Péri-urbain",
         "rural":        "Rural",
-        "inconnu":      "—",
+        "inconnu":      "N/D",
     }
-    typologie_str = typologie_labels.get(str(r.get("typologie", "inconnu")), "—")
+    typologie_str = typologie_labels.get(str(r.get("typologie", "inconnu")), "N/D")
 
     badge_class = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
     score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
@@ -303,7 +303,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame) -> None:
                 f'<div class="diagnostic-kpi-label">'
                 f'APL · ACCESSIBILITÉ AUX MÉDECINS GÉNÉRALISTES {info_tooltip("apl")}'
                 f'</div>'
-                '<div class="diagnostic-kpi-value" style="color:#9C9A92;">—</div>'
+                '<div class="diagnostic-kpi-value" style="color:#9C9A92;">N/D</div>'
                 '<div class="diagnostic-kpi-context">'
                 '<span>Donnée ANCT non disponible pour ce département</span>'
                 '</div>'
@@ -573,13 +573,13 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         return
 
     comm_data["tt_score"] = comm_data["score_opportunite"].apply(
-        lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "—"
+        lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "N/D"
     )
     comm_data["tt_temps"] = comm_data["temps_acces"].apply(
-        lambda x: f"{float(x):.1f} min" if pd.notna(x) else "—"
+        lambda x: f"{float(x):.1f} min" if pd.notna(x) else "N/D"
     )
     comm_data["tt_prix"] = comm_data["prix_m2"].apply(
-        lambda x: f"{float(x):,.0f} €/m²".replace(",", "\u202f") if pd.notna(x) else "—"
+        lambda x: f"{float(x):,.0f} €/m²".replace(",", "\u202f") if pd.notna(x) else "N/D"
     )
     comm_data["tt_niveau"] = comm_data["niveau"].replace(
         "Faible intérêt d'implantation", "Faible intérêt"
@@ -661,18 +661,18 @@ def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:
         temps = row.get("temps_acces")
         prix = row.get("prix_m2")
         pop = row.get("population")
-        score_str = f"{float(score):.0f}/100" if pd.notna(score) else "—"
-        temps_str = f"{float(temps):.1f} min" if pd.notna(temps) else "—"
+        score_str = f"{float(score):.0f}/100" if pd.notna(score) else "N/D"
+        temps_str = f"{float(temps):.1f} min" if pd.notna(temps) else "N/D"
         prix_str = (
-            f"{float(prix):,.0f} €/m²".replace(",", "\u202f") if pd.notna(prix) else "—"
+            f"{float(prix):,.0f} €/m²".replace(",", "\u202f") if pd.notna(prix) else "N/D"
         )
         pop_str = (
-            f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "—"
+            f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "N/D"
         )
         rows_html += (
             f'<tr>'
             f'<td class="cell-rank">{i + 1}</td>'
-            f'<td class="metric-label">{row.get("commune", "—")}</td>'
+            f'<td class="metric-label">{row.get("commune", "N/D")}</td>'
             f'<td>{score_str}</td>'
             f'<td>{pop_str}</td>'
             f'<td>{temps_str}</td>'
@@ -1505,7 +1505,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             ecart_color = "#E8A838"
 
         br       = besoin_reel(pour_100k, med_nat, patho_key, spec_nom)
-        br_str   = f"+{br}" if br else "\u2014"
+        br_str   = f"+{br}" if br else "N/D"
         br_color = "#A51C30" if br else "#9C9A92"
 
         badge = ""
@@ -1733,7 +1733,7 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
     APL_NATIONALE = 2.9  # médiane nationale ANCT 2023
 
     if pd.isna(apl):
-        st.info("APL non disponible pour ce département — délais non calculables.")
+        st.info("APL non disponible pour ce département : délais non calculables.")
         return
 
     delais = compute_delais_proxy(dept_code, float(apl), APL_NATIONALE)
@@ -1871,7 +1871,7 @@ def render_suggestions_comparaison(r: pd.Series, master: pd.DataFrame) -> None:
     for i, sim in enumerate(suggestions[:3]):
         with cols[i]:
             score_val = sim["score"]
-            score_str = f"{score_val:.0f}/100" if pd.notna(score_val) else "—"
+            score_str = f"{score_val:.0f}/100" if pd.notna(score_val) else "N/D"
             zone_sug  = str(sim["zone"])
             badge_cls = {"Critique": "crit", "Intermédiaire": "inter",
                          "Favorable": "fav"}.get(zone_sug, "")

@@ -24,7 +24,7 @@ def _fig_to_png(fig, width: int = 700, height: int = 400) -> bytes:
 
 def _safe(v, spec: str = ".1f", suffix: str = "") -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
-        return "—"
+        return "N/D"
     try:
         return format(v, spec) + suffix
     except Exception:
@@ -67,14 +67,14 @@ def _generate_weasyprint(dept_row, gauge_fig, radar_fig) -> bytes:
         <div class="header">
             <h1>Rapport Santé &amp; Territoires</h1>
             <div>{dept_row.get('Nom du département', '')} ({dept_row.get('dept', '')})
-                — {dept_row.get('Nom de la région', '')}</div>
+                · {dept_row.get('Nom de la région', '')}</div>
         </div>
         <div class="meta">Rapport généré le {today}</div>
 
         <div class="section">
             <h2>Synthèse</h2>
             <p>Score global : <b>{_safe(dept_row.get('score_global'))}/100</b>
-               — Zone <b>{dept_row.get('zone_short', '—')}</b></p>
+               · Zone <b>{dept_row.get('zone_short', 'N/D')}</b></p>
             <img src="data:image/png;base64,{gauge_b64}" />
         </div>
 
@@ -168,7 +168,7 @@ def _generate_reportlab(dept_row, gauge_fig, radar_fig) -> bytes:
     ], [
         Paragraph(
             f"{dept_row.get('Nom du département', '')} "
-            f"({dept_row.get('dept', '')}) — "
+            f"({dept_row.get('dept', '')}) · "
             f"{dept_row.get('Nom de la région', '')}",
             s_sub),
     ]]
@@ -190,9 +190,9 @@ def _generate_reportlab(dept_row, gauge_fig, radar_fig) -> bytes:
     # Synthèse
     story.append(Paragraph("Synthèse", s_h2))
     score_val = _safe(dept_row.get("score_global"))
-    zone_val  = dept_row.get("zone_short", "—")
+    zone_val  = dept_row.get("zone_short", "N/D")
     story.append(Paragraph(
-        f"Score global : <b>{score_val}/100</b> — Zone <b>{zone_val}</b>", s_body))
+        f"Score global : <b>{score_val}/100</b> · Zone <b>{zone_val}</b>", s_body))
     story.append(Spacer(1, 6))
     try:
         gauge_png = _fig_to_png(gauge_fig, 600, 280)

@@ -108,7 +108,7 @@ def render(data: dict) -> None:
         "L'ÉCOLE"
         '</div>'
         '<div style="font-size:17px;font-weight:600;color:#0A1938;margin-bottom:8px;">'
-        'ESD — École Supérieure du Digital'
+        'ESD, École Supérieure du Digital'
         '</div>'
         '<div style="font-size:14px;color:#4B4B48;line-height:1.6;">'
         'Mastère 1 Data · Promotion 2025-2026<br>Paris, France'
@@ -144,7 +144,7 @@ def render(data: dict) -> None:
         "de données ouvertes.\u202f\u00bb"
         '</em>'
         '<div style="margin-top:12px;font-size:12px;color:#6B6B68;">'
-        '— Open Data University · '
+        'Open Data University · '
         '<a href="https://www.opendatauniversity.org/" target="_blank" '
         'style="color:#1A3D8F;text-decoration:none;">'
         'opendatauniversity.org'
@@ -188,7 +188,7 @@ def render(data: dict) -> None:
          style="width:160px;height:auto;
                 mix-blend-mode:multiply;
                 background:transparent;"
-         alt="ESData — ESD Paris">
+         alt="ESData, ESD Paris">
 </div>
 """, unsafe_allow_html=True)
     else:
@@ -319,7 +319,7 @@ def render(data: dict) -> None:
         ),
         (
             "DVF · DGFiP · 2025",
-            "Demande de Valeurs Foncières — transactions immobilières",
+            "Demande de Valeurs Foncières (transactions immobilières)",
             "https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres/",
         ),
         (
@@ -429,7 +429,7 @@ def render(data: dict) -> None:
         _voc_html += (
             '<div style="padding:10px 0;border-bottom:1px solid #E8E6DD;">'
             f'<span style="font-weight:700;color:#0A1938;">{abbr}</span>'
-            f" — {label}"
+            f" : {label}"
         )
         if extra:
             _voc_html += (

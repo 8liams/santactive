@@ -208,9 +208,9 @@ def render_hero(
                    "Favorable": "fav"}.get(zone_region, "")
 
     apl_med = region_depts["apl_median_dept"].median()
-    apl_str = f"{apl_med:.1f}" if pd.notna(apl_med) else "—"
+    apl_str = f"{apl_med:.1f}" if pd.notna(apl_med) else "N/D"
 
-    pop_fmt = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "—"
+    pop_fmt = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "N/D"
 
     st.markdown(
         f'<div class="fiche-header">'
@@ -276,9 +276,9 @@ def _short_raison(text: str) -> str:
     if "temps d'accès" in low:
         return "Temps d'accès élevé"
     if "prévalence" in low:
-        return text.split(" — ")[-1][:50] if " — " in text else text[:50]
-    if " — " in text:
-        return text.split(" — ")[0][:55]
+        if "(" in text:
+            return text.split("(")[-1].rstrip(").")[:50]
+        return text[:50]
     return text[:55]
 
 
@@ -367,7 +367,7 @@ def render_ou_agir(
     for i, (_, row) in enumerate(top3.iterrows()):
         code = str(row["dept"]).zfill(2)
         profile = build_territoire_card(row, patho_map.get(code), region_depts)
-        public = profile["publics"][0] if profile["publics"] else "—"
+        public = profile["publics"][0] if profile["publics"] else "N/D"
         raisons = [_short_raison(r) for r in row.get("raisons", [])[:3]]
         raisons_html = "".join(
             f'<li style="margin-bottom:6px;font-size:13px;color:#4A4A4A;">{r}</li>'
@@ -410,7 +410,7 @@ def render_pour_qui(publics: list[dict]) -> None:
     for i, pub in enumerate(top_publics):
         label = _PUBLIC_SHORT.get(pub["label"], pub["label"])
         depts_str = ", ".join(pub.get("depts", [])[:3]) or "n.d."
-        importance = pub.get("importance", pub.get("priorite", "—"))
+        importance = pub.get("importance", pub.get("priorite", "N/D"))
         volume = pub.get("volume", "n.d.")
 
         with cols_ui[i]:
@@ -460,7 +460,7 @@ def render_comment_agir(
             f'<div class="reco-card p{i}">'
             f'<div class="reco-title">{lev["intitule"].capitalize()}</div>'
             f'<div class="reco-prose" style="font-size:13px;">'
-            f'<strong>Problème\u202f:</strong> {lev.get("tension", "—")}<br>'
+            f'<strong>Problème\u202f:</strong> {lev.get("tension", "N/D")}<br>'
             f'<strong>Public\u202f:</strong> {lev["public_cible"]}<br>'
             f'<strong>Territoires\u202f:</strong> {depts_str}'
             f'</div>'
@@ -565,14 +565,14 @@ def render_diagnostic_region(region_depts: pd.DataFrame, region_name: str) -> No
     if nb_crit > 0:
         phrase = (
             f"{nb_crit} département{'s' if nb_crit > 1 else ''} en zone critique. "
-            f"{worst['Nom du département']} ({worst['score_global']:.1f}/100) "
-            f"— {best['Nom du département']} ({best['score_global']:.1f}/100)."
+            f"Écart de {worst['Nom du département']} ({worst['score_global']:.1f}/100) "
+            f"à {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
     else:
         phrase = (
             f"Situation homogène. "
-            f"{worst['Nom du département']} ({worst['score_global']:.1f}/100) "
-            f"— {best['Nom du département']} ({best['score_global']:.1f}/100)."
+            f"Écart de {worst['Nom du département']} ({worst['score_global']:.1f}/100) "
+            f"à {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
 
     st.markdown(
@@ -650,11 +650,11 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
 
     st.markdown('<div class="dept-table-nav sa-tbl-scroll">', unsafe_allow_html=True)
     for i, (_, d) in enumerate(sorted_depts.iterrows(), 1):
-        zone = d.get("zone_short", "\u2014")
+        zone = d.get("zone_short", "N/D")
         score = d.get("score_global")
-        score_str = f"{score:.1f}" if pd.notna(score) else "\u2014"
+        score_str = f"{score:.1f}" if pd.notna(score) else "N/D"
         pop = d.get("population_num", 0)
-        pop_str = f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "\u2014"
+        pop_str = f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "N/D"
         dept_code = str(d["dept"]).zfill(2)
         dept_name = d["Nom du département"]
         badge_cls = {"Critique": "crit", "Intermédiaire": "inter",
@@ -745,7 +745,7 @@ def render_delais_detail(delais_region: pd.DataFrame, region_name: str) -> None:
             f'<span style="text-align:right;font-weight:600;">'
             f'{int(srow["delai_jours_median"])}\u202fj</span>'
             f'<span style="text-align:right;color:#6B6B68;">{p75_str}</span>'
-            f'<span>{srow.get("levier", "—")}</span>'
+            f'<span>{srow.get("levier", "N/D")}</span>'
             f'</div>'
         )
     html += "</div></div>"

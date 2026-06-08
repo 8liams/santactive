@@ -28,7 +28,7 @@ _NAME_PREFIXES = ("L ", "LE ", "LA ", "LES ")
 def opportunite_level(score: float) -> tuple[str, str]:
     """Retourne (libellé, couleur hex) pour un score 0–100."""
     if pd.isna(score):
-        return "—", "#E8E6DD"
+        return "N/D", "#E8E6DD"
     for threshold, label, color in _OPPORTUNITY_LEVELS:
         if float(score) >= threshold:
             return label, color
@@ -178,7 +178,7 @@ def build_commune_opportunity_df(
         df["score_inclut_population"] = False
 
     level_data = df["score_opportunite"].apply(
-        lambda s: opportunite_level(float(s)) if pd.notna(s) else ("—", "#E8E6DD")
+        lambda s: opportunite_level(float(s)) if pd.notna(s) else ("N/D", "#E8E6DD")
     )
     df["niveau"] = level_data.apply(lambda x: x[0])
     df["color_hex"] = level_data.apply(lambda x: x[1])

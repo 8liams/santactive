@@ -176,7 +176,7 @@ Un département avec moins de 3 dimensions disponibles ne reçoit pas de score g
     st.html("""
 <div style="max-width:720px;padding:16px 20px;background:#F3F2EC;border-radius:6px;font-size:13px;color:#4B4B48;line-height:1.7;margin-bottom:32px;">
 <strong style="color:#0A1938;display:block;margin-bottom:8px;">Pourquoi ces 6 dimensions et ces pondérations ?</strong>
-L'APL reçoit le poids le plus fort (30 %) car c'est l'indicateur le plus précis pour mesurer l'accès réel aux soins de ville — il intègre simultanément l'offre, la demande et la distance.
+L'APL reçoit le poids le plus fort (30 %) car c'est l'indicateur le plus précis pour mesurer l'accès réel aux soins de ville : il intègre simultanément l'offre, la demande et la distance.
 Le temps d'accès et la densité médecins reçoivent chacun 20 % car ils mesurent deux facettes complémentaires de l'accessibilité.
 Les établissements hospitaliers (15 %) complètent avec l'offre de soins secondaires.
 La pression démographique (10 %) et le contexte foncier (5 %) sont des facteurs de contexte qui modulent l'intensité du besoin et la capacité d'y répondre.
@@ -193,7 +193,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
     # ══════════════════════════════════════════════════════════════════════════
 
     _section(
-        "APL — ACCESSIBILITÉ POTENTIELLE LOCALISÉE",
+        "APL : ACCESSIBILITÉ POTENTIELLE LOCALISÉE",
         f'L\'indicateur de référence {info_tooltip("apl")} <em>de la DREES.</em>',
     )
     _prose(
@@ -205,7 +205,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "<strong>1. L'offre médicale</strong> : nombre de médecins généralistes actifs "
         "dans un rayon de 20 à 30 minutes de trajet, pondéré par leur volume d'activité "
         "réel en ETP (équivalent temps plein).",
-        "<strong>2. La demande</strong> : population locale pondérée par l'âge — un "
+        "<strong>2. La demande</strong> : population locale pondérée par l'âge : un "
         "habitant de 75 ans génère environ 4 fois plus de consultations qu'un adulte "
         "de 30 ans.",
         "<strong>3. La distance</strong> : seuls les médecins accessibles dans un temps "
@@ -285,7 +285,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "<td><strong>Score environnemental</strong></td>"
         "<td>Composite qualité de l'air + eau + espaces verts</td>"
         "<td>SPF / DREAL</td><td>Variable</td>"
-        "<td>Régional uniquement — non intégré au score global</td>"
+        "<td>Régional uniquement, non intégré au score global</td>"
         "</tr>"
         "<tr>"
         "<td><strong>Temps d'accès médian</strong></td>"
@@ -320,7 +320,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
 
     st.markdown(
         '<div class="method-content">'
-        "<p><strong>Étape 1 — Base nationale réelle (DREES 2016-2017)</strong></p>"
+        "<p><strong>Étape 1 : Base nationale réelle (DREES 2016-2017)</strong></p>"
         "<p>L'enquête DREES «\u202fDélais d'attente en matière d'accès aux soins\u202f» "
         "(Études et Résultats n°1085, octobre 2018) est la seule enquête française "
         "avec protocole statistique rigoureux sur ce sujet (label CNIS, 40\u202f000 "
@@ -351,7 +351,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
     )
 
     _prose(
-        "<strong>Étape 2 — Ajustement départemental par l'APL</strong>",
+        "<strong>Étape 2 : Ajustement départemental par l'APL</strong>",
         "La DREES établit dans cette même enquête que les délais sont significativement "
         "plus longs dans les territoires à faible APL. On applique un facteur "
         "d'ajustement\u202f:",
@@ -369,9 +369,9 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "L'APL nationale utilisée est 2,9 (médiane ANCT 2023). Le facteur est plafonné "
         "à ×3 pour éviter des valeurs aberrantes dans les territoires très sous-dotés "
         "(DOM, Corse).",
-        "<strong>Exemple 1 — Cher (APL\u202f=\u202f1,7)</strong>\u202f: facteur\u202f=\u202f2,9\u202f/\u202f1,7\u202f=\u202f1,71 "
+        "<strong>Exemple 1 : Cher (APL\u202f=\u202f1,7)</strong>\u202f: facteur\u202f=\u202f2,9\u202f/\u202f1,7\u202f=\u202f1,71 "
         "→ délai ophtalmo estimé à <strong>89\u202fjours</strong> (vs 52\u202fjours national).",
-        "<strong>Exemple 2 — Métropole de Lyon (APL\u202f≈\u202f3,0)</strong>\u202f: facteur\u202f≈\u202f0,97 "
+        "<strong>Exemple 2 : Métropole de Lyon (APL\u202f≈\u202f3,0)</strong>\u202f: facteur\u202f≈\u202f0,97 "
         "→ délai ophtalmo estimé à <strong>50\u202fjours</strong>.",
         "Ces valeurs sont des estimations indicatives, non des mesures directes. "
         "Elles visent à donner un ordre de grandeur différencié par territoire, "
@@ -421,7 +421,7 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "les fondations, les acteurs de prévention et les porteurs d'expérimentation.",
         "L'objectif n'est pas d'identifier uniquement les territoires les plus fragiles, "
         "mais les territoires où une action peut être <strong>utile, ciblée et "
-        "déployable</strong> — compte tenu du besoin observé et des relais existants.",
+        "déployable</strong>, compte tenu du besoin observé et des relais existants.",
         "La fiche région traduit cette logique en blocs de lecture synthétique. "
         "Les calculs sous-jacents restent distincts du score Sant'active départemental "
         "et ne modifient ni les pondérations ni le classement national.",
@@ -474,7 +474,7 @@ présents, relais de terrain, accessibilité, contexte foncier.
 <strong style="color:#0A1938;">Principe clé.</strong>
 Un territoire très fragile n'est pas automatiquement la première priorité si la
 capacité d'action locale est faible. La priorisation croise le besoin, le volume
-de population concernée et la faisabilité de déploiement — sans désigner
+de population concernée et la faisabilité de déploiement, sans désigner
 mécaniquement le département au score le plus bas.
 </div>
 """, unsafe_allow_html=True)
@@ -495,8 +495,8 @@ mécaniquement le département au score le plus bas.
         "Plusieurs profils peuvent ressortir selon les régions&nbsp;: seniors, "
         "maladies cardiovasculaires, diabète, cancers, maladies respiratoires, "
         "santé mentale, maladies neurologiques ou dégénératives.",
-        "Pour chaque axe, Sant'active indique — lorsque les données le permettent "
-        "— le volume estimé de patients ou de personnes concernées, les "
+        "Pour chaque axe, Sant'active indique, lorsque les données le permettent, "
+        "le volume estimé de patients ou de personnes concernées, les "
         "départements les plus touchés et un niveau d'importance relatif à "
         "l'échelle régionale. Ces profils varient d'une région à l'autre&nbsp;: "
         "un même indicateur national peut masquer des priorités de public "
@@ -615,7 +615,7 @@ mécaniquement le département au score le plus bas.
             "Score environnemental exclu du score global",
             "L'indicateur environnemental (qualité de l'air, eau, espaces verts) n'est "
             "disponible qu'à la maille régionale. L'appliquer identiquement à tous les "
-            "départements d'une région introduirait un biais — deux départements très "
+            "départements d'une région introduirait un biais : deux départements très "
             "différents recevraient le même score environnemental. Il est affiché en "
             "lecture seule.",
         ),

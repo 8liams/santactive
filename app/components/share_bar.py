@@ -43,7 +43,7 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
     apl_str   = f"{float(apl):.1f}/hab." if apl is not None and pd.notna(apl) else "N/D"
 
     fiche_url = build_fiche_url("dept", dept_code=dept_code)
-    subject   = f"Sant'active — Fiche {dept_nom} ({dept_code})"
+    subject   = f"Sant'active · Fiche {dept_nom} ({dept_code})"
     body = (
         f"Bonjour,\n\n"
         f"Voici la fiche Sant'active du département {dept_nom} ({dept_code}).\n\n"
@@ -52,7 +52,6 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
         f"Zone : {zone}\n"
         f"APL médian : {apl_str}\n\n"
         f"Consulter la fiche complète :\n{fiche_url}\n\n"
-        f"—\n"
         f"Sant'active · Observatoire Santé Territorial\n"
         f"santactive.esdata@gmail.com"
     )
@@ -77,10 +76,10 @@ def region_share_context(
     pop_str  = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "N/D"
     apl_med  = region_depts["apl_median_dept"].median()
     apl_str  = f"{float(apl_med):.1f}/hab." if pd.notna(apl_med) else "N/D"
-    tension  = summary.get("tension_principale", "—")
+    tension  = summary.get("tension_principale", "N/D")
 
     fiche_url = build_fiche_url("region", region_code=str(region_code))
-    subject   = f"Sant'active — Pilotage régional {region_name}"
+    subject   = f"Sant'active · Pilotage régional {region_name}"
     body = (
         f"Bonjour,\n\n"
         f"Voici la fiche pilotage Sant'active pour la région {region_name}.\n\n"
@@ -89,7 +88,6 @@ def region_share_context(
         f"APL médian : {apl_str}\n"
         f"Tension principale : {tension}\n\n"
         f"Consulter la fiche complète :\n{fiche_url}\n\n"
-        f"—\n"
         f"Sant'active · Observatoire Santé Territorial\n"
         f"santactive.esdata@gmail.com"
     )

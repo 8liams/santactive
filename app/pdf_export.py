@@ -55,7 +55,7 @@ def _zone_soft(zone: str) -> Any:
     }.get(zone, GRIS_CLAIR)
 
 
-def _fmt(val, fmt="{:.1f}", fallback="—"):
+def _fmt(val, fmt="{:.1f}", fallback="N/D"):
     try:
         if pd.isna(val):
             return fallback
@@ -143,10 +143,10 @@ def generate_department_pdf(
     """Génère un rapport PDF A4 complet pour un département."""
 
     buf        = io.BytesIO()
-    dept_name  = str(r.get("Nom du département", "—"))
+    dept_name  = str(r.get("Nom du département", "N/D"))
     dept_code  = str(r.get("dept", "")).zfill(2)
-    region     = str(r.get("Nom de la région", "—"))
-    zone       = str(r.get("zone_short", "—"))
+    region     = str(r.get("Nom de la région", "N/D"))
+    zone       = str(r.get("zone_short", "N/D"))
     score      = r.get("score_global")
     zone_col   = _zone_color(zone)
     zone_bg    = _zone_soft(zone)
@@ -158,7 +158,7 @@ def generate_department_pdf(
         rightMargin=MARGIN,
         topMargin=MARGIN + 4 * mm,
         bottomMargin=18 * mm,
-        title=f"Sant'active — {dept_name}",
+        title=f"Sant'active · {dept_name}",
         author="Sant'active",
     )
 
@@ -263,7 +263,7 @@ def generate_department_pdf(
     def _arrow(good: bool | None) -> str:
         if good is True:  return f'<font color="#{_hex(VERT_FAV)}">▲</font>'
         if good is False: return f'<font color="#{_hex(ROUGE_CRIT)}">▼</font>'
-        return '<font color="#999999">—</font>'
+        return '<font color="#999999">N/D</font>'
 
     def _kpi(label, val_str, cmp_str, good):
         col = VERT_FAV if good is True else (ROUGE_CRIT if good is False else AMBRE)
@@ -299,7 +299,7 @@ def generate_department_pdf(
              f"Méd. nat. {_fmt(pct65_nat, '{:.1f}')} %",
              None),
         _kpi("Population",
-             _fmt(pop, "{:,.0f}").replace(",", "\u202f") if pop and not pd.isna(pop) else "—",
+             _fmt(pop, "{:,.0f}").replace(",", "\u202f") if pop and not pd.isna(pop) else "N/D",
              "Source INSEE 2021",
              None),
     ]
@@ -543,7 +543,7 @@ def generate_department_pdf(
             c      = f"#{_hex(VERT_FAV)}" if good else f"#{_hex(ROUGE_CRIT)}"
             return f'<font color="{c}"><b>{symbol} {abs(diff):.1f}</b></font>'
         except Exception:
-            return "—"
+            return "N/D"
 
     score_med = ranked["score_global"].median() if not ranked.empty else None
 
@@ -570,7 +570,7 @@ def generate_department_pdf(
         try:
             ecart_str = _ecart(dept_v, nat_v, higher)
         except Exception:
-            ecart_str = "—"
+            ecart_str = "N/D"
         comp_rows.append([
             Paragraph(f'<font size="9">{ind}</font>',    _s(f"ci{ind[:3]}", fontSize=9, textColor=NOIR)),
             Paragraph(f'<b><font size="9">{dept_v}</font></b>',
@@ -623,7 +623,7 @@ def generate_region_pdf(
         rightMargin=MARGIN,
         topMargin=MARGIN + 4 * mm,
         bottomMargin=18 * mm,
-        title=f"Sant'active — {region_name}",
+        title=f"Sant'active · {region_name}",
         author="Sant'active",
     )
     story: list = []
@@ -668,7 +668,7 @@ def generate_region_pdf(
         ("Zone critique", str(nb_crit)),
         ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
         ("APL médian", _fmt(apl_med, "{:.1f}") + " /hab."),
-        ("Tension principale", str(summary.get("tension_principale", "—"))[:40]),
+        ("Tension principale", str(summary.get("tension_principale", "N/D"))[:40]),
     ]
     rows = []
     for i in range(0, len(kpi_data), 2):

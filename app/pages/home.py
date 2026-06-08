@@ -143,7 +143,7 @@ def _render_quick_suggestions(master: pd.DataFrame) -> None:
         return
 
     st.markdown(
-        '<div class="suggestions-label">Suggestions — zones critiques</div>',
+        '<div class="suggestions-label">Suggestions · zones critiques</div>',
         unsafe_allow_html=True,
     )
 
@@ -185,7 +185,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     )
 
     if not geojson:
-        st.warning("Carte indisponible — vérifiez la connexion.")
+        st.warning("Carte indisponible. Vérifiez la connexion.")
         return
 
     # Sélecteur d'indicateur — pills arrondis
@@ -355,7 +355,7 @@ def _render_national_kpis(data: dict) -> None:
                 "Délai médian pour obtenir un RDV chez un ophtalmologue. "
                 "Spécialité avec les délais les plus longs en France. "
                 "Les délais réels par département ne sont pas disponibles "
-                "en open data — voir Méthodologie."
+                "en open data. Voir Méthodologie."
             ),
             "rouge": False,
         },

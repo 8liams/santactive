@@ -143,12 +143,12 @@ def render_national_choropleth(
         row = master[master["dept"] == code]
         if not row.empty:
             rv = row.iloc[0]
-            feat["properties"]["dept_name"]  = str(rv.get("Nom du département", "—"))
-            feat["properties"]["region_name"] = str(rv.get("Nom de la région", "—"))
-            feat["properties"]["zone"]        = str(rv.get("zone_short", "—"))
+            feat["properties"]["dept_name"]  = str(rv.get("Nom du département", "N/D"))
+            feat["properties"]["region_name"] = str(rv.get("Nom de la région", "N/D"))
+            feat["properties"]["zone"]        = str(rv.get("zone_short", "N/D"))
             sg = rv.get("score_global")
             feat["properties"]["score_global_display"] = (
-                f"{sg:.1f}/100" if pd.notna(sg) else "—"
+                f"{sg:.1f}/100" if pd.notna(sg) else "N/D"
             )
             main_val = rv.get(metric)
             if pd.notna(main_val):
@@ -159,11 +159,11 @@ def render_national_choropleth(
                 except Exception:
                     feat["properties"]["main_display"] = str(main_val)
             else:
-                feat["properties"]["main_display"] = "—"
+                feat["properties"]["main_display"] = "N/D"
         else:
             feat["properties"].update(
-                dept_name="—", region_name="—", zone="—",
-                score_global_display="—", main_display="—",
+                dept_name="N/D", region_name="N/D", zone="N/D",
+                score_global_display="N/D", main_display="N/D",
             )
 
     def _style(feature: dict) -> dict:
@@ -570,7 +570,7 @@ def render_commune_choropleth(
             )
             feat["properties"]["has_data"] = "oui"
         else:
-            feat["properties"]["val_display"] = "—"
+            feat["properties"]["val_display"] = "N/D"
             feat["properties"]["has_data"] = "non"
 
     # Centrage fiable via lookup fixe

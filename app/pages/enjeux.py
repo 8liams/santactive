@@ -48,8 +48,8 @@ def render(data: dict) -> None:
         '</div>'
         '</div>'
         '<div style="max-width:720px;font-size:14px;line-height:1.8;color:#4B4B48;margin-bottom:48px;">'
-        'Face \u00e0 ce constat, les d\u00e9cideurs \u2014 \u00e9lus locaux, directeurs d\u2019ARS, '
-        'professionnels de sant\u00e9 souhaitant s\u2019installer \u2014 manquent d\u2019un outil '
+        'Face \u00e0 ce constat, les d\u00e9cideurs (\u00e9lus locaux, directeurs d\u2019ARS, '
+        'professionnels de sant\u00e9 souhaitant s\u2019installer) manquent d\u2019un outil '
         'qui <strong>croise ces donn\u00e9es de fa\u00e7on lisible et actionnable</strong>. '
         'Sant\u2019active r\u00e9pond \u00e0 ce manque.'
         '</div>'
@@ -78,7 +78,7 @@ def render(data: dict) -> None:
         },
         {
             "numero": "02",
-            "profil": "\u00c9lu local \u2014 Maire ou Pr\u00e9sident de D\u00e9partement",
+            "profil": "\u00c9lu local (Maire ou Pr\u00e9sident de D\u00e9partement)",
             "usage": (
                 "Pr\u00e9parer un Plan Local d\u2019Urbanisme int\u00e9grant l\u2019acc\u00e8s aux "
                 "soins. Identifier les communes les plus \u00e9loign\u00e9es d\u2019un "

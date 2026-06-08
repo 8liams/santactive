@@ -2239,7 +2239,7 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
 
 /* Images injectées via st.markdown HTML */
 img[alt="Sant'active"],
-img[alt="ESData — ESD Paris"] {
+img[alt="ESData, ESD Paris"] {
     background: transparent !important;
     display: block;
 }

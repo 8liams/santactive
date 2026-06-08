@@ -13,7 +13,7 @@ from __future__ import annotations
 # ── Dictionnaire centralisé de toutes les définitions ────────────────────────
 TOOLTIPS: dict[str, dict[str, str]] = {
     "apl": {
-        "title": "APL — Accessibilité Potentielle Localisée",
+        "title": "APL : Accessibilité Potentielle Localisée",
         "body": (
             "Mesure le nombre de consultations disponibles par an "
             "et par habitant, en tenant compte du nombre de médecins "
@@ -232,9 +232,9 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "péri-urbain, rural, etc.)."
             "<br><br>"
             "Chaque piste est qualifiée par un niveau métier :"
-            "<br>• Urgence forte — signal territorial marqué"
-            "<br>• Prioritaire — levier cohérent avec le diagnostic"
-            "<br>• Complémentaire — piste de soutien ou de vigilance"
+            "<br>• Urgence forte : signal territorial marqué"
+            "<br>• Prioritaire : levier cohérent avec le diagnostic"
+            "<br>• Complémentaire : piste de soutien ou de vigilance"
             "<br><br>"
             "L'ordre d'affichage ne constitue pas un plan de mise en œuvre."
             "<br><br>"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import PATHOS_EXCLUDED
+from .config import NA_DISPLAY, PATHOS_EXCLUDED
 
 APL_SEUIL_DESERT = 2.5
 
@@ -137,7 +137,7 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     if pd.notna(apl):
         if apl < APL_SEUIL_DESERT:
             reasons.append(
-                f"APL de {apl:.1f}\u202f/hab. — désert médical officiel (seuil DREES\u202f: 2,5)."
+                f"APL de {apl:.1f}\u202f/hab., en désert médical officiel (seuil DREES\u202f: 2,5)."
             )
         elif apl < 3.0:
             reasons.append(f"APL de {apl:.1f}\u202f/hab., sous la médiane nationale (~2,9).")
@@ -149,7 +149,7 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
 
     pct65 = _num(row.get("pct_plus_65"))
     if pd.notna(pct65) and pct65 > 22:
-        reasons.append(f"{pct65:.1f}\u202f% de 65 ans et plus — pression démographique élevée.")
+        reasons.append(f"{pct65:.1f}\u202f% de 65 ans et plus, avec une pression démographique élevée.")
 
     temps = _num(row.get("temps_acces_median"))
     if pd.notna(temps) and temps > 12:
@@ -164,20 +164,20 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     pha = int(_num(row.get("nb_pharmaciens"), 0) or 0)
     if hop > 0 and inf > 0:
         reasons.append(
-            f"{hop} hôpital(aux) et {inf} infirmiers recensés — relais existants pour coordonner."
+            f"{hop} hôpital(aux) et {inf} infirmiers recensés, relais existants pour coordonner."
         )
     elif inf > 0 or pha > 0:
-        reasons.append(f"{inf} infirmiers et {pha} pharmaciens — relais de proximité présents.")
+        reasons.append(f"{inf} infirmiers et {pha} pharmaciens, relais de proximité présents.")
 
     if patho_info and patho_info.get("prev_max", 0) > 0:
         pname = str(patho_info.get("patho_name", ""))[:45]
         reasons.append(
-            f"Prévalence {patho_info['prev_max']:.1f}\u202f% — {pname}."
+            f"Prévalence {patho_info['prev_max']:.1f}\u202f% ({pname})."
         )
 
     prix = _num(row.get("prix_m2_moyen"))
     if pd.notna(prix) and prix < 1800:
-        reasons.append(f"Prix médian à {prix:.0f}\u202f€/m² — foncier accessible pour ancrer une action.")
+        reasons.append(f"Prix médian à {prix:.0f}\u202f€/m², foncier accessible pour ancrer une action.")
 
     score_acces = _num(row.get("score_acces"))
     if pd.notna(score_acces) and score_acces < 40:
@@ -501,7 +501,7 @@ def compute_region_summary(
     """Résumé régional pour le bandeau supérieur du bloc."""
     if priorities.empty:
         return {
-            "dept_top": "—",
+            "dept_top": NA_DISPLAY,
             "nb_prioritaires": 0,
             "nb_experimentation": 0,
             "tension_principale": "Données insuffisantes pour identifier une tension dominante.",
@@ -539,7 +539,7 @@ def compute_region_summary(
             tension = f"délais d'accès aux spécialistes, notamment en {top_spec.lower()}"
 
     return {
-        "dept_top": str(top.get("Nom du département", "—")),
+        "dept_top": str(top.get("Nom du département", NA_DISPLAY)),
         "nb_prioritaires": nb_prio,
         "nb_experimentation": nb_exp,
         "tension_principale": tension,
