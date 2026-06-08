@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import requests
-import pandas as pd
 import folium
+import pandas as pd
+from ..scoring import fmt_score_affichage
 import streamlit as st
 from branca.colormap import LinearColormap
 from streamlit_folium import st_folium
@@ -148,14 +149,19 @@ def render_national_choropleth(
             feat["properties"]["zone"]        = str(rv.get("zone_short", "—"))
             sg = rv.get("score_global")
             feat["properties"]["score_global_display"] = (
-                f"{sg:.1f}/100" if pd.notna(sg) else "—"
+                f"{fmt_score_affichage(sg)}/100" if pd.notna(sg) else "—"
             )
             main_val = rv.get(metric)
             if pd.notna(main_val):
                 try:
-                    feat["properties"]["main_display"] = (
-                        main_fmt.format(main_val).replace(",", "\u202f")
-                    )
+                    if metric == "score_global":
+                        feat["properties"]["main_display"] = (
+                            f"{fmt_score_affichage(main_val)}/100"
+                        )
+                    else:
+                        feat["properties"]["main_display"] = (
+                            main_fmt.format(main_val).replace(",", "\u202f")
+                        )
                 except Exception:
                     feat["properties"]["main_display"] = str(main_val)
             else:
@@ -282,7 +288,10 @@ def render_dom_cartouches(
                 else "#1B5E3F" if zone == "Favorable"
                 else "#9C9A92"
             )
-            score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
+            score_display = (
+                f"{fmt_score_affichage(score_val, decimals=0)}/100"
+                if score_val is not None else "N/D"
+            )
 
             st.markdown(
                 f'<div style="font-size:11px;font-weight:700;color:#0A1938;'

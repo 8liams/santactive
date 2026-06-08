@@ -727,26 +727,16 @@ div[data-testid="stExpander"] > div {
 .score-value .delta.pos { color: var(--fav); }
 
 /* ─── Reco cards ─────────────────────────────────────────────────────────── */
-.reco-card {
+.reco-card,
+.reco-card-neutral {
     background: #FFFFFF;
     border: 1px solid #E8E6DD;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 28px;
     position: relative;
     margin-bottom: 16px;
     min-height: 220px;
 }
-.reco-priority {
-    position: absolute;
-    top: 24px; right: 24px;
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-weight: 600;
-}
-.reco-priority.p1 { color: var(--crit); }
-.reco-priority.p2 { color: var(--inter); }
-.reco-priority.p3 { color: var(--fav); }
 .reco-meth-note {
     font-size: 13px;
     line-height: 1.55;
@@ -768,7 +758,7 @@ div[data-testid="stExpander"] > div {
     line-height: 1.2;
     letter-spacing: -0.01em;
     margin-bottom: 10px;
-    padding-right: 80px;
+    color: #0A1938;
 }
 .reco-prose {
     font-size: 13px;
@@ -1499,45 +1489,31 @@ div[data-testid="stRadio"] svg { display: none !important; }
 .diagnostic-kpi-value.inter { color: var(--inter); }
 .diagnostic-kpi-value.fav   { color: var(--fav); }
 
-/* ─── Reco cards — bordure de priorité à gauche ──────────────────────────── */
+/* ─── Reco cards — style uniforme (sans hiérarchie) ─────────────────────── */
+.reco-card-neutral,
 .reco-card {
     background: #FFFFFF;
     border: 1px solid #E8E6DD;
-    border-left: none !important;
-    border-radius: 0 6px 6px 0;
+    border-radius: 6px;
     padding: 24px 28px;
     position: relative;
     margin-bottom: 14px;
     min-height: 200px;
     transition: box-shadow 0.18s;
 }
+.reco-card-neutral:hover,
 .reco-card:hover { box-shadow: 0 4px 18px rgba(10,25,56,0.07); }
-.reco-card.p1 { border-left: 4px solid var(--crit) !important;   border-radius: 0 6px 6px 0; }
-.reco-card.p2 { border-left: 4px solid var(--inter) !important;  border-radius: 0 6px 6px 0; }
-.reco-card.p3 { border-left: 4px solid var(--fav) !important;    border-radius: 0 6px 6px 0; }
 
-.reco-priority {
-    position: absolute;
-    top: 22px; right: 22px;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 100px;
-}
-.reco-priority.p1 { background: var(--crit-soft);  color: var(--crit); }
-.reco-priority.p2 { background: var(--inter-soft); color: var(--inter); }
-.reco-priority.p3 { background: var(--fav-soft);   color: var(--fav); }
-
-.reco-title {
-    font-family: var(--serif);
-    font-size: 20px;
-    line-height: 1.25;
-    letter-spacing: -0.01em;
-    margin-bottom: 10px;
-    padding-right: 90px;
-    color: #0A1938;
+.reco-impact-meth-note {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #6B6B68;
+    max-width: 820px;
+    margin: 0 0 20px;
+    padding: 14px 18px;
+    background: #F8F7F3;
+    border: 1px solid #E8E6DD;
+    border-radius: 6px;
 }
 
 /* ─── Reco stats — micro-indicateurs ────────────────────────────────────── */
@@ -1574,41 +1550,49 @@ div[data-testid="stRadio"] svg { display: none !important; }
     font-weight: 500;
 }
 
-/* ─── Reco impact — projection indicative ───────────────────────────────── */
+/* ─── Reco impact — projection indicative (KPI secondaire) ──────────────── */
 .reco-impact {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px dashed #E8E6DD;
+    margin-top: 18px;
+    padding: 16px 18px;
+    background: #F3F2EC;
+    border: 1px solid #E0DDD4;
+    border-radius: 6px;
+    border-left: 4px solid var(--bleu-regalien, #1A3D8F);
 }
 .reco-impact-title {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #9C9A92;
-    margin-bottom: 10px;
+    color: #0A1938;
+    margin-bottom: 12px;
 }
 .reco-impact-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px 16px;
 }
 .reco-impact-item {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
+    background: #FFFFFF;
+    border: 1px solid #E8E6DD;
+    border-radius: 4px;
+    padding: 10px 12px;
 }
 .reco-impact-lbl {
     font-size: 10px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #9C9A92;
+    color: #6B6B68;
     font-weight: 600;
 }
 .reco-impact-val {
-    font-size: 13px;
-    line-height: 1.45;
-    color: #4A4A4A;
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 500;
+    color: #0A1938;
 }
 
 /* ─── Délais cards — valeurs colorées + hover ────────────────────────────── */

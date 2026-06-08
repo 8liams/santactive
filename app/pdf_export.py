@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
+from .scoring import fmt_score_affichage, invert_score_text
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -202,7 +203,7 @@ def generate_department_pdf(
     # ── ③ SCORE GLOBAL + ZONE ─────────────────────────────────────────────────
     ranked    = master.dropna(subset=["score_global"]).sort_values("score_global")
     rang      = int((ranked["dept"] == r["dept"]).cumsum().max()) if score else 0
-    score_str = _fmt(score, "{:.1f}")
+    score_str = fmt_score_affichage(score)
     total     = len(ranked)
 
     score_block = Table([[
@@ -466,17 +467,16 @@ def generate_department_pdf(
     if recos:
         _section_heading("Leviers d'action recommandés", story)
 
-        _prio_col_map = {1: ROUGE_CRIT, 2: AMBRE, 3: BLEU_ROYAL}
-        _prio_lbl_map = {
-            1: "Urgence forte",
-            2: "Prioritaire",
-            3: "Complémentaire",
-        }
+        def _display_stat(val: str, lbl: str) -> str:
+            if "score" in lbl.lower() and "/100" in str(val):
+                try:
+                    internal = float(str(val).replace("/100", "").strip())
+                    return f"{fmt_score_affichage(internal, decimals=0)}/100"
+                except (TypeError, ValueError):
+                    pass
+            return str(val)
 
         for i, reco in enumerate(recos[:4], 1):
-            prio_raw  = int(reco.get("priority", 3))
-            prio_lbl  = _prio_lbl_map.get(prio_raw, "Complémentaire")
-            badge_col = _prio_col_map.get(prio_raw, BLEU_ROYAL)
             stats     = reco.get("stats", [])
 
             content = [
@@ -486,7 +486,7 @@ def generate_department_pdf(
                        textColor=BLEU_NUIT, spaceAfter=4),
                 ),
                 Paragraph(
-                    reco.get("prose", ""),
+                    invert_score_text(reco.get("prose", "")),
                     _s(f"rp{i}", fontSize=9, textColor=GRIS_TXT, leading=13),
                 ),
             ]
@@ -495,16 +495,17 @@ def generate_department_pdf(
                 stat_items = []
                 for val, lbl in stats[:3]:
                     stat_items.append(Paragraph(
-                        f'<b><font size="14" color="#{_hex(badge_col)}">{val}</font></b>'
+                        f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">'
+                        f'{_display_stat(val, lbl)}</font></b>'
                         f'<br/><font size="8" color="#666666">{lbl}</font>',
                         _s(f"rs{i}{val[:2]}", fontName="Helvetica-Bold", fontSize=14,
-                           textColor=badge_col, alignment=TA_CENTER, leading=18),
+                           textColor=BLEU_NUIT, alignment=TA_CENTER, leading=18),
                     ))
                 while len(stat_items) < 3:
                     stat_items.append(Paragraph("", _s("rse", fontSize=8)))
 
-                stat_cw = (CONTENT_W - 36) / 3
-                st_tbl = Table([stat_items], colWidths=[stat_cw] * 3)
+                stat_cw = CONTENT_W - 24
+                st_tbl = Table([stat_items], colWidths=[stat_cw / 3] * 3)
                 st_tbl.setStyle(TableStyle([
                     ("BACKGROUND",    (0, 0), (-1, -1), GRIS_CLAIR),
                     ("GRID",          (0, 0), (-1, -1), 0.3, GRIS_BORD),
@@ -516,24 +517,16 @@ def generate_department_pdf(
                 content.append(Spacer(1, 5))
                 content.append(st_tbl)
 
-            reco_tbl = Table([[
-                Paragraph(
-                    f'<b><font size="8" color="#{_hex(badge_col)}">{prio_lbl}</font></b>',
-                    _s(f"rb{i}", fontName="Helvetica-Bold", fontSize=8,
-                       alignment=TA_CENTER, textColor=badge_col, leading=10),
-                ),
-                content,
-            ]], colWidths=[78, CONTENT_W - 78])
+            reco_tbl = Table([[content]], colWidths=[CONTENT_W])
             reco_tbl.setStyle(TableStyle([
                 ("BACKGROUND",    (0, 0), (-1, -1), BLANC),
                 ("TOPPADDING",    (0, 0), (-1, -1), 10),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                ("LEFTPADDING",   (0, 0), (0, -1), 10),
-                ("LEFTPADDING",   (1, 0), (1, -1), 12),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+                ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
                 ("VALIGN",        (0, 0), (-1, -1), "TOP"),
                 ("LINEBELOW",     (0, 0), (-1, -1), 0.5, GRIS_BORD),
-                ("LINEBEFORE",    (0, 0), (0, -1), 3, badge_col),
+                ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORD),
             ]))
             story.append(KeepTogether(reco_tbl))
             story.append(Spacer(1, 6))
@@ -580,7 +573,8 @@ def generate_department_pdf(
         ("APL médecins gén.",      _fmt(apl, "{:.2f}"),    _fmt(apl_nat, "{:.2f}"),    True),
         ("Temps d'accès (min)",    _fmt(temps, "{:.0f}"),   _fmt(temp_nat, "{:.0f}"),   False),
         ("Médecins gén. / 100k",   _fmt(med_gen, "{:.0f}"), _fmt(med_nat, "{:.0f}"),    True),
-        ("Score global / 100",     _fmt(score, "{:.1f}"),   _fmt(score_med, "{:.1f}"),  True),
+        ("Score global / 100",     fmt_score_affichage(score),
+         fmt_score_affichage(score_med) if score_med is not None else "—", False),
     ]:
         try:
             ecart_str = _ecart(dept_v, nat_v, higher)

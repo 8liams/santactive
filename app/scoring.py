@@ -88,6 +88,47 @@ def gauge_investissement(row) -> float:
     return 100 - float(sg)
 
 
+def score_affichage(value) -> float | None:
+    """Convertit un score interne en score affiché (100 = fragile, 0 = favorable).
+
+    Les calculs métier conservent le score interne ; cette fonction ne sert
+    qu'à la présentation utilisateur.
+    """
+    if value is None:
+        return None
+    try:
+        v = float(value)
+        if pd.isna(v):
+            return None
+        return round(100.0 - v, 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def fmt_score_affichage(value, decimals: int = 1) -> str:
+    """Formate un score interne pour affichage utilisateur."""
+    d = score_affichage(value)
+    if d is None:
+        return "N/D"
+    if decimals == 0:
+        return f"{int(round(d))}"
+    return f"{d:.{decimals}f}"
+
+
+def invert_score_text(text: str) -> str:
+    """Inverse les valeurs X/100 dans un texte (affichage uniquement)."""
+    import re
+
+    def _repl(match: re.Match) -> str:
+        try:
+            internal = float(match.group(1))
+            return f"{fmt_score_affichage(internal, decimals=0)}/100"
+        except (TypeError, ValueError):
+            return match.group(0)
+
+    return re.sub(r"(\d+(?:\.\d+)?)/100", _repl, str(text))
+
+
 # ── Calcul principal ──────────────────────────────────────────────────────────
 
 def compute_scores(master: pd.DataFrame) -> pd.DataFrame:
