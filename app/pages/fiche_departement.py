@@ -487,6 +487,7 @@ SINGLE_COMMUNE_DEPTS = {"75"}  # extensible si d'autres identifiés
 
 def render_carte_communale(r: pd.Series, data: dict) -> None:
     from ..commune_opportunity import (
+        build_commune_code_lookup,
         build_commune_opportunity_df,
         opportunity_legend_items,
     )
@@ -496,9 +497,14 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">ZOOM TERRITORIAL</div>'
-        '<h2 class="section-title">La carte des communes.</h2>'
-        '<p class="section-lead">Survolez une commune pour voir les détails. '
-        'Les points rouges signalent les établissements de santé.</p>'
+        '<h2 class="section-title">Opportunité d\u2019<em>implantation.</em></h2>'
+        '<p class="section-lead">'
+        "Cette carte identifie les communes où une implantation ou une action "
+        "de santé pourrait avoir le plus d\u2019impact, en croisant "
+        "l\u2019éloignement aux soins et les conditions d\u2019implantation. "
+        "Survolez une commune pour voir le détail — les points rouges "
+        "signalent les établissements de santé."
+        '</p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -519,149 +525,70 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         )
         return
 
-    layer_options = [
-        "Opportunité d'implantation",
-        "Temps d'accès",
-        "Prix médian /m²",
-    ]
-    indicator_map = {
-        "Opportunité d'implantation": ("opportunite", "", "opportunite"),
-        "Prix médian /m²":            ("prix",        "€/m²",  "prix"),
-        "Temps d'accès":              ("temps",       "min",   "temps"),
-    }
-    try:
-        layer = st.pills(
-            "Indicateur carte",
-            options=layer_options,
-            default="Opportunité d'implantation",
-            key=f"layer_{dept_code}",
-            label_visibility="collapsed",
-        )
-    except AttributeError:
-        layer = st.radio(
-            "Indicateur carte",
-            options=layer_options,
-            horizontal=True,
-            index=0,
-            key=f"layer_{dept_code}",
-            label_visibility="collapsed",
-        )
-    if layer is None:
-        layer = "Opportunité d'implantation"
-    value_key, unit, colormap = indicator_map[layer]
-    is_opportunite = value_key == "opportunite"
-
-    if is_opportunite:
-        st.markdown(
-            '<p class="section-lead" style="margin:8px 0 20px;">'
-            "Cette carte identifie les communes où une implantation ou une action "
-            "de santé pourrait avoir le plus d\u2019impact, en croisant "
-            "l\u2019éloignement aux soins et les conditions d\u2019implantation."
-            "</p>",
-            unsafe_allow_html=True,
-        )
-
     communes_gj = _fetch_communes_geojson(dept_code)
     if communes_gj is None:
         st.warning("Découpage communal indisponible (API geo.api.gouv.fr).")
         return
 
-    def _norm_aggressive(s: str) -> str:
-        import unicodedata as _ud
-        if not isinstance(s, str):
-            return ""
-        s = _ud.normalize("NFKD", s).encode("ascii", "ignore").decode().upper()
-        for ch in "-'.,()":
-            s = s.replace(ch, " ")
-        s = " ".join(s.split())
-        s = s.replace("SAINTE ", "STE ").replace("SAINT ", "ST ")
-        return s
-
-    name_to_code: dict[str, str] = {}
+    name_to_code, code_to_name = build_commune_code_lookup(
+        communes_gj.get("features", [])
+    )
     population_by_code: dict[str, float] = {}
     for feat in communes_gj.get("features", []):
-        nom = feat["properties"].get("nom", "")
-        code = feat["properties"].get("code", "")
-        if nom and code:
-            name_to_code[_norm_aggressive(nom)] = code
-            pop = feat["properties"].get("population")
-            if pop is not None:
-                try:
-                    population_by_code[str(code).zfill(5)] = float(pop)
-                except (TypeError, ValueError):
-                    pass
+        code = feat.get("properties", {}).get("code", "")
+        pop = feat.get("properties", {}).get("population")
+        if code and pop is not None:
+            try:
+                population_by_code[str(code).zfill(5)] = float(pop)
+            except (TypeError, ValueError):
+                pass
 
     temps: pd.DataFrame = data["temps"]
     immo: pd.DataFrame = data["immo"]
     temps_f = temps[temps["code_departement"].astype(str).str.zfill(2) == dept_code]
     immo_f = immo[immo["code_departement"].astype(str).str.zfill(2) == dept_code]
 
-    if is_opportunite:
-        if temps_f.empty or immo_f.empty:
-            st.info(
-                "Données insuffisantes pour calculer l'opportunité d'implantation "
-                "(temps d'accès et prix immobilier requis)."
-            )
-            return
-        comm_data = build_commune_opportunity_df(
-            temps_f,
-            immo_f,
-            name_to_code,
-            norm_name=_norm_aggressive,
-            population_by_code=population_by_code or None,
-        )
-        if comm_data.empty:
-            st.warning(
-                "Impossible de calculer l'opportunité d'implantation "
-                "(communes non matchées ou données manquantes)."
-            )
-            return
-        comm_data["tt_score"] = comm_data["score_opportunite"].apply(
-            lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "—"
-        )
-        comm_data["tt_temps"] = comm_data["temps_acces"].apply(
-            lambda x: f"{float(x):.1f} min" if pd.notna(x) else "—"
-        )
-        comm_data["tt_prix"] = comm_data["prix_m2"].apply(
-            lambda x: f"{float(x):,.0f} €/m²".replace(",", "\u202f") if pd.notna(x) else "—"
-        )
-        comm_data["tt_niveau"] = comm_data["niveau"].replace(
-            "Faible intérêt d'implantation", "Faible intérêt"
-        )
-        total_before = len(comm_data)
-        matched = len(comm_data)
-    elif value_key == "prix":
-        if immo_f.empty:
-            st.info("Données immobilières non disponibles pour ce département.")
-            return
-        comm_data = immo_f.groupby("commune")["prix_m2"].median().reset_index()
-        comm_data.columns = ["commune", "value"]
-        total_before = len(comm_data)
-        comm_data["code_commune"] = comm_data["commune"].apply(
-            lambda c: name_to_code.get(_norm_aggressive(c))
-        )
-        matched = comm_data["code_commune"].notna().sum()
-        comm_data = comm_data.dropna(subset=["code_commune", "value"])
-    else:
-        if temps_f.empty:
-            st.info("Données temps d'accès non disponibles pour ce département.")
-            return
-        comm_data = temps_f.groupby("commune")["temps_acces"].mean().reset_index()
-        comm_data.columns = ["commune", "value"]
-        total_before = len(comm_data)
-        comm_data["code_commune"] = comm_data["commune"].apply(
-            lambda c: name_to_code.get(_norm_aggressive(c))
-        )
-        matched = comm_data["code_commune"].notna().sum()
-        comm_data = comm_data.dropna(subset=["code_commune", "value"])
+    if temps_f.empty and immo_f.empty:
+        st.info("Données communales indisponibles pour ce département.")
+        return
+    if temps_f.empty:
+        st.info("Données de temps d'accès indisponibles pour ce département.")
+        return
+    if immo_f.empty:
+        st.info("Données immobilières indisponibles pour ce département.")
+        return
 
+    comm_data = build_commune_opportunity_df(
+        temps_f,
+        immo_f,
+        name_to_code,
+        code_to_name=code_to_name,
+        population_by_code=population_by_code or None,
+    )
     if comm_data.empty:
+        nb_temps = temps_f["commune"].nunique()
+        nb_immo = immo_f["commune"].nunique()
         st.warning(
-            f"Impossible de matcher les communes avec le référentiel INSEE "
-            f"(0 sur {total_before} communes reconnues). "
-            "Les noms dans les données diffèrent trop du référentiel officiel."
+            f"Impossible de croiser les données pour ce département "
+            f"({nb_temps} communes avec temps d'accès, {nb_immo} avec prix immobilier, "
+            f"mais aucune commune commune identifiée sur les deux sources). "
+            "Les libellés diffèrent probablement entre les fichiers sources."
         )
         return
+
+    comm_data["tt_score"] = comm_data["score_opportunite"].apply(
+        lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "—"
+    )
+    comm_data["tt_temps"] = comm_data["temps_acces"].apply(
+        lambda x: f"{float(x):.1f} min" if pd.notna(x) else "—"
+    )
+    comm_data["tt_prix"] = comm_data["prix_m2"].apply(
+        lambda x: f"{float(x):,.0f} €/m²".replace(",", "\u202f") if pd.notna(x) else "—"
+    )
+    comm_data["tt_niveau"] = comm_data["niveau"].replace(
+        "Faible intérêt d'implantation", "Faible intérêt"
+    )
+    matched = len(comm_data)
 
     etabs: pd.DataFrame = data["etabs"]
     etabs_f = etabs[etabs["code_departement"].astype(str).str.zfill(2) == dept_code]
@@ -671,41 +598,35 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         etabs_overlay.columns = ["lat", "lon", "nom"]
         etabs_overlay = etabs_overlay.dropna(subset=["lat", "lon"]).head(50)
 
-    render_kwargs: dict = {
-        "dept_code": dept_code,
-        "data_by_commune": comm_data,
-        "value_col": "value",
-        "metric_label": layer,
-        "unit": unit,
-        "colormap_name": colormap,
-        "etabs_overlay": etabs_overlay,
-        "height": 540,
-        "key": f"commune_map_{dept_code}_{value_key}",
-    }
-    if is_opportunite:
-        render_kwargs.update({
-            "discrete": True,
-            "color_col": "color_hex",
-            "tooltip_fields": ["nom", "tt_score", "tt_temps", "tt_prix", "tt_niveau"],
-            "tooltip_aliases": [
-                "Commune",
-                "Score d'opportunité",
-                "Temps d'accès",
-                "Prix médian",
-                "Niveau",
-            ],
-            "legend_items": opportunity_legend_items(),
-        })
-
-    render_commune_choropleth(**render_kwargs)
-
-    st.caption(
-        f"{matched} communes matchées sur {total_before} "
-        "(nom ↔ code INSEE officiel) · survolez pour afficher le détail."
+    render_commune_choropleth(
+        dept_code=dept_code,
+        data_by_commune=comm_data,
+        value_col="value",
+        metric_label="Opportunité d'implantation",
+        unit="",
+        colormap_name="opportunite",
+        etabs_overlay=etabs_overlay,
+        height=540,
+        key=f"commune_map_{dept_code}_opportunite",
+        discrete=True,
+        color_col="color_hex",
+        tooltip_fields=["nom", "tt_score", "tt_temps", "tt_prix", "tt_niveau"],
+        tooltip_aliases=[
+            "Commune",
+            "Score d'opportunité",
+            "Temps d'accès",
+            "Prix médian",
+            "Niveau",
+        ],
+        legend_items=opportunity_legend_items(),
     )
 
-    if is_opportunite:
-        _render_top_communes_opportunite(comm_data)
+    st.caption(
+        f"{matched} communes analysées (croisement temps d'accès + prix immobilier) "
+        "· survolez pour afficher le détail."
+    )
+
+    _render_top_communes_opportunite(comm_data)
 
 
 def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:

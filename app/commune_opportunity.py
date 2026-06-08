@@ -18,6 +18,8 @@ _OPPORTUNITY_LEVELS: list[tuple[float, str, str]] = [
 _WEIGHTS_WITH_POP = (0.50, 0.30, 0.20)   # temps, prix inverse, population
 _WEIGHTS_NO_POP = (0.60, 0.40)           # temps, prix inverse
 
+_NAME_PREFIXES = ("L ", "LE ", "LA ", "LES ")
+
 
 def opportunite_level(score: float) -> tuple[str, str]:
     """Retourne (libellé, couleur hex) pour un score 0–100."""
@@ -34,38 +36,111 @@ def opportunity_legend_items() -> list[tuple[str, str]]:
     return [(label, color) for _, label, color in _OPPORTUNITY_LEVELS]
 
 
+def norm_commune_name(s: str) -> str:
+    """Normalisation robuste des libellés communaux."""
+    import unicodedata
+
+    if not isinstance(s, str):
+        return ""
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().upper()
+    for ch in "-'.,()":
+        s = s.replace(ch, " ")
+    s = " ".join(s.split())
+    s = s.replace("SAINTE ", "STE ").replace("SAINT ", "ST ")
+    return s
+
+
+def commune_name_keys(name: str) -> list[str]:
+    """Variantes de recherche pour un libellé communal."""
+    base = norm_commune_name(name)
+    if not base:
+        return []
+    keys = {base}
+    for prefix in _NAME_PREFIXES:
+        if base.startswith(prefix):
+            keys.add(base[len(prefix):].strip())
+    return list(keys)
+
+
+def build_commune_code_lookup(
+    geojson_features: list[dict],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Construit les tables nom → code INSEE et code → nom officiel."""
+    name_to_code: dict[str, str] = {}
+    code_to_name: dict[str, str] = {}
+    for feat in geojson_features:
+        nom = feat.get("properties", {}).get("nom", "")
+        code = feat.get("properties", {}).get("code", "")
+        if not nom or not code:
+            continue
+        code = str(code).zfill(5)
+        code_to_name[code] = nom
+        for key in commune_name_keys(nom):
+            name_to_code[key] = code
+    return name_to_code, code_to_name
+
+
+def lookup_commune_code(name: str, name_to_code: dict[str, str]) -> str | None:
+    for key in commune_name_keys(name):
+        code = name_to_code.get(key)
+        if code:
+            return str(code).zfill(5)
+    return None
+
+
+def _aggregate_by_code(
+    df: pd.DataFrame,
+    value_col: str,
+    agg: str,
+    name_to_code: dict[str, str],
+) -> pd.DataFrame:
+    if df.empty or value_col not in df.columns:
+        return pd.DataFrame(columns=["code_commune", value_col])
+
+    work = df[["commune", value_col]].copy()
+    work["code_commune"] = work["commune"].apply(
+        lambda c: lookup_commune_code(c, name_to_code)
+    )
+    work = work.dropna(subset=["code_commune", value_col])
+    if work.empty:
+        return pd.DataFrame(columns=["code_commune", value_col])
+
+    work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
+    work = work.dropna(subset=[value_col])
+    if work.empty:
+        return pd.DataFrame(columns=["code_commune", value_col])
+
+    grouped = (
+        work.groupby("code_commune", as_index=False)[value_col]
+        .agg(agg)
+    )
+    return grouped
+
+
 def build_commune_opportunity_df(
     temps_df: pd.DataFrame,
     immo_df: pd.DataFrame,
     name_to_code: dict[str, str],
     *,
-    norm_name,
+    code_to_name: dict[str, str] | None = None,
     population_by_code: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Calcule le score d'opportunité pour chaque commune du département."""
     if temps_df.empty or immo_df.empty:
         return pd.DataFrame()
 
-    temps_agg = (
-        temps_df.groupby("commune", as_index=False)["temps_acces"]
-        .mean()
-    )
-    prix_agg = (
-        immo_df.groupby("commune", as_index=False)["prix_m2"]
-        .median()
-    )
-    df = temps_agg.merge(prix_agg, on="commune", how="inner")
+    temps_by_code = _aggregate_by_code(temps_df, "temps_acces", "mean", name_to_code)
+    prix_by_code = _aggregate_by_code(immo_df, "prix_m2", "median", name_to_code)
+
+    if temps_by_code.empty or prix_by_code.empty:
+        return pd.DataFrame()
+
+    df = temps_by_code.merge(prix_by_code, on="code_commune", how="inner")
     if df.empty:
         return pd.DataFrame()
 
-    df["code_commune"] = df["commune"].apply(
-        lambda c: name_to_code.get(norm_name(c))
-    )
-    df = df.dropna(subset=["code_commune", "temps_acces", "prix_m2"])
-    if df.empty:
-        return pd.DataFrame()
-
-    df["code_commune"] = df["code_commune"].astype(str).str.zfill(5)
+    code_to_name = code_to_name or {}
+    df["commune"] = df["code_commune"].map(code_to_name).fillna(df["code_commune"])
 
     if population_by_code:
         df["population"] = df["code_commune"].map(population_by_code)
