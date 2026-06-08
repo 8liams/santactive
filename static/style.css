@@ -230,6 +230,24 @@ div[data-testid="stExpander"] > div {
 [data-testid="stSidebar"] > div:first-child {
     padding-top: 0 !important;
 }
+/* Logo sidebar — centré */
+[data-testid="stSidebar"] .sidebar-brand {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 20px 16px 8px;
+    box-sizing: border-box;
+}
+[data-testid="stSidebar"] .sidebar-brand img {
+    display: block;
+    width: 130px;
+    max-width: calc(100% - 8px);
+    height: auto;
+    margin: 0 auto;
+    mix-blend-mode: screen;
+    filter: brightness(1.05);
+}
 /* Boutons de navigation */
 [data-testid="stSidebar"] .stButton > button {
     background: transparent !important;

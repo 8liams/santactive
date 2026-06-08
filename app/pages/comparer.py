@@ -1,4 +1,4 @@
-"""Page Comparer : 2 à 4 départements côte à côte."""
+"""Page Comparer : 2 à 4 départements ou régions côte à côte."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Communes > 15 min",    "nb_communes_critiques", ".0f", ""),
 ]
 
-# Indicateurs où une valeur plus basse est favorable — comparaison inter-départements
+# Indicateurs où une valeur plus basse est favorable — comparaison inter-territoires
 COMPARE_LOWER_IS_BETTER = {"temps_acces_median", "nb_communes_critiques"}
 
 # Indicateurs où une valeur plus basse est favorable vs la médiane nationale
@@ -31,9 +31,64 @@ NATIONAL_LOWER_IS_BETTER = {
     "temps_acces_median", "nb_communes_critiques", "pct_plus_65", "prix_m2_moyen",
 }
 
+_RADAR_DIMENSIONS = [
+    ("score_acces",        "Accès aux soins"),
+    ("score_pros",         "Professionnels"),
+    ("score_etabs",        "Établissements"),
+    ("pct_plus_65",        "Jeunesse"),
+    ("prix_m2_moyen",      "Accessibilité\nfoncière"),
+    ("temps_acces_median", "Proximité\nétablissements"),
+]
+_RADAR_INVERTED = {"pct_plus_65", "prix_m2_moyen", "temps_acces_median"}
+
+
+def _pop_weighted_mean(depts: pd.DataFrame, col: str) -> float:
+    pop = pd.to_numeric(depts["population_num"], errors="coerce")
+    vals = pd.to_numeric(depts[col], errors="coerce")
+    mask = pop.notna() & vals.notna() & (pop > 0)
+    if not mask.any():
+        return float("nan")
+    return float((vals[mask] * pop[mask]).sum() / pop[mask].sum())
+
+
+def build_regions_comparison_df(master: pd.DataFrame) -> pd.DataFrame:
+    """Agrège le master départemental en une ligne par région (même logique que fiche région)."""
+    rows: list[dict] = []
+    for code, group in master.groupby("Code région", sort=False):
+        name = str(group["Nom de la région"].iloc[0])
+        rows.append({
+            "territory_name": name,
+            "Nom du département": name,
+            "Nom de la région": name,
+            "Code région": str(code),
+            "dept": "",
+            "territory_type": "region",
+            "score_global": _pop_weighted_mean(group, "score_global"),
+            "apl_median_dept": group["apl_median_dept"].median(),
+            "temps_acces_median": _pop_weighted_mean(group, "temps_acces_median"),
+            "med_gen_pour_100k": _pop_weighted_mean(group, "med_gen_pour_100k"),
+            "structures_pour_100k": _pop_weighted_mean(group, "structures_pour_100k"),
+            "prix_m2_moyen": _pop_weighted_mean(group, "prix_m2_moyen"),
+            "pct_plus_65": _pop_weighted_mean(group, "pct_plus_65"),
+            "nb_communes_critiques": pd.to_numeric(
+                group["nb_communes_critiques"], errors="coerce"
+            ).fillna(0).sum(),
+            "score_acces": _pop_weighted_mean(group, "score_acces"),
+            "score_pros": _pop_weighted_mean(group, "score_pros"),
+            "score_etabs": _pop_weighted_mean(group, "score_etabs"),
+        })
+    return pd.DataFrame(rows)
+
+
+def _territory_label(kind: str, *, plural: bool = False) -> str:
+    if kind == "region":
+        return "régions" if plural else "région"
+    return "départements" if plural else "département"
+
 
 def render(data: dict) -> None:
     master: pd.DataFrame = data["master"]
+    regions_df = build_regions_comparison_df(master)
 
     st.markdown(
         '<div class="fiche-topbar"><div class="breadcrumb">'
@@ -55,37 +110,67 @@ def render(data: dict) -> None:
         '<h1 class="fiche-title">Comparer</h1>'
         '</div>'
         '<p style="font-size:16px;color:#2B2B2B;max-width:720px;margin-top:16px;">'
-        'Sélectionnez 2 à 4 départements pour les comparer sur tous les indicateurs clés.'
+        'Sélectionnez 2 à 4 départements ou régions pour les comparer '
+        'sur tous les indicateurs clés.'
         '</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # Sélecteur de départements
-    options = (
-        master.dropna(subset=["Nom du département"])
-        .sort_values("Nom du département")["Nom du département"]
-        .tolist()
+    territory_mode = st.radio(
+        "Niveau territorial",
+        options=["Départements", "Régions"],
+        horizontal=True,
+        key="comparer_territory_mode",
     )
-    default: list[str] = []
-    if "compare_base" in st.session_state:
-        base = master[master["dept"] == st.session_state["compare_base"]]
-        if not base.empty:
-            default = [base.iloc[0]["Nom du département"]]
+    is_region = territory_mode == "Régions"
+    kind = "region" if is_region else "dept"
 
+    if is_region:
+        source_df = regions_df
+        options = (
+            regions_df.dropna(subset=["territory_name"])
+            .sort_values("territory_name")["territory_name"]
+            .tolist()
+        )
+        default: list[str] = []
+    else:
+        source_df = master.assign(
+            territory_name=master["Nom du département"],
+            territory_type="dept",
+        )
+        options = (
+            master.dropna(subset=["Nom du département"])
+            .sort_values("Nom du département")["Nom du département"]
+            .tolist()
+        )
+        default = []
+        if "compare_base" in st.session_state:
+            base = master[master["dept"] == st.session_state["compare_base"]]
+            if not base.empty:
+                default = [base.iloc[0]["Nom du département"]]
+
+    label_plural = _territory_label(kind, plural=True)
     selected: list[str] = st.multiselect(
-        "Choisir 2 à 4 départements à comparer",
+        f"Choisir 2 à 4 {label_plural} à comparer",
         options=options,
         default=default,
         max_selections=4,
-        key="comparer_selection",
+        key=f"comparer_selection_{kind}",
     )
 
     if len(selected) < 2:
-        st.info("Sélectionnez au moins 2 départements pour lancer la comparaison.")
+        st.info(f"Sélectionnez au moins 2 {_territory_label(kind, plural=True)} pour lancer la comparaison.")
         return
 
-    comp_df = master[master["Nom du département"].isin(selected)].copy()
+    name_col = "territory_name" if is_region else "Nom du département"
+    if is_region:
+        comp_df = regions_df[regions_df["territory_name"].isin(selected)].copy()
+    else:
+        comp_df = source_df[source_df["Nom du département"].isin(selected)].copy()
+
+    metrics = COMPARE_METRICS
+    lower_is_better = COMPARE_LOWER_IS_BETTER
 
     # ── TABLEAU SYNOPTIQUE ────────────────────────────────────────────────────
     st.markdown(
@@ -96,36 +181,28 @@ def render(data: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    metrics = COMPARE_METRICS
-
     header_cells = ""
-    for d in selected:
-        dept_code_val = ""
-        rows_d = comp_df[comp_df["Nom du département"] == d]
-        if not rows_d.empty:
-            dept_code_val = rows_d.iloc[0]["dept"]
+    for name in selected:
+        code_val = _territory_code(comp_df, name, is_region)
         header_cells += (
             f'<th>'
-            f'<div class="col-dept-name">{d}</div>'
-            f'<div class="col-dept-code">{dept_code_val}</div>'
+            f'<div class="col-dept-name">{name}</div>'
+            f'<div class="col-dept-code">{code_val}</div>'
             f'</th>'
         )
-
-    # Indicateurs inversés (plus bas = meilleur) — comparaison inter-départements
-    lower_is_better = COMPARE_LOWER_IS_BETTER
 
     rows_html = ""
     for label, col, fmt, unit in metrics:
         if col not in comp_df.columns:
             continue
-        values = comp_df.set_index("Nom du département")[col]
+        values = comp_df.set_index(name_col)[col]
         valid_vals = values.dropna()
         if valid_vals.empty:
             continue
         best_val = valid_vals.min() if col in lower_is_better else valid_vals.max()
         cells = ""
-        for d in selected:
-            v = values.get(d)
+        for name in selected:
+            v = values.get(name)
             if pd.isna(v) if not isinstance(v, float) else (v != v):
                 cells += '<td class="cell-na">—</td>'
             else:
@@ -145,7 +222,12 @@ def render(data: dict) -> None:
         '</div>'
         '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
         'Les meilleures valeurs sont mises en évidence en vert.'
-        '</p>',
+        + (
+            ' Agrégats régionaux\u202f: médiane des départements pour l\'APL, '
+            'moyennes pondérées par la population pour les autres indicateurs.'
+            if is_region else ''
+        )
+        + '</p>',
         unsafe_allow_html=True,
     )
 
@@ -155,39 +237,16 @@ def render(data: dict) -> None:
         '<div class="section-eyebrow">RADAR COMPARATIF</div>'
         '<h2 class="section-title">Profils <em>superposés.</em></h2>'
         '<p class="section-lead">Tous les indicateurs sont normalisés en rang '
-        'percentile national (0 = pire département, 100 = meilleur). '
+        'percentile national (0 = pire, 100 = meilleur). '
         'Plus la surface est grande, meilleur est le profil global.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # 6 dimensions pertinentes — rang percentile national
-    dimensions = [
-        ("score_acces",        "Accès aux soins"),
-        ("score_pros",         "Professionnels"),
-        ("score_etabs",        "Établissements"),
-        ("pct_plus_65",        "Jeunesse"),          # inversé : moins de 65+ = mieux
-        ("prix_m2_moyen",      "Accessibilité\nfoncière"),  # inversé : prix bas = mieux
-        ("temps_acces_median", "Proximité\nétablissements"),  # inversé : temps bas = mieux
-    ]
-    inverted_cols = {"pct_plus_65", "prix_m2_moyen", "temps_acces_median"}
+    rank_base = _build_rank_base(master, regions_df)
+    master_ranks = _compute_radar_ranks(rank_base)
 
-    # Calcul des rangs percentiles sur tout le master
-    master_ranks = master.copy()
-    for col, _ in dimensions:
-        if col not in master_ranks.columns:
-            master_ranks[f"rank_{col}"] = 0.0
-            continue
-        if col in inverted_cols:
-            master_ranks[f"rank_{col}"] = (
-                100 - master_ranks[col].rank(pct=True, na_option="keep") * 100
-            )
-        else:
-            master_ranks[f"rank_{col}"] = (
-                master_ranks[col].rank(pct=True, na_option="keep") * 100
-            )
-
-    theta_labels = [d[1] for d in dimensions]
+    theta_labels = [d[1] for d in _RADAR_DIMENSIONS]
     colors = [
         PALETTE["bleu_regalien"],
         PALETTE["rouge_critique"],
@@ -196,13 +255,13 @@ def render(data: dict) -> None:
     ]
 
     fig = go.Figure()
-    for i, dept_name in enumerate(selected):
-        row = master_ranks[master_ranks["Nom du département"] == dept_name]
+    for i, name in enumerate(selected):
+        row = master_ranks[master_ranks[name_col] == name]
         if row.empty:
             continue
         rv = row.iloc[0]
         r_vals = []
-        for col, _ in dimensions:
+        for col, _ in _RADAR_DIMENSIONS:
             v = rv.get(f"rank_{col}")
             r_vals.append(float(v) if pd.notna(v) else 0.0)
 
@@ -215,11 +274,10 @@ def render(data: dict) -> None:
                 fill="toself",
                 fillcolor=f"rgba({rgb},0.15)",
                 line=dict(color=color_hex, width=2),
-                name=dept_name,
+                name=name,
             )
         )
 
-    # Applique le template en retirant les clés passées explicitement dessous
     layout_opts = {
         k: v for k, v in PLOTLY_TEMPLATE["layout"].items()
         if k not in ("margin", "title", "legend", "polar")
@@ -250,7 +308,9 @@ def render(data: dict) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
     # ── RÉFÉRENCE NATIONALE ───────────────────────────────────────────────────
-    _render_national_reference_table(master, comp_df, selected, metrics)
+    _render_national_reference_table(
+        master, comp_df, selected, metrics, name_col=name_col, kind=kind,
+    )
 
     # ── LIENS VERS LES FICHES ─────────────────────────────────────────────────
     st.markdown(
@@ -261,18 +321,61 @@ def render(data: dict) -> None:
         unsafe_allow_html=True,
     )
     link_cols = st.columns(len(selected))
-    for i, dept_name in enumerate(selected):
-        rows_d = comp_df[comp_df["Nom du département"] == dept_name]
-        if rows_d.empty:
+    for i, name in enumerate(selected):
+        rows_t = comp_df[comp_df[name_col] == name]
+        if rows_t.empty:
             continue
-        dept_code_val = rows_d.iloc[0]["dept"]
         with link_cols[i]:
-            if st.button(
-                f"Fiche {dept_name} →",
-                key=f"link_{dept_code_val}",
-                use_container_width=True,
-            ):
-                navigate("dept", dept_code=dept_code_val)
+            if is_region:
+                region_code_val = str(rows_t.iloc[0]["Code région"])
+                if st.button(
+                    f"Fiche {name} →",
+                    key=f"link_region_{region_code_val}",
+                    use_container_width=True,
+                ):
+                    navigate("region", region_code=region_code_val)
+            else:
+                dept_code_val = rows_t.iloc[0]["dept"]
+                if st.button(
+                    f"Fiche {name} →",
+                    key=f"link_{dept_code_val}",
+                    use_container_width=True,
+                ):
+                    navigate("dept", dept_code=dept_code_val)
+
+
+def _territory_code(comp_df: pd.DataFrame, name: str, is_region: bool) -> str:
+    rows = comp_df[comp_df["territory_name" if is_region else "Nom du département"] == name]
+    if rows.empty:
+        return ""
+    if is_region:
+        return str(rows.iloc[0]["Code région"])
+    return str(rows.iloc[0]["dept"])
+
+
+def _build_rank_base(master: pd.DataFrame, regions_df: pd.DataFrame) -> pd.DataFrame:
+    dept_rows = master.assign(
+        territory_name=master["Nom du département"],
+        territory_type="dept",
+    )
+    return pd.concat([dept_rows, regions_df], ignore_index=True)
+
+
+def _compute_radar_ranks(df: pd.DataFrame) -> pd.DataFrame:
+    master_ranks = df.copy()
+    for col, _ in _RADAR_DIMENSIONS:
+        if col not in master_ranks.columns:
+            master_ranks[f"rank_{col}"] = 0.0
+            continue
+        if col in _RADAR_INVERTED:
+            master_ranks[f"rank_{col}"] = (
+                100 - master_ranks[col].rank(pct=True, na_option="keep") * 100
+            )
+        else:
+            master_ranks[f"rank_{col}"] = (
+                master_ranks[col].rank(pct=True, na_option="keep") * 100
+            )
+    return master_ranks
 
 
 def _national_reference(master: pd.DataFrame, col: str) -> float | None:
@@ -318,6 +421,8 @@ def _lecture_nationale(
     nat: float | None,
     dept_values: dict[str, float],
     selected: list[str],
+    *,
+    kind: str = "dept",
 ) -> str:
     """Génère une phrase courte de lecture vs médiane nationale."""
     if nat is None or pd.isna(nat):
@@ -341,13 +446,14 @@ def _lecture_nationale(
         return "Données insuffisantes pour cette comparaison."
 
     names_all = _join_dept_names(selected[:4])
+    unit = _territory_label(kind, plural=True)
 
     if col == "apl_median_dept":
         if better and not worse:
             return f"{_join_dept_names(better)} atteint la médiane nationale."
         if worse and not better:
             if len(worse) == len(selected):
-                return "Aucun département n'atteint la médiane nationale."
+                return f"Aucun des {unit} sélectionnés n'atteint la médiane nationale."
             return f"{_join_dept_names(worse)} reste sous la médiane nationale."
         if at and not better and not worse:
             return f"{names_all} se situe à la médiane nationale."
@@ -370,15 +476,15 @@ def _lecture_nationale(
             return f"{_join_dept_names(better)} dépassent la référence nationale."
         if worse and not better:
             if len(worse) == len(selected):
-                return "Aucun département ne dépasse la référence nationale."
+                return f"Aucun des {unit} sélectionnés ne dépasse la référence nationale."
             return f"{_join_dept_names(worse)} reste sous la référence nationale."
 
     if col == "score_global":
         if worse and not better:
             if len(worse) == len(selected):
                 if len(selected) == 2:
-                    return "Les deux départements se situent sous la médiane nationale."
-                return "Tous les départements sélectionnés sont sous la médiane nationale."
+                    return f"Les deux {unit} se situent sous la médiane nationale."
+                return f"Tous les {unit} sélectionnés sont sous la médiane nationale."
             return f"{_join_dept_names(worse)} se situe sous la médiane nationale."
         if better and not worse:
             return f"{_join_dept_names(better)} se situe au-dessus de la médiane nationale."
@@ -390,11 +496,11 @@ def _lecture_nationale(
         return f"{_join_dept_names(better)} est au-dessus de la médiane nationale."
     if worse and not better:
         if len(worse) == len(selected):
-            return "Aucun département n'atteint la médiane nationale."
+            return f"Aucun des {unit} sélectionnés n'atteint la médiane nationale."
         return f"{_join_dept_names(worse)} reste sous la médiane nationale."
     if at and not better and not worse:
         return f"{names_all} est proche de la médiane nationale."
-    return f"Écarts contrastés entre les départements sélectionnés."
+    return f"Écarts contrastés entre les {unit} sélectionnés."
 
 
 def _render_national_reference_table(
@@ -402,6 +508,9 @@ def _render_national_reference_table(
     comp_df: pd.DataFrame,
     selected: list[str],
     metrics: list[tuple[str, str, str, str]],
+    *,
+    name_col: str = "Nom du département",
+    kind: str = "dept",
 ) -> None:
     st.markdown(
         '<div class="section-header">'
@@ -413,16 +522,14 @@ def _render_national_reference_table(
         unsafe_allow_html=True,
     )
 
+    is_region = kind == "region"
     dept_headers = ""
-    for d in selected:
-        dept_code_val = ""
-        rows_d = comp_df[comp_df["Nom du département"] == d]
-        if not rows_d.empty:
-            dept_code_val = rows_d.iloc[0]["dept"]
+    for name in selected:
+        code_val = _territory_code(comp_df, name, is_region)
         dept_headers += (
             f'<th>'
-            f'<div class="col-dept-name">{d}</div>'
-            f'<div class="col-dept-code">{dept_code_val}</div>'
+            f'<div class="col-dept-name">{name}</div>'
+            f'<div class="col-dept-code">{code_val}</div>'
             f'</th>'
         )
 
@@ -431,12 +538,12 @@ def _render_national_reference_table(
         if col not in comp_df.columns:
             continue
         nat = _national_reference(master, col)
-        values = comp_df.set_index("Nom du département")[col]
+        values = comp_df.set_index(name_col)[col]
         dept_vals: dict[str, float] = {}
-        for d in selected:
-            v = values.get(d)
+        for name in selected:
+            v = values.get(name)
             if v is not None and not (isinstance(v, float) and pd.isna(v)):
-                dept_vals[d] = float(v)
+                dept_vals[name] = float(v)
 
         if nat is None or pd.isna(nat):
             nat_cell = '<td class="cell-na">—</td>'
@@ -446,8 +553,8 @@ def _render_national_reference_table(
             )
 
         dept_cells = ""
-        for d in selected:
-            v = values.get(d)
+        for name in selected:
+            v = values.get(name)
             if v is None or (isinstance(v, float) and pd.isna(v)):
                 dept_cells += '<td class="cell-na">—</td>'
                 continue
@@ -459,7 +566,7 @@ def _render_national_reference_table(
             }.get(pos or "", "")
             dept_cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
 
-        lecture = _lecture_nationale(label, col, nat, dept_vals, selected)
+        lecture = _lecture_nationale(label, col, nat, dept_vals, selected, kind=kind)
         rows_html += (
             f'<tr>'
             f'<td class="metric-label">{label}</td>'

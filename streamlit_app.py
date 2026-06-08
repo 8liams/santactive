@@ -132,27 +132,18 @@ with st.sidebar:
     _logo_b64 = _get_image_b64("static/brand/logo-santactive.png")
     if _logo_b64:
         st.sidebar.markdown("""
-<div style="padding:12px 8px 4px;text-align:center;">
+<div class="sidebar-brand">
     <img src="data:image/png;base64,{logo_b64}"
-         style="width:130px;height:auto;
-                mix-blend-mode:screen;
-                filter:brightness(1.05);"
          alt="Sant'active">
 </div>
 """.format(logo_b64=_logo_b64), unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style="font-size:18px;font-weight:700;color:white;
-                    padding:8px 0 4px;">Sant'active</div>
+        <div class="sidebar-brand">
+        <div style="font-size:18px;font-weight:700;color:white;">Sant'active</div>
+        </div>
         """, unsafe_allow_html=True)
 
-    st.sidebar.markdown("""
-<div style="font-size:10px;font-weight:600;letter-spacing:0.12em;
-            text-transform:uppercase;color:rgba(255,255,255,0.4);
-            margin-bottom:20px;">
-    OBSERVATOIRE SANTÉ TERRITORIAL
-</div>
-""", unsafe_allow_html=True)
     st.markdown(
         "<hr style='border:none;border-top:1px solid rgba(255,255,255,0.1);"
         "margin:0 0 20px;'>",

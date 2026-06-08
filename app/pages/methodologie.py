@@ -124,37 +124,37 @@ Un département avec moins de 3 dimensions disponibles ne reçoit pas de score g
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité soins de ville</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Dimension principale</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">30 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">APL médian départemental<br><span style="color:#9C9A92;">ANCT · Observatoire des territoires · 2023</span></div>
-<div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité physique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Temps de trajet</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">Temps d'accès médian pondéré par population<br><span style="color:#9C9A92;">Calcul interne · FINESS mars 2026 + INSEE 2021</span></div>
-<div style="font-size:12px;color:#A51C30;font-weight:600;">Bas = bon</div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Densité médecins généralistes</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Offre professionnelle</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médecins généralistes actifs pour 100&#8239;000 hab.<br><span style="color:#9C9A92;">RPPS · DREES · janv. 2026</span></div>
-<div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Offre hospitalière</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Structures de soins</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">15 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">Hôpitaux + cliniques FINESS pour 100&#8239;000 hab.<br><span style="color:#9C9A92;">FINESS · DREES · mars 2026</span></div>
-<div style="font-size:12px;color:#1B5E3F;font-weight:600;">Haut = bon</div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Pression démographique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Vieillissement de la population</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">10 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">Part des 65 ans et plus<br>Les seniors consomment 4× plus de soins (DREES).<br><span style="color:#9C9A92;">INSEE · Recensement 2021</span></div>
-<div style="font-size:12px;color:#A51C30;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(fort vieillissement = forte demande)</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(fort vieillissement = forte demande)</span></div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;background:#FAFAF8;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Contexte foncier</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Attractivité à l'installation</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">5 %</div>
 <div style="font-size:12px;color:#4B4B48;line-height:1.5;">Prix médian au m² (DVF)<br>Un foncier accessible facilite l'installation médicale.<br><span style="color:#9C9A92;">DVF · DGFiP · 2025</span></div>
-<div style="font-size:12px;color:#A51C30;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(prix bas = installation facilitée)</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(prix bas = installation facilitée)</span></div>
 </div>
 </div>
 """)
