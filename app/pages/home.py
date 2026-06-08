@@ -407,8 +407,9 @@ def _render_national_kpis(data: dict) -> None:
         '<div class="methodology-card">'
         '<strong>Comment on calcule ces scores ?</strong>'
         ' APL ANCT 2023 (65\u202f%) + temps d\'accès pondéré (35\u202f%), '
-        'densité en établissements et délais de RDV. '
-        '<a href="?view=methodologie">Méthodologie complète →</a>'
+        'densité en établissements et délais de RDV.'
         '</div>',
         unsafe_allow_html=True,
     )
+    if st.button("Méthodologie complète →", key="home_methodo", type="secondary"):
+        navigate("methodologie")

@@ -211,11 +211,36 @@ def render_fiche_share_bar(
         _render_copy_button(fiche_url, key_prefix)
 
     with cols[1]:
-        st.link_button(
-            "Envoyer par e-mail",
-            mailto,
-            use_container_width=True,
-            type="secondary",
+        mailto_js = json.dumps(mailto)
+        components.html(
+            f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;">
+<a href={mailto_js} class="btn-share-email">Envoyer par e-mail</a>
+<style>
+  .btn-share-email {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 1rem;
+    min-height: 2.5rem;
+    background: #FFFFFF;
+    color: #1A3D8F;
+    border: 1.5px solid #1A3D8F;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: Marianne, Inter, -apple-system, sans-serif;
+    text-decoration: none;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+  }}
+  .btn-share-email:hover {{ background: #F3F2EC; }}
+</style>
+</body></html>""",
+            height=46,
         )
 
     with cols[2]:

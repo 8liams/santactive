@@ -11,6 +11,7 @@ from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
 from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
 from ..components.share_bar import dept_share_context, render_fiche_share_bar
+from ..components.nav import NavCrumb, render_breadcrumb
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate
@@ -56,17 +57,11 @@ def render_topbar(r: pd.Series, data: dict) -> None:
     dept_name = str(r["Nom du département"])
     dept_code = str(r.get("dept", "")).zfill(2)
 
-    st.html(
-        '<div class="fiche-topbar">'
-        '<div class="breadcrumb">'
-        '<a href="?view=home">Accueil</a>'
-        '<span class="sep">›</span>'
-        f'<a href="?view=region&region_code={region_code}">{region_name}</a>'
-        '<span class="sep">›</span>'
-        f'<span class="current">{dept_name}</span>'
-        '</div>'
-        '</div>'
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb(region_name, "region", {"region_code": region_code}),
+        NavCrumb(dept_name),
+    ], key_prefix=f"dept_bc_{dept_code}")
 
     share = dept_share_context(r)
     pdf_bytes: bytes | None = None

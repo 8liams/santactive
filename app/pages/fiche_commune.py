@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from ..components import render_kpi_card
+from ..components.nav import NavCrumb, render_breadcrumb
 from ..router import navigate
 
 
@@ -33,18 +34,12 @@ def render(data: dict) -> None:
     region_code = str(dept_row.iloc[0]["Code région"])    if not dept_row.empty else ""
 
     # ── TOPBAR ────────────────────────────────────────────────────────────────
-    st.markdown(
-        f'<div class="fiche-topbar"><div class="breadcrumb">'
-        f'<a href="?view=home">Accueil</a>'
-        f'<span class="sep">›</span>'
-        f'<a href="?view=region&region_code={region_code}">{region_name}</a>'
-        f'<span class="sep">›</span>'
-        f'<a href="?view=dept&dept_code={dept_code}">{dept_name}</a>'
-        f'<span class="sep">›</span>'
-        f'<span class="current">{commune_name.title()}</span>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb(region_name, "region", {"region_code": region_code}),
+        NavCrumb(dept_name, "dept", {"dept_code": dept_code}),
+        NavCrumb(commune_name.title()),
+    ], key_prefix=f"commune_bc_{dept_code}")
 
     # ── HEADER ────────────────────────────────────────────────────────────────
     st.markdown(

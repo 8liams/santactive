@@ -20,6 +20,7 @@ from app.pages import (
     home,
     methodologie,
 )  # noqa: E402  (importés après set_page_config)
+from app.components.nav import render_mobile_nav
 from app.router import get_current_view, init_from_url, navigate
 from app.scoring import compute_scores
 
@@ -125,6 +126,8 @@ geojson = load_geojson()
 # ─── ROUTING — init depuis URL ─────────────────────────────────────────────────
 init_from_url()
 view = get_current_view()
+
+render_mobile_nav(view)
 
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -270,26 +273,3 @@ elif view == "comparer":
     comparer.render(data)
 else:
     navigate("home")
-
-# ─── TOP NAV MOBILE — remplace la sidebar sur petit écran ────────────────────
-_nav_items = [
-    ("home",        "Accueil"),
-    ("enjeux",      "Enjeux"),
-    ("comparer",    "Comparer"),
-    ("methodologie","Méthodo"),
-    ("about",       "À propos"),
-]
-_nav_links = "".join(
-    f'<a href="?view={v}" target="_self" class="sa-nav-active" title="{label}">'
-    f'<span class="sa-nav-label">{label}</span>'
-    f'</a>'
-    if v == view else
-    f'<a href="?view={v}" target="_self" title="{label}">'
-    f'<span class="sa-nav-label">{label}</span>'
-    f'</a>'
-    for v, label in _nav_items
-)
-st.markdown(
-    f'<nav class="sa-mobile-nav">{_nav_links}</nav>',
-    unsafe_allow_html=True,
-)

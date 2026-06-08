@@ -6,6 +6,9 @@ from pathlib import Path
 
 import streamlit as st
 
+from ..components.nav import NavCrumb, render_breadcrumb
+from ..router import navigate
+
 from ..router import navigate
 
 
@@ -38,15 +41,10 @@ def _remove_dark_background(image_path: str, output_path: str,
 
 def render(data: dict) -> None:
 
-    # Breadcrumb
-    st.markdown(
-        '<div class="fiche-topbar"><div class="breadcrumb">'
-        '<a href="?view=home">Accueil</a>'
-        '<span class="sep">›</span>'
-        '<span class="current">À propos</span>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb("À propos"),
+    ], key_prefix="about_bc")
 
     # ── SECTION 1 — LE PROJET ─────────────────────────────────────────────────
     st.markdown(
@@ -450,25 +448,26 @@ def render(data: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">'
-        '<a href="https://www.opendatauniversity.org/" target="_blank" '
-        'style="padding:12px 24px;background:#1A3D8F;color:white;'
-        'border-radius:4px;text-decoration:none;font-size:14px;font-weight:500;">'
-        'Open Data University →'
-        '</a>'
-        '<a href="?view=methodologie" '
-        'style="padding:12px 24px;background:white;color:#1A3D8F;'
-        'border:1.5px solid #1A3D8F;border-radius:4px;'
-        'text-decoration:none;font-size:14px;font-weight:500;">'
-        'Notre méthodologie →'
-        '</a>'
-        '<a href="https://ecole-du-digital.com/" target="_blank" '
-        'style="padding:12px 24px;background:white;color:#2B2B2B;'
-        'border:1.5px solid #D8D6CE;border-radius:4px;'
-        'text-decoration:none;font-size:14px;font-weight:500;">'
-        'ESD Paris →'
-        '</a>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.link_button(
+            "Open Data University →",
+            "https://www.opendatauniversity.org/",
+            use_container_width=True,
+            type="primary",
+        )
+    with c2:
+        if st.button(
+            "Notre méthodologie →",
+            key="about_methodo",
+            use_container_width=True,
+            type="secondary",
+        ):
+            navigate("methodologie")
+    with c3:
+        st.link_button(
+            "ESD Paris →",
+            "https://ecole-du-digital.com/",
+            use_container_width=True,
+            type="secondary",
+        )

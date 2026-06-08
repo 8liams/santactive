@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ..config import PALETTE, PLOTLY_TEMPLATE
+from ..components.nav import NavCrumb, render_breadcrumb
 from ..router import navigate
 
 # Médiane APL nationale (ANCT 2023) — même référence que l'accueil et les fiches dept.
@@ -86,14 +87,10 @@ def render(data: dict) -> None:
     master: pd.DataFrame = data["master"]
     regions_df = build_regions_comparison_df(master)
 
-    st.markdown(
-        '<div class="fiche-topbar"><div class="breadcrumb">'
-        '<a href="?view=home">Accueil</a>'
-        '<span class="sep">›</span>'
-        '<span class="current">Comparer</span>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb("Comparer"),
+    ], key_prefix="comparer_bc")
 
     st.markdown(
         '<div class="fiche-header">'

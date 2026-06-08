@@ -21,6 +21,7 @@ from ..region_pilotage import (
     compute_region_summary,
     compute_specialites_tension,
 )
+from ..components.nav import NavCrumb, dept_link_button, render_breadcrumb
 from ..router import navigate
 
 # Affichage uniquement — les calculs internes restent inchangés
@@ -82,14 +83,10 @@ def render(data: dict) -> None:
 # ── Bloc 1 — Contexte régional ───────────────────────────────────────────────
 
 def render_topbar(region_name: str) -> None:
-    st.markdown(
-        f'<div class="fiche-topbar"><div class="breadcrumb">'
-        f'<a href="?view=home">Accueil</a>'
-        f'<span class="sep">›</span>'
-        f'<span class="current">{region_name}</span>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb(region_name),
+    ], key_prefix="region_bc")
 
 
 def render_share_section(
@@ -298,40 +295,56 @@ def render_ou_agir(
         unsafe_allow_html=True,
     )
 
-    cols = "40px 1fr 130px 1.4fr"
-    table_html = (
-        f'<div class="sa-tbl-scroll"><div style="min-width:520px;">'
-        f'<div style="display:grid;grid-template-columns:{cols};gap:0 14px;'
-        f'padding:10px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-        f'font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6B6B68;'
-        f'text-transform:uppercase;">'
-        f'<span>Rang</span><span>Département</span><span>Priorité</span>'
-        f'<span>Lecture rapide</span>'
-        f'</div>'
+    st.markdown(
+        '<div class="sa-tbl-scroll"><div style="min-width:520px;">'
+        '<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr 72px;'
+        'padding:10px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
+        'font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6B6B68;'
+        'text-transform:uppercase;border-bottom:none;">'
+        '<span>Rang</span><span>Département</span><span>Priorité</span>'
+        '<span>Lecture rapide</span>'
+        '</div></div></div>',
+        unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="dept-table-nav sa-tbl-scroll">', unsafe_allow_html=True)
     for _, row in priorities.iterrows():
-        dept_code = row["dept"]
+        dept_code = str(row["dept"]).zfill(2)
         rang = int(row["priorite_rang"])
         internal = row["priorite"]
         label, _ = _PRIORITE_DISPLAY.get(internal, ("Surveillance", "fav"))
         bg = "#FEF9F9" if label in ("Priorité immédiate", "Priorité forte") else "white"
 
-        table_html += (
-            f'<a href="?view=dept&dept_code={dept_code}" '
-            f'style="display:grid;grid-template-columns:{cols};gap:0 14px;'
-            f'padding:12px 16px;background:{bg};border-bottom:1px solid #F0EDE5;'
-            f'text-decoration:none;color:inherit;align-items:center;">'
-            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{rang:02d}</span>'
-            f'<span style="font-size:14px;font-weight:500;">{row["Nom du département"]}</span>'
-            f'<span>{_priorite_badge(internal)}</span>'
-            f'<span style="font-size:12px;color:#6B6B68;line-height:1.45;">'
-            f'{row["lecture_rapide"]}</span>'
-            f'</a>'
+        st.markdown(
+            f'<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr 72px;'
+            f'background:{bg};">',
+            unsafe_allow_html=True,
         )
-
-    table_html += "</div></div>"
-    st.markdown(table_html, unsafe_allow_html=True)
+        c_rank, c_name, c_prio, c_lecture = st.columns(
+            [0.4, 2.4, 1.0, 3.2], gap="small"
+        )
+        with c_rank:
+            st.markdown(
+                f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">'
+                f'{rang:02d}</span>',
+                unsafe_allow_html=True,
+            )
+        with c_name:
+            dept_link_button(
+                dept_code,
+                str(row["Nom du département"]),
+                key=f"prio_dept_{dept_code}",
+            )
+        with c_prio:
+            st.markdown(_priorite_badge(internal), unsafe_allow_html=True)
+        with c_lecture:
+            st.markdown(
+                f'<span style="font-size:12px;color:#6B6B68;line-height:1.45;">'
+                f'{row["lecture_rapide"]}</span>',
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # Focus top 3
     top3 = priorities.head(3)
@@ -621,56 +634,81 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
         "score_global", na_position="last"
     ).reset_index(drop=True)
 
-    cols = "36px 1fr 60px 110px 80px 100px 48px"
-    table_html = (
-        f'<div class="sa-tbl-scroll"><div style="min-width:640px;">'
-        f'<div style="display:grid;grid-template-columns:{cols};gap:0 12px;'
-        f'padding:8px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-        f'font-size:11px;font-weight:700;letter-spacing:0.1em;color:#6B6B68;'
-        f'text-transform:uppercase;">'
-        f'<span>#</span><span>D\u00e9partement</span><span>Code</span>'
-        f'<span>Zone</span>'
-        f'<span style="text-align:right;">Score</span>'
-        f'<span style="text-align:right;">Population</span>'
-        f'<span></span>'
-        f'</div>'
+    st.markdown(
+        '<div class="sa-tbl-scroll"><div style="min-width:640px;">'
+        '<div style="display:grid;grid-template-columns:36px 1fr 60px 110px 80px 100px;'
+        'gap:0 12px;padding:8px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
+        'font-size:11px;font-weight:700;letter-spacing:0.1em;color:#6B6B68;'
+        'text-transform:uppercase;">'
+        '<span>#</span><span>D\u00e9partement</span><span>Code</span>'
+        '<span>Zone</span>'
+        '<span style="text-align:right;">Score</span>'
+        '<span style="text-align:right;">Population</span>'
+        '</div></div></div>',
+        unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="dept-table-nav sa-tbl-scroll">', unsafe_allow_html=True)
     for i, (_, d) in enumerate(sorted_depts.iterrows(), 1):
         zone = d.get("zone_short", "\u2014")
         score = d.get("score_global")
         score_str = f"{score:.1f}" if pd.notna(score) else "\u2014"
         pop = d.get("population_num", 0)
         pop_str = f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "\u2014"
-        dept_code = d["dept"]
-        dept_name = d["Nom du d\u00e9partement"]
-        badge_cls = {"Critique": "crit", "Interm\u00e9diaire": "inter",
+        dept_code = str(d["dept"]).zfill(2)
+        dept_name = d["Nom du département"]
+        badge_cls = {"Critique": "crit", "Intermédiaire": "inter",
                      "Favorable": "fav"}.get(zone, "")
         score_color = (
             "#A51C30" if zone == "Critique"
-            else ("#E5B04A" if zone == "Interm\u00e9diaire" else "#1B5E3F")
+            else ("#E5B04A" if zone == "Intermédiaire" else "#1B5E3F")
         )
         bg = "#FEF9F9" if zone == "Critique" else "white"
 
-        table_html += (
-            f'<a href="?view=dept&dept_code={dept_code}" '
-            f'style="display:grid;grid-template-columns:{cols};gap:0 12px;'
-            f'padding:10px 16px;background:{bg};border-bottom:1px solid #F0EDE5;'
-            f'text-decoration:none;color:inherit;align-items:center;">'
-            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{i:02d}</span>'
-            f'<span style="font-size:14px;font-weight:500;">{dept_name}</span>'
-            f'<span style="font-size:12px;color:#9C9A92;">{dept_code}</span>'
-            f'<span><span class="fiche-zone-badge {badge_cls}" '
-            f'style="font-size:10px;padding:3px 8px;">{zone}</span></span>'
-            f'<span style="text-align:right;font-weight:600;color:{score_color};">'
-            f'{score_str}</span>'
-            f'<span style="text-align:right;font-size:12px;color:#6B6B68;">{pop_str}</span>'
-            f'<span style="text-align:right;color:#1A3D8F;">\u2192</span>'
-            f'</a>'
+        st.markdown(
+            f'<div style="padding:4px 0;background:{bg};'
+            f'border-bottom:1px solid #F0EDE5;"></div>',
+            unsafe_allow_html=True,
         )
-
-    table_html += "</div></div>"
-    st.markdown(table_html, unsafe_allow_html=True)
+        c1, c2, c3, c4, c5, c6 = st.columns(
+            [0.35, 2.0, 0.55, 1.0, 0.7, 0.9], gap="small"
+        )
+        with c1:
+            st.markdown(
+                f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">'
+                f'{i:02d}</span>',
+                unsafe_allow_html=True,
+            )
+        with c2:
+            dept_link_button(
+                dept_code,
+                dept_name,
+                key=f"rank_dept_{dept_code}",
+            )
+        with c3:
+            st.markdown(
+                f'<span style="font-size:12px;color:#9C9A92;">{dept_code}</span>',
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                f'<span class="fiche-zone-badge {badge_cls}" '
+                f'style="font-size:10px;padding:3px 8px;">{zone}</span>',
+                unsafe_allow_html=True,
+            )
+        with c5:
+            st.markdown(
+                f'<span style="text-align:right;display:block;font-weight:600;'
+                f'color:{score_color};">{score_str}</span>',
+                unsafe_allow_html=True,
+            )
+        with c6:
+            st.markdown(
+                f'<span style="text-align:right;display:block;font-size:12px;'
+                f'color:#6B6B68;">{pop_str}</span>',
+                unsafe_allow_html=True,
+            )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_delais_detail(delais_region: pd.DataFrame, region_name: str) -> None:

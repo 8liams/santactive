@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ..components.nav import NavCrumb, render_breadcrumb
+
 from ..router import navigate
 from ..components.tooltip import info_tooltip
 
@@ -31,15 +33,10 @@ def _prose(*paragraphs: str) -> None:
 
 def render(data: dict) -> None:
 
-    # Breadcrumb
-    st.markdown(
-        '<div class="fiche-topbar"><div class="breadcrumb">'
-        '<a href="?view=home">Accueil</a>'
-        '<span class="sep">›</span>'
-        '<span class="current">Méthodologie</span>'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
+    render_breadcrumb([
+        NavCrumb("Accueil", "home"),
+        NavCrumb("Méthodologie"),
+    ], key_prefix="methodo_bc")
 
     st.markdown(
         '<div class="fiche-header">'
