@@ -28,6 +28,17 @@ def navigate(view: View, **params) -> None:
     st.rerun()
 
 
+def navigate_compare(*dept_codes: str) -> None:
+    """Ouvre la comparaison avec 2 à 4 départements pré-sélectionnés."""
+    codes = [str(c).zfill(2) for c in dept_codes if c]
+    if not codes:
+        navigate("comparer")
+        return
+    st.session_state["comparer_territory_kind"] = "dept"
+    st.session_state["comparer_preselect"] = codes
+    navigate("comparer")
+
+
 def init_from_url() -> None:
     """Initialise l'état depuis les query params à l'arrivée sur le site."""
     qp = dict(st.query_params)

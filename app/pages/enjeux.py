@@ -63,7 +63,8 @@ def render(data: dict) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">CAS D\u2019USAGE</div>'
-        '<h2 class="section-title">Qui utilise Sant\u2019active, <em>et pour quoi faire.</em></h2>'
+        '<h2 class="section-title">Qui utilise Sant\u2019active, '
+        '<em>et pour quoi faire\u00a0?</em></h2>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -140,7 +141,8 @@ def render(data: dict) -> None:
     diff_html = (
         '<div class="section-header">'
         '<div class="section-eyebrow">DIFF\u00c9RENCIATION</div>'
-        '<h2 class="section-title">Pourquoi Sant\u2019active <em>est diff\u00e9rent.</em></h2>'
+        '<h2 class="section-title">Pourquoi Sant\u2019active '
+        '<em>est diff\u00e9rent\u00a0?</em></h2>'
         '</div>'
         '<div style="border:1px solid #E8E6DD;border-radius:6px;overflow:hidden;max-width:860px;margin-top:8px;">'
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#0A1938;padding:14px 20px;gap:0;">'

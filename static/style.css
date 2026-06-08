@@ -1163,6 +1163,25 @@ div[data-testid="stExpander"] > div {
     padding: 20px;
     margin-bottom: 8px;
 }
+.suggestion-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.suggestion-card-link:hover {
+    border-color: #1A3D8F;
+    box-shadow: 0 2px 12px rgba(10, 25, 56, 0.08);
+}
+.suggestion-card-link .suggestion-name {
+    color: #0A1938;
+}
+.suggestion-card-link:hover .suggestion-name {
+    color: #1A3D8F;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
 .suggestion-label {
     font-size: 10px;
     letter-spacing: 0.18em;

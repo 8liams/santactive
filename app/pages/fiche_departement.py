@@ -11,10 +11,11 @@ from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
 from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
 from ..components.share_bar import dept_share_context, render_fiche_share_bar
-from ..components.nav import NavCrumb, render_breadcrumb
+from ..components.maps import DEPT_CENTER
+from ..components.nav import NavCrumb, internal_href, render_breadcrumb
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
-from ..router import navigate
+from ..router import navigate, navigate_compare
 from ..scoring import fmt_rang_affichage
 
 
@@ -322,7 +323,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         '<div class="section-header">'
         '<div class="section-eyebrow">SCORECARD</div>'
         '<h2 class="section-title">'
-        'Où ce département <em>décroche,</em> et où il tient bon.</h2>'
+        'Où ce département <em>décroche,</em> et où il tient bon\u00a0?</h2>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1156,7 +1157,7 @@ def render_contexte(r: pd.Series, data: dict) -> None:
         '<div class="section-header">'
         '<div class="section-eyebrow">CONTEXTE POPULATIONNEL</div>'
         '<h2 class="section-title">Qui sont les habitants, '
-        '<em>et de quoi souffrent-ils.</em></h2>'
+        '<em>et de quoi souffrent-ils\u00a0?</em></h2>'
         '</div>'
     )
     col1, col2 = st.columns(2, gap="large")
@@ -1372,7 +1373,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         '<div class="section-header">'
         '<div class="section-eyebrow">OFFRE MÉDICALE</div>'
         '<h2 class="section-title">'
-        "Combien de <em>spécialistes,</em> et qu'en déduire.</h2>"
+        "Combien de <em>spécialistes,</em> et qu'en déduire\u00a0?</h2>"
         '<p class="section-lead">'
         'Top 5 soins primaires et top 5 spécialistes liés aux pathologies '
         'prédominantes du territoire. Comparés à la médiane nationale '
@@ -1802,53 +1803,89 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
 # 8. COMPARER AVEC
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _dept_distance_km(dept_a: str, dept_b: str) -> float:
+    """Distance approximative entre centres départementaux."""
+    from math import atan2, cos, radians, sin, sqrt
+
+    a = DEPT_CENTER.get(str(dept_a).zfill(2))
+    b = DEPT_CENTER.get(str(dept_b).zfill(2))
+    if not a or not b:
+        return 9999.0
+    lat1, lon1 = radians(a[0]), radians(a[1])
+    lat2, lon2 = radians(b[0]), radians(b[1])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    x = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    return 6371.0 * 2 * atan2(sqrt(x), sqrt(1 - x))
+
+
 def find_similar_depts(
     r: pd.Series,
     master: pd.DataFrame,
     n: int = 3,
 ) -> list[dict]:
-    """Matching sur score, densité, part des 65+ et zone identique."""
+    """Suggère des départements proches, en priorité en zone favorable (contraste)."""
     dept_code = str(r.get("dept", "")).zfill(2)
-    zone      = r.get("zone_short", "")
-    score     = float(r.get("score_global", 50) or 50)
-    densite   = float(r.get("densite", 50) or 50)
-    pct_65    = float(r.get("pct_plus_65", 20) or 20)
-    region    = str(r.get("Code région", ""))
-    is_dom    = dept_code in {"971", "972", "973", "974", "976"}
+    zone = str(r.get("zone_short", ""))
+    score = float(r.get("score_global", 50) or 50)
+    region = str(r.get("Code région", ""))
+    is_dom = dept_code in {"971", "972", "973", "974", "976"}
+    dom_codes = {"971", "972", "973", "974", "976"}
 
-    candidates = master[
-        (master["dept"] != dept_code) &
-        (master["zone_short"] == zone)
-    ].copy()
-
+    candidates = master[master["dept"] != dept_code].copy()
     if not is_dom:
-        candidates = candidates[
-            ~candidates["dept"].isin({"971", "972", "973", "974", "976"})
-        ]
+        candidates = candidates[~candidates["dept"].isin(dom_codes)]
 
     if candidates.empty:
         return []
 
-    def _sim(row):
-        s_diff = abs(float(row.get("score_global", 50) or 50) - score) / 100
-        d_diff = abs(float(row.get("densite", 50) or 50) - densite) / max(densite, 1)
-        p_diff = abs(float(row.get("pct_plus_65", 20) or 20) - pct_65) / 100
-        bonus  = -0.1 if str(row.get("Code région", "")) == region else 0
-        return 0.40 * s_diff + 0.30 * min(d_diff, 1.0) + 0.30 * p_diff + bonus
+    favorable = candidates[candidates["zone_short"] == "Favorable"]
+    if not favorable.empty:
+        pool = favorable
+    elif zone == "Critique":
+        pool = candidates[candidates["zone_short"] != "Critique"]
+    else:
+        pool = candidates
 
-    candidates["_sim"] = candidates.apply(_sim, axis=1)
-    top = candidates.nsmallest(n, "_sim")
+    if pool.empty:
+        pool = candidates
+
+    def _rank(row: pd.Series) -> float:
+        other = str(row.get("dept", "")).zfill(2)
+        dist_km = _dept_distance_km(dept_code, other)
+        dist_score = min(dist_km / 400.0, 1.0)
+        row_zone = str(row.get("zone_short", ""))
+        row_score = float(row.get("score_global", 50) or 50)
+        zone_bonus = 0.0
+        if row_zone == "Favorable":
+            zone_bonus = -0.35
+        elif zone != row_zone:
+            zone_bonus = -0.12
+        contrast = min(abs(row_score - score) / 60.0, 1.0)
+        region_bonus = -0.18 if str(row.get("Code région", "")) == region else 0.0
+        return 0.55 * dist_score + zone_bonus + region_bonus - 0.18 * contrast
+
+    pool = pool.copy()
+    pool["_rank"] = pool.apply(_rank, axis=1)
+    top = pool.nsmallest(n, "_rank")
 
     results = []
     for _, row in top.iterrows():
         same_region = str(row.get("Code région", "")) == region
+        row_zone = str(row.get("zone_short", ""))
+        if row_zone == "Favorable" and same_region:
+            raison = "Zone favorable · Même région"
+        elif row_zone == "Favorable":
+            raison = "Zone favorable · Proche géographiquement"
+        elif same_region:
+            raison = "Même région · Profil contrasté"
+        else:
+            raison = "Territoire proche · Profil contrasté"
         results.append({
-            "dept":   row["dept"],
-            "nom":    row.get("Nom du département", ""),
-            "score":  row.get("score_global"),
-            "zone":   row.get("zone_short", ""),
-            "raison": "Même région · Profil similaire"
-                      if same_region else "Même zone · Profil similaire",
+            "dept": row["dept"],
+            "nom": row.get("Nom du département", ""),
+            "score": row.get("score_global"),
+            "zone": row_zone,
+            "raison": raison,
         })
     return results
 
@@ -1867,16 +1904,19 @@ def render_suggestions_comparaison(r: pd.Series, master: pd.DataFrame) -> None:
         st.info("Aucune suggestion disponible.")
         return
 
+    base_dept = str(r["dept"]).zfill(2)
     cols = st.columns(min(3, len(suggestions)))
     for i, sim in enumerate(suggestions[:3]):
         with cols[i]:
             score_val = sim["score"]
             score_str = f"{score_val:.0f}/100" if pd.notna(score_val) else "N/D"
-            zone_sug  = str(sim["zone"])
+            zone_sug = str(sim["zone"])
             badge_cls = {"Critique": "crit", "Intermédiaire": "inter",
                          "Favorable": "fav"}.get(zone_sug, "")
+            sim_dept = str(sim["dept"]).zfill(2)
+            fiche_href = internal_href("dept", dept_code=sim_dept)
             st.html(
-                '<div class="suggestion-card">'
+                f'<a href="{fiche_href}" target="_self" class="suggestion-card suggestion-card-link">'
                 f'<div class="suggestion-label">{sim["raison"]}</div>'
                 f'<div class="suggestion-name">{sim["nom"]}</div>'
                 f'<div class="suggestion-score">{score_str}'
@@ -1884,11 +1924,11 @@ def render_suggestions_comparaison(r: pd.Series, master: pd.DataFrame) -> None:
                 f'style="font-size:11px;padding:4px 10px;">'
                 f'{zone_sug}</span>'
                 '</div>'
-                '</div>'
+                '</a>'
             )
             if st.button(
-                "Voir la fiche →",
-                key=f"suggest_{r['dept']}_{sim['dept']}",
+                "Voir la comparaison",
+                key=f"suggest_{base_dept}_{sim_dept}",
                 use_container_width=True,
             ):
-                navigate("dept", dept_code=sim["dept"])
+                navigate_compare(base_dept, sim_dept)

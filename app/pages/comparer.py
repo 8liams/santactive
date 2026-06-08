@@ -119,6 +119,17 @@ def render(data: dict) -> None:
     if "comparer_territory_kind" not in st.session_state:
         st.session_state["comparer_territory_kind"] = "dept"
 
+    if "comparer_preselect" in st.session_state:
+        codes = st.session_state.pop("comparer_preselect")
+        st.session_state["comparer_territory_kind"] = "dept"
+        names: list[str] = []
+        for code in codes:
+            row = master[master["dept"] == str(code).zfill(2)]
+            if not row.empty:
+                names.append(str(row.iloc[0]["Nom du département"]))
+        if names:
+            st.session_state["comparer_selection_dept"] = names[:4]
+
     toggle_col1, toggle_col2, _ = st.columns([1.15, 1.15, 4.7])
     with toggle_col1:
         if st.button(
@@ -174,8 +185,8 @@ def render(data: dict) -> None:
             .sort_values("Nom du département")["Nom du département"]
             .tolist()
         )
-        default = []
-        if "compare_base" in st.session_state:
+        default = st.session_state.get("comparer_selection_dept", [])
+        if not default and "compare_base" in st.session_state:
             base = master[master["dept"] == st.session_state["compare_base"]]
             if not base.empty:
                 default = [base.iloc[0]["Nom du département"]]
