@@ -545,8 +545,8 @@ div[data-testid="stExpander"] > div {
 
 /* ─── Topbar + breadcrumb fiche ─────────────────────────────────────────── */
 .fiche-topbar {
-    padding: 16px 0;
-    margin-bottom: 8px;
+    padding: 8px 0 10px;
+    margin-bottom: 4px;
     border-bottom: 1px solid #E8E6DD;
 }
 .fiche-topbar .breadcrumb { font-size: 13px; color: #6B6B68; }
@@ -662,15 +662,37 @@ div[data-testid="stExpander"] > div {
 
 /* ─── Header fiche ───────────────────────────────────────────────────────── */
 .fiche-header {
-    padding: 40px 0 32px;
+    padding: 20px 0 16px;
     border-bottom: 1px solid #E8E6DD;
-    margin-bottom: 48px;
+    margin-bottom: 24px;
+}
+.fiche-header-tool {
+    padding: 8px 0 14px;
+    margin-bottom: 16px;
+}
+.fiche-header-tool .fiche-eyebrow {
+    margin-bottom: 8px;
+}
+.fiche-header-tool .fiche-title-row {
+    margin-bottom: 8px;
+}
+.fiche-header-tool .fiche-title {
+    font-size: clamp(30px, 3.5vw, 40px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.02em !important;
+}
+.fiche-header-lead {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #2B2B2B;
+    max-width: 720px;
+    margin: 0;
 }
 .fiche-eyebrow {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 .fiche-eyebrow .code {
     font-size: 10px;
@@ -691,12 +713,12 @@ div[data-testid="stExpander"] > div {
     justify-content: space-between;
     gap: 32px;
     flex-wrap: wrap;
-    margin-bottom: 28px;
+    margin-bottom: 16px;
 }
 .fiche-title {
     font-family: var(--serif) !important;
-    font-size: clamp(48px, 7vw, 88px) !important;
-    line-height: 0.9 !important;
+    font-size: clamp(40px, 5.5vw, 64px) !important;
+    line-height: 0.95 !important;
     letter-spacing: -0.03em !important;
     font-weight: 400 !important;
     color: #0A0A0A !important;
@@ -743,7 +765,7 @@ div[data-testid="stExpander"] > div {
 .fiche-meta-item .value .small { font-size: 13px; color: #6B6B68; margin-left: 2px; }
 
 /* ─── Section headers ────────────────────────────────────────────────────── */
-.section-header { margin: 64px 0 32px; }
+.section-header { margin: 40px 0 20px; }
 .section-eyebrow {
     font-size: 10px;
     letter-spacing: 0.22em;
@@ -1545,7 +1567,7 @@ div[data-testid="stRadio"] svg { display: none !important; }
 .comparer-level-hint {
     font-size: 14px;
     color: #6B6B68;
-    margin: 24px 0 0;
+    margin: 12px 0 0;
     line-height: 1.5;
 }
 .comparer-level-step {
@@ -1715,9 +1737,11 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
    DA v2 — Sant'active — Améliorations visuelles globales
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Section headers — trait rouge latéral ─────────────────────────────── */
-.section-header {
-    margin: 56px 0 28px;
+/* Première section (Enjeux, À propos…) : moins d'espace en haut */
+.stMainBlockContainer > div:first-child .section-header {
+    margin-top: 12px;
+}
+    margin: 32px 0 18px;
     padding-left: 16px;
     border-left: 3px solid #A51C30;
 }

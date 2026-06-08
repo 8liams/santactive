@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ..config import PALETTE, PLOTLY_TEMPLATE
-from ..components.nav import NavCrumb, render_breadcrumb
 from ..router import navigate
 
 # Médiane APL nationale (ANCT 2023) — même référence que l'accueil et les fiches dept.
@@ -87,13 +86,8 @@ def render(data: dict) -> None:
     master: pd.DataFrame = data["master"]
     regions_df = build_regions_comparison_df(master)
 
-    render_breadcrumb([
-        NavCrumb("Accueil", "home"),
-        NavCrumb("Comparaison"),
-    ], key_prefix="comparer_bc")
-
     st.markdown(
-        '<div class="fiche-header">'
+        '<div class="fiche-header fiche-header-tool">'
         '<div class="fiche-eyebrow">'
         '<span class="code">OUTIL</span>'
         '<span class="dot"></span>'
@@ -102,7 +96,7 @@ def render(data: dict) -> None:
         '<div class="fiche-title-row">'
         '<h1 class="fiche-title">Comparaison</h1>'
         '</div>'
-        '<p style="font-size:16px;color:#2B2B2B;max-width:720px;margin-top:16px;">'
+        '<p class="fiche-header-lead">'
         'Identifiez les écarts, les forces et les priorités entre plusieurs '
         'territoires en quelques secondes pour mieux agir.'
         '</p>'
