@@ -99,8 +99,8 @@ def render(data: dict) -> None:
         '</div>'
         '<div style="font-size:22px;font-weight:300;color:#0A1938;'
         'letter-spacing:-0.01em;margin-bottom:14px;line-height:1.2;">'
-        'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em>, '
-        'une r\u00e9gion ou une commune.'
+        'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em> '
+        'ou une r\u00e9gion.'
         '</div>'
         '</div>',
         unsafe_allow_html=True,
