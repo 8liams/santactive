@@ -1633,6 +1633,23 @@ div[data-testid="stRadio"] svg { display: none !important; }
     color: #6B6B68;
     font-variant-numeric: tabular-nums;
 }
+.commune-action-meth-note {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #6B6B68;
+    max-width: 820px;
+    margin: 16px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid #F0EDE5;
+}
+.commune-action-table .metric-col:last-child {
+    min-width: 220px;
+}
+@media screen and (max-width: 768px) {
+    .commune-action-table {
+        min-width: 640px;
+    }
+}
 .comparison-table-national .cell-national-ref {
     background: #F3F2EC;
     font-weight: 600;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import unicodedata
 
 import pandas as pd
@@ -495,9 +496,9 @@ SINGLE_COMMUNE_DEPTS = {"75"}  # extensible si d'autres identifiés
 
 def render_carte_communale(r: pd.Series, data: dict) -> None:
     from ..commune_opportunity import (
+        action_priority_legend_items,
         build_commune_code_lookup,
         build_commune_opportunity_df,
-        opportunity_legend_items,
         top_communes_for_action,
     )
     from ..components import render_commune_choropleth
@@ -506,11 +507,12 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">ZOOM TERRITORIAL</div>'
-        '<h2 class="section-title">Opportunité d\u2019<em>implantation.</em></h2>'
+        '<h2 class="section-title">Communes prioritaires pour une '
+        '<em>action de santé.</em></h2>'
         '<p class="section-lead">'
-        "Cette carte identifie les communes où une implantation ou une action "
-        "de santé pourrait avoir le plus d\u2019impact, en croisant "
-        "l\u2019éloignement aux soins et les conditions d\u2019implantation. "
+        "Cette carte identifie les communes où une action de santé pourrait "
+        "avoir le plus d\u2019impact, en croisant l\u2019éloignement aux soins, "
+        "la population concernée et les conditions de déploiement. "
         "Survolez une commune pour voir le détail."
         '</p>'
         '</div>',
@@ -585,18 +587,16 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         )
         return
 
-    comm_data["tt_score"] = comm_data["score_opportunite"].apply(
+    comm_data["tt_score"] = comm_data["score_action"].apply(
         lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "N/D"
+    )
+    comm_data["tt_pop"] = comm_data["population"].apply(
+        lambda x: f"{int(x):,}".replace(",", "\u202f") if pd.notna(x) else "N/D"
     )
     comm_data["tt_temps"] = comm_data["temps_acces"].apply(
         lambda x: f"{float(x):.1f} min" if pd.notna(x) else "N/D"
     )
-    comm_data["tt_prix"] = comm_data["prix_m2"].apply(
-        lambda x: f"{float(x):,.0f} €/m²".replace(",", "\u202f") if pd.notna(x) else "N/D"
-    )
-    comm_data["tt_niveau"] = comm_data["niveau"].replace(
-        "Faible intérêt d'implantation", "Faible intérêt"
-    )
+    comm_data["tt_niveau"] = comm_data["niveau"]
     matched = len(comm_data)
 
     etabs: pd.DataFrame = data["etabs"]
@@ -611,23 +611,23 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         dept_code=dept_code,
         data_by_commune=comm_data,
         value_col="value",
-        metric_label="Opportunité d'implantation",
+        metric_label="Priorité d'action locale",
         unit="",
-        colormap_name="opportunite",
+        colormap_name="action_priority",
         etabs_overlay=etabs_overlay,
         height=540,
-        key=f"commune_map_{dept_code}_opportunite",
+        key=f"commune_map_{dept_code}_action",
         discrete=True,
         color_col="color_hex",
-        tooltip_fields=["nom", "tt_score", "tt_temps", "tt_prix", "tt_niveau"],
+        tooltip_fields=["nom", "tt_score", "tt_pop", "tt_temps", "tt_niveau"],
         tooltip_aliases=[
             "Commune",
-            "Score d'opportunité",
+            "Score d'action",
+            "Population",
             "Temps d'accès",
-            "Prix médian",
-            "Niveau",
+            "Niveau de priorité",
         ],
-        legend_items=opportunity_legend_items(),
+        legend_items=action_priority_legend_items(),
     )
 
     score_uses_pop = (
@@ -635,80 +635,83 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         and bool(comm_data["score_inclut_population"].any())
     )
     st.caption(
-        f"{matched} communes analysées (croisement temps d'accès + prix immobilier"
-        + (", pondéré par la population INSEE" if score_uses_pop else "")
+        f"{matched} communes analysées · score d\u2019opportunité d\u2019action "
+        f"(besoin sanitaire, population concernée, faisabilité"
+        + ("" if score_uses_pop else ", population non disponible")
         + ") · survolez pour afficher le détail."
     )
 
-    _render_top_communes_opportunite(comm_data)
+    _render_top_communes_action(comm_data)
 
 
-def _render_top_communes_opportunite(comm_data: pd.DataFrame) -> None:
-    """Top 10 communes par score d'opportunité d'implantation."""
+def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
+    """Top 10 communes où une action pourrait avoir le plus d'impact."""
     from ..commune_opportunity import top_communes_for_action
 
     top = top_communes_for_action(comm_data, limit=10)
     if top.empty:
         return
 
-    pop_note = (
-        "Le score intègre la population communale (INSEE, 20\u202f% du calcul) : "
-        "une commune éloignée des soins mais très peu habitée ne remonte pas "
-        "au même rang qu\u2019une commune de taille comparable. "
-        "Les micro-communes sont exclues de ce classement."
-    )
-
     st.markdown(
         '<div class="section-header" style="margin-top:32px;">'
         '<div class="section-eyebrow">PRIORISATION LOCALE</div>'
-        '<h2 class="section-title">Top 10 communes à fort '
-        '<em>potentiel d\u2019action.</em></h2>'
-        f'<p class="section-lead">{pop_note}</p>'
+        '<h2 class="section-title">Top 10 des communes où une action '
+        'pourrait avoir le plus d\u2019<em>impact.</em></h2>'
+        '<p class="section-lead">'
+        "Synthèse d\u2019aide à la décision pour cibler une intervention "
+        "de santé à l\u2019échelle communale."
+        '</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
     rows_html = ""
     for i, row in top.iterrows():
-        score = row.get("score_opportunite")
-        temps = row.get("temps_acces")
-        prix = row.get("prix_m2")
         pop = row.get("population")
-        score_str = f"{float(score):.0f}/100" if pd.notna(score) else "N/D"
-        temps_str = f"{float(temps):.1f} min" if pd.notna(temps) else "N/D"
-        prix_str = (
-            f"{float(prix):,.0f} €/m²".replace(",", "\u202f") if pd.notna(prix) else "N/D"
-        )
+        impact = row.get("impact_population")
+        niveau = str(row.get("niveau", "N/D"))
+        facteur = html.escape(str(row.get("facteur_principal", "N/D")))
+        commune_name = html.escape(str(row.get("commune", "N/D")))
         pop_str = (
             f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "N/D"
+        )
+        impact_str = (
+            f"{int(impact):,}".replace(",", "\u202f") if pd.notna(impact) else "N/D"
         )
         rows_html += (
             f'<tr>'
             f'<td class="cell-rank">{i + 1}</td>'
-            f'<td class="metric-label">{row.get("commune", "N/D")}</td>'
-            f'<td>{score_str}</td>'
+            f'<td class="metric-label">{commune_name}</td>'
             f'<td>{pop_str}</td>'
-            f'<td>{temps_str}</td>'
-            f'<td>{prix_str}</td>'
+            f'<td>{impact_str}</td>'
+            f'<td>{niveau}</td>'
+            f'<td style="font-size:13px;color:#4A4A4A;line-height:1.45;">'
+            f'{facteur}</td>'
             f'</tr>'
         )
 
     st.markdown(
         '<div class="sa-tbl-scroll">'
-        '<table class="comparison-table-v2">'
+        '<table class="comparison-table-v2 commune-action-table">'
         '<thead>'
         '<tr>'
         '<th class="metric-col">Rang</th>'
         '<th class="metric-col">Commune</th>'
-        '<th class="metric-col">Score d\u2019opportunité</th>'
-        '<th class="metric-col">Population</th>'
-        '<th class="metric-col">Temps d\u2019accès</th>'
-        '<th class="metric-col">Prix médian</th>'
+        '<th class="metric-col">Population concernée</th>'
+        '<th class="metric-col">Impact potentiel</th>'
+        '<th class="metric-col">Niveau de priorité</th>'
+        '<th class="metric-col">Facteurs principaux</th>'
         '</tr>'
         '</thead>'
         f'<tbody>{rows_html}</tbody>'
         '</table>'
-        '</div>',
+        '</div>'
+        '<p class="commune-action-meth-note">'
+        "Le classement identifie les communes où une action pourrait avoir "
+        "le plus d\u2019impact au regard des données disponibles. "
+        "Il ne constitue pas une recommandation d\u2019implantation médicale "
+        "et doit être complété par l\u2019expertise des acteurs locaux."
+        "</p>",
         unsafe_allow_html=True,
     )
 
