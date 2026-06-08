@@ -2168,10 +2168,8 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
 }
 
 /* ─── Top navigation mobile — visible uniquement sur mobile ─────────────── */
-.sa-mnav-marker { display: none !important; }
-
 @media screen and (max-width: 768px) {
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) {
+    .st-key-sa_mobile_nav {
         display: flex !important;
         position: fixed !important;
         top: 0;
@@ -2186,17 +2184,17 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
         box-shadow: 0 2px 16px rgba(0,0,0,0.25);
         align-items: center;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) [data-testid="stHorizontalBlock"] {
+    .st-key-sa_mobile_nav [data-testid="stHorizontalBlock"] {
         width: 100%;
         gap: 0 !important;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) [data-testid="column"] {
+    .st-key-sa_mobile_nav [data-testid="column"] {
         padding: 0 !important;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) .stButton {
+    .st-key-sa_mobile_nav .stButton {
         width: 100%;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) .stButton > button {
+    .st-key-sa_mobile_nav .stButton > button {
         width: 100%;
         background: transparent !important;
         border: none !important;
@@ -2211,21 +2209,18 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
         border-radius: 6px !important;
         font-family: 'Marianne', 'Inter', sans-serif;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) .stButton > button:hover {
+    .st-key-sa_mobile_nav .stButton > button:hover {
         color: rgba(255,255,255,0.85) !important;
         background: transparent !important;
     }
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) .stButton > button[kind="primary"] {
+    .st-key-sa_mobile_nav .stButton > button[kind="primary"] {
         color: #FFFFFF !important;
         background: rgba(255,255,255,0.12) !important;
-    }
-    .block-container {
-        padding-top: calc(70px + env(safe-area-inset-top, 0px)) !important;
     }
 }
 
 @media screen and (min-width: 769px) {
-    .stApp div[data-testid="stVerticalBlock"]:has(.sa-mnav-marker) {
+    .st-key-sa_mobile_nav {
         display: none !important;
     }
 }

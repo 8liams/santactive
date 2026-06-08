@@ -91,17 +91,14 @@ def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
         ("methodologie", "Méthodo"),
         ("about", "À propos"),
     ]
-    st.markdown(
-        '<span class="sa-mnav-marker" aria-hidden="true"></span>',
-        unsafe_allow_html=True,
-    )
-    cols = st.columns(len(items), gap="small")
-    for col, (view, label) in zip(cols, items):
-        with col:
-            if st.button(
-                label,
-                key=f"{key_prefix}_{view}",
-                use_container_width=True,
-                type="primary" if view == current_view else "secondary",
-            ):
-                navigate(view)
+    with st.container(key="sa_mobile_nav"):
+        cols = st.columns(len(items), gap="small")
+        for col, (view, label) in zip(cols, items):
+            with col:
+                if st.button(
+                    label,
+                    key=f"{key_prefix}_{view}",
+                    use_container_width=True,
+                    type="primary" if view == current_view else "secondary",
+                ):
+                    navigate(view)
