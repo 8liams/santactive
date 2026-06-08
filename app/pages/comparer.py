@@ -89,7 +89,7 @@ def render(data: dict) -> None:
 
     render_breadcrumb([
         NavCrumb("Accueil", "home"),
-        NavCrumb("Comparer"),
+        NavCrumb("Comparaison"),
     ], key_prefix="comparer_bc")
 
     st.markdown(
@@ -100,11 +100,11 @@ def render(data: dict) -> None:
         '<span class="region">Analyse multi-territoriale</span>'
         '</div>'
         '<div class="fiche-title-row">'
-        '<h1 class="fiche-title">Comparer</h1>'
+        '<h1 class="fiche-title">Comparaison</h1>'
         '</div>'
         '<p style="font-size:16px;color:#2B2B2B;max-width:720px;margin-top:16px;">'
-        'Sélectionnez 2 à 4 départements ou régions pour les comparer '
-        'sur tous les indicateurs clés.'
+        'Identifiez les écarts, les forces et les priorités entre plusieurs '
+        'territoires en quelques secondes pour mieux agir.'
         '</p>'
         '</div>',
         unsafe_allow_html=True,
@@ -112,7 +112,15 @@ def render(data: dict) -> None:
 
     st.markdown(
         '<p class="comparer-level-hint">'
-        'Comparer des <strong>départements</strong> ou des <strong>régions</strong>'
+        'Comparer 2 à 4 <strong>départements</strong> ou '
+        '<strong>régions</strong> en fonction de leurs indicateurs clés.'
+        '</p>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<p class="comparer-level-hint" style="margin-top:12px;">'
+        'Choisissez votre niveau d&rsquo;analyse'
         '</p>',
         unsafe_allow_html=True,
     )
@@ -167,12 +175,12 @@ def render(data: dict) -> None:
             if not base.empty:
                 default = [base.iloc[0]["Nom du département"]]
 
-    label_plural = _territory_label(kind, plural=True)
     selected: list[str] = st.multiselect(
-        f"Choisir 2 à 4 {label_plural} à comparer",
+        "Sélectionnez les territoires à comparer",
         options=options,
         default=default,
         max_selections=4,
+        placeholder="ex : deux noms de départements",
         key=f"comparer_selection_{kind}",
     )
 
