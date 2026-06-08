@@ -11,6 +11,7 @@ from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
 from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
 from ..pdf_export import generate_department_pdf
+from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate
 
 
@@ -739,6 +740,20 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
 # 5. PLAN D'ACTION
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Affichage uniquement — mappe priority interne (1–3) vers libellés métier
+_RECO_NIVEAU: dict[int, tuple[str, str]] = {
+    1: ("Urgence forte", "p1"),
+    2: ("Prioritaire", "p2"),
+    3: ("Complémentaire", "p3"),
+}
+
+_RECO_METH_NOTE = (
+    "Ces recommandations sont générées à partir des caractéristiques du territoire. "
+    "Elles ne constituent pas un ordre de mise en œuvre et doivent être adaptées "
+    "au contexte local, aux moyens disponibles et aux acteurs mobilisables."
+)
+
+
 def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
     recos = _generate_recommendations(r, master, data)
     nb = len(recos)
@@ -746,21 +761,17 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
     if nb == 0:
         return
 
-    _titres = {1: "Un levier", 2: "Deux leviers", 3: "Trois leviers", 4: "Quatre leviers"}
-    titre   = _titres.get(nb, f"{nb} leviers")
-    suffixe = "prioritaire" if nb == 1 else "prioritaires"
-
     st.html(
         '<div class="section-header">'
         '<div class="section-eyebrow">PLAN D\'ACTION</div>'
-        f'<h2 class="section-title">{titre} <em>{suffixe}</em>.</h2>'
-        '<p class="section-lead">Recommandations générées à partir du croisement '
-        'des indicateurs. Chiffrées, localisées, hiérarchisées.</p>'
+        '<h2 class="section-title">Leviers d\'action <em>recommandés</em>.</h2>'
+        '<p class="section-lead">Pistes générées à partir du croisement des '
+        'indicateurs territoriaux. Chiffrées et localisées.</p>'
         '</div>'
     )
 
     if nb == 1:
-        _render_reco_card(recos[0], index=1)
+        _render_reco_card(recos[0], r, data)
     else:
         for i in range(0, nb, 2):
             c1, c2 = st.columns(2, gap="large")
@@ -768,7 +779,12 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
                 if i + j >= nb:
                     break
                 with col:
-                    _render_reco_card(recos[i + j], index=i + j + 1)
+                    _render_reco_card(recos[i + j], r, data)
+
+    st.markdown(
+        f'<p class="reco-meth-note">{_RECO_METH_NOTE}</p>',
+        unsafe_allow_html=True,
+    )
 
 
 def _generate_recommendations(
@@ -1137,18 +1153,11 @@ def _generate_recommendations(
     return recos[:4]
 
 
-def _render_reco_card(reco: dict, index: int) -> None:
-    """Affiche une carte de recommandation.
-
-    Le badge priorité est basé sur la position dans la liste (index, 1-based),
-    pas sur la valeur stockée dans reco['priority'].
-    """
-    if index == 1:
-        badge_label, badge_class = "Priorité 1", "p1"
-    elif index == 2:
-        badge_label, badge_class = "Priorité 2", "p2"
-    else:
-        badge_label, badge_class = f"Priorité {index}", "p3"
+def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
+    """Affiche une carte de recommandation (niveau = reco['priority'] interne)."""
+    prio = int(reco.get("priority", 3))
+    badge_label, badge_class = _RECO_NIVEAU.get(prio, _RECO_NIVEAU[3])
+    impact = project_levier_impact(reco, r, data)
 
     stats_html = "".join(
         f'<div class="reco-stat">'
@@ -1160,12 +1169,12 @@ def _render_reco_card(reco: dict, index: int) -> None:
     stats_block = f'<div class="reco-stats">{stats_html}</div>' if stats_html else ""
 
     st.html(
-        '<div class="reco-card">'
+        f'<div class="reco-card {badge_class}">'
         f'<span class="reco-priority {badge_class}">{badge_label}</span>'
-        f'<div class="reco-number">{index:02d} —</div>'
         f'<div class="reco-title">{reco["title"]}</div>'
         f'<div class="reco-prose">{reco["prose"]}</div>'
         f'{stats_block}'
+        f'{render_impact_html(impact)}'
         '</div>'
     )
 

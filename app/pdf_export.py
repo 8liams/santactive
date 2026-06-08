@@ -464,17 +464,18 @@ def generate_department_pdf(
 
     # ── ⑦ RECOMMANDATIONS ─────────────────────────────────────────────────────
     if recos:
-        _section_heading("Plan d'action recommandé", story)
+        _section_heading("Leviers d'action recommandés", story)
 
-        _prio_col_map = {
-            1: ROUGE_CRIT, "P1": ROUGE_CRIT,
-            2: AMBRE,      "P2": AMBRE,
-            3: BLEU_ROYAL, "P3": BLEU_ROYAL,
+        _prio_col_map = {1: ROUGE_CRIT, 2: AMBRE, 3: BLEU_ROYAL}
+        _prio_lbl_map = {
+            1: "Urgence forte",
+            2: "Prioritaire",
+            3: "Complémentaire",
         }
 
         for i, reco in enumerate(recos[:4], 1):
-            prio_raw  = reco.get("priority", i)
-            prio_lbl  = f"P{prio_raw}" if isinstance(prio_raw, int) else str(prio_raw)
+            prio_raw  = int(reco.get("priority", 3))
+            prio_lbl  = _prio_lbl_map.get(prio_raw, "Complémentaire")
             badge_col = _prio_col_map.get(prio_raw, BLEU_ROYAL)
             stats     = reco.get("stats", [])
 
@@ -517,12 +518,12 @@ def generate_department_pdf(
 
             reco_tbl = Table([[
                 Paragraph(
-                    f'<b><font size="12" color="#{_hex(badge_col)}">{prio_lbl}</font></b>',
-                    _s(f"rb{i}", fontName="Helvetica-Bold", fontSize=12,
-                       alignment=TA_CENTER, textColor=badge_col),
+                    f'<b><font size="8" color="#{_hex(badge_col)}">{prio_lbl}</font></b>',
+                    _s(f"rb{i}", fontName="Helvetica-Bold", fontSize=8,
+                       alignment=TA_CENTER, textColor=badge_col, leading=10),
                 ),
                 content,
-            ]], colWidths=[36, CONTENT_W - 36])
+            ]], colWidths=[78, CONTENT_W - 78])
             reco_tbl.setStyle(TableStyle([
                 ("BACKGROUND",    (0, 0), (-1, -1), BLANC),
                 ("TOPPADDING",    (0, 0), (-1, -1), 10),
@@ -536,6 +537,14 @@ def generate_department_pdf(
             ]))
             story.append(KeepTogether(reco_tbl))
             story.append(Spacer(1, 6))
+
+        story.append(Paragraph(
+            "Ces recommandations sont générées à partir des caractéristiques du territoire. "
+            "Elles ne constituent pas un ordre de mise en œuvre et doivent être adaptées "
+            "au contexte local, aux moyens disponibles et aux acteurs mobilisables.",
+            _s("reco_meth", fontSize=8, textColor=GRIS_TXT, leading=11, spaceBefore=4),
+        ))
+        story.append(Spacer(1, 12))
 
     # ── ⑧ TABLEAU COMPARATIF NATIONAL ────────────────────────────────────────
     _section_heading("Comparaison nationale", story)

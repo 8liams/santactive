@@ -385,7 +385,208 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
                 unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # 6. LIMITES ASSUMÉES
+    # 6. AIDE À LA DÉCISION TERRITORIALE
+    # ══════════════════════════════════════════════════════════════════════════
+
+    _section(
+        "AIDE À LA DÉCISION TERRITORIALE",
+        "Au-delà de la mesure, <em>orienter l'action.</em>",
+        lead=(
+            "Sant'active ne se limite plus à mesurer la fragilité d'un territoire. "
+            "L'outil vise à répondre à quatre questions complémentaires pour "
+            "l'aide à la décision publique et philanthropique."
+        ),
+    )
+
+    st.markdown("""
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px;">
+<div style="padding:14px 18px;background:white;border:1px solid #E8E6DD;border-radius:4px;border-left:3px solid #1A3D8F;">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;">Question 1</div>
+<div style="font-size:15px;font-weight:600;color:#0A1938;margin-top:6px;">Où agir ?</div>
+</div>
+<div style="padding:14px 18px;background:white;border:1px solid #E8E6DD;border-radius:4px;border-left:3px solid #1A3D8F;">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;">Question 2</div>
+<div style="font-size:15px;font-weight:600;color:#0A1938;margin-top:6px;">Pour quel public ?</div>
+</div>
+<div style="padding:14px 18px;background:white;border:1px solid #E8E6DD;border-radius:4px;border-left:3px solid #1A3D8F;">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;">Question 3</div>
+<div style="font-size:15px;font-weight:600;color:#0A1938;margin-top:6px;">Sur quelle problématique ?</div>
+</div>
+<div style="padding:14px 18px;background:white;border:1px solid #E8E6DD;border-radius:4px;border-left:3px solid #1A3D8F;">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;">Question 4</div>
+<div style="font-size:15px;font-weight:600;color:#0A1938;margin-top:6px;">Avec quel type d'action ?</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+    _prose(
+        "Cette logique est particulièrement pensée pour les ARS, les collectivités, "
+        "les fondations, les acteurs de prévention et les porteurs d'expérimentation.",
+        "L'objectif n'est pas d'identifier uniquement les territoires les plus fragiles, "
+        "mais les territoires où une action peut être <strong>utile, ciblée et "
+        "déployable</strong> — compte tenu du besoin observé et des relais existants.",
+        "La fiche région traduit cette logique en blocs de lecture synthétique. "
+        "Les calculs sous-jacents restent distincts du score Sant'active départemental "
+        "et ne modifient ni les pondérations ni le classement national.",
+    )
+
+    st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:32px 0;'>",
+                unsafe_allow_html=True)
+
+    # ── Priorisation des territoires ──────────────────────────────────────────
+
+    _section(
+        "PRIORISATION DES TERRITOIRES",
+        "Comment sont classés <em>les départements d'une région.</em>",
+    )
+    _prose(
+        "Sur la fiche région, un département n'est pas priorisé uniquement selon "
+        "son score Sant'active. La priorisation repose sur trois familles de "
+        "critères croisés, calculés à l'échelle intra-régionale à partir des "
+        "données déjà disponibles dans Sant'active.",
+        "Les niveaux affichés (priorité immédiate, priorité forte, priorité "
+        "secondaire, surveillance) sont des traductions lisibles d'une priorisation "
+        "interne. Ils ne remplacent pas le score global départemental.",
+    )
+
+    st.markdown("""
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px;">
+<div style="padding:18px 20px;background:white;border:1px solid #E8E6DD;border-radius:6px;border-top:3px solid #A51C30;">
+<div style="font-size:12px;font-weight:700;color:#A51C30;margin-bottom:10px;">1 · FRAGILITÉ TERRITORIALE</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.65;">
+Mesure la vulnérabilité sanitaire du département&nbsp;: accès aux soins, APL,
+densité médicale, offre hospitalière, vieillissement, isolement géographique.
+</div>
+</div>
+<div style="padding:18px 20px;background:white;border:1px solid #E8E6DD;border-radius:6px;border-top:3px solid #1A3D8F;">
+<div style="font-size:12px;font-weight:700;color:#1A3D8F;margin-bottom:10px;">2 · IMPACT POTENTIEL</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.65;">
+Estime l'ampleur du besoin&nbsp;: population concernée, volume de patients,
+poids des pathologies (CNAM), nombre de communes ou de publics touchés.
+</div>
+</div>
+<div style="padding:18px 20px;background:white;border:1px solid #E8E6DD;border-radius:6px;border-top:3px solid #1B5E3F;">
+<div style="font-size:12px;font-weight:700;color:#1B5E3F;margin-bottom:10px;">3 · FAISABILITÉ D'ACTION</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.65;">
+Évalue les conditions de déploiement&nbsp;: structures existantes, professionnels
+présents, relais de terrain, accessibilité, contexte foncier.
+</div>
+</div>
+</div>
+<div style="max-width:720px;padding:16px 20px;background:#F3F2EC;border-radius:6px;font-size:13px;color:#4B4B48;line-height:1.7;margin-bottom:32px;">
+<strong style="color:#0A1938;">Principe clé.</strong>
+Un territoire très fragile n'est pas automatiquement la première priorité si la
+capacité d'action locale est faible. La priorisation croise le besoin, le volume
+de population concernée et la faisabilité de déploiement — sans désigner
+mécaniquement le département au score le plus bas.
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:32px 0;'>",
+                unsafe_allow_html=True)
+
+    # ── Publics prioritaires ──────────────────────────────────────────────────
+
+    _section(
+        "PUBLICS PRIORITAIRES",
+        "Identifier <em>les populations concernées.</em>",
+    )
+    _prose(
+        "Les données CNAM (pathologies chroniques) et INSEE (structure d'âge) "
+        "permettent d'identifier, à l'échelle régionale, les publics les plus "
+        "concernés par un enjeu de santé.",
+        "Plusieurs profils peuvent ressortir selon les régions&nbsp;: seniors, "
+        "maladies cardiovasculaires, diabète, cancers, maladies respiratoires, "
+        "santé mentale, maladies neurologiques ou dégénératives.",
+        "Pour chaque axe, Sant'active indique — lorsque les données le permettent "
+        "— le volume estimé de patients ou de personnes concernées, les "
+        "départements les plus touchés et un niveau d'importance relatif à "
+        "l'échelle régionale. Ces profils varient d'une région à l'autre&nbsp;: "
+        "un même indicateur national peut masquer des priorités de public "
+        "différentes entre territoires.",
+    )
+
+    st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:32px 0;'>",
+                unsafe_allow_html=True)
+
+    # ── Leviers d'action ──────────────────────────────────────────────────────
+
+    _section(
+        "LEVIERS D'ACTION RECOMMANDÉS",
+        "Des réponses <em>adaptées au profil territorial.</em>",
+    )
+    _prose(
+        "Sant'active ne repose pas sur une logique unique de recrutement de "
+        "médecins. L'outil peut faire émerger plusieurs familles d'actions "
+        "cohérentes avec les indicateurs observés.",
+    )
+
+    st.markdown("""
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Prévention</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Dépistage</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Téléexpertise</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Télésuivi</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Coordination territoriale</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Consultations avancées</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Accompagnement des seniors</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Médiation en santé</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Actions mobiles</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Expérimentations locales</span>
+</div>
+""", unsafe_allow_html=True)
+
+    _prose(
+        "Ces leviers ne sont <strong>jamais affichés systématiquement</strong>. "
+        "Ils sont générés à partir du profil réel observé sur le territoire "
+        "(APL, délais, pathologies CNAM, part des seniors, professionnels et "
+        "établissements présents, isolement, communes éloignées des soins).",
+        "Un levier n'est proposé que lorsqu'il est cohérent avec les indicateurs "
+        "disponibles. Deux régions aux profils différents n'affichent donc pas "
+        "forcément les mêmes recommandations.",
+    )
+
+    st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:32px 0;'>",
+                unsafe_allow_html=True)
+
+    # ── Logique de recommandation ─────────────────────────────────────────────
+
+    _section(
+        "LOGIQUE DE RECOMMANDATION",
+        "De la tension observée <em>à l'action proposée.</em>",
+    )
+
+    st.markdown("""
+<div style="max-width:520px;margin:0 auto 24px;padding:24px;background:white;border:1px solid #E8E6DD;border-radius:6px;">
+<div style="padding:14px 16px;background:#FEF3F3;border-left:3px solid #A51C30;border-radius:4px;margin-bottom:12px;">
+<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">Tension observée</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.5;">Ex.&nbsp;: APL faible, délais élevés, prévalence chronique importante</div>
+</div>
+<div style="text-align:center;color:#C4C2B8;font-size:18px;margin:8px 0;">↓</div>
+<div style="padding:14px 16px;background:#EEF2FA;border-left:3px solid #1A3D8F;border-radius:4px;margin-bottom:12px;">
+<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">Population concernée</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.5;">Ex.&nbsp;: seniors, patients chroniques, publics en attente de spécialistes</div>
+</div>
+<div style="text-align:center;color:#C4C2B8;font-size:18px;margin:8px 0;">↓</div>
+<div style="padding:14px 16px;background:#F0F7F3;border-left:3px solid #1B5E3F;border-radius:4px;">
+<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">Type d'action recommandé</div>
+<div style="font-size:13px;color:#4B4B48;line-height:1.5;">Ex.&nbsp;: téléexpertise, prévention ciblée, coordination de parcours</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+    _prose(
+        "Sant'active ne cherche pas à prédire l'impact futur d'une politique "
+        "publique. L'outil vise à produire des <strong>pistes d'intervention "
+        "cohérentes</strong> avec les données observées, afin d'éclairer le "
+        "diagnostic territorial avant toute décision d'engagement.",
+    )
+
+    st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:40px 0;'>",
+                unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 7. LIMITES ASSUMÉES
     # ══════════════════════════════════════════════════════════════════════════
 
     _section(
@@ -445,6 +646,14 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
             "indicateurs agrégés. Elles ne constituent pas une évaluation de politique "
             "publique et ne doivent pas être utilisées seules pour allouer des "
             "ressources. Elles visent à orienter le diagnostic, pas à le remplacer.",
+        ),
+        (
+            "07",
+            "Priorités territoriales et leviers recommandés",
+            "Les priorités territoriales et leviers recommandés constituent des "
+            "aides à la décision et non des prescriptions. Ils reposent sur des règles "
+            "transparentes construites à partir des données disponibles et ne "
+            "remplacent pas l'expertise des acteurs locaux.",
         ),
     ]
 

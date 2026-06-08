@@ -192,7 +192,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     INDICATORS = [
         ("score_global",       "Score global",   "score", False),
         ("apl_median_dept",    "APL",            "score", False),
-        ("temps_acces_median", "Temps d'accès",  "temps", True),
+        ("temps_acces_median", "Temps d'accès",  "temps", False),
         ("med_gen_pour_100k",  "Médecins /100k", "score", False),
         ("prix_m2_moyen",      "Prix immo",      "prix",  False),
         ("pct_plus_65",        "Part 65+",       "age",   False),

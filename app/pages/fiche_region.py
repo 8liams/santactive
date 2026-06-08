@@ -5,6 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from ..action_impact import (
+    project_levier_amplitude_region,
+    render_amplitude_region_html,
+)
 from ..components import render_national_choropleth
 from ..region_pilotage import (
     _patho_metrics,
@@ -64,7 +68,7 @@ def render(data: dict) -> None:
     render_hero(region_depts, region_name, summary, publics)
     render_ou_agir(priorities, region_depts, data)
     render_pour_qui(publics)
-    render_comment_agir(leviers)
+    render_comment_agir(leviers, region_depts, data, region_name)
     render_donnees_detaillees(
         region_depts, region_name, data, delais_region, priorities
     )
@@ -382,7 +386,12 @@ def render_pour_qui(publics: list[dict]) -> None:
 
 # ── Bloc 4 — Comment agir ? ───────────────────────────────────────────────────
 
-def render_comment_agir(leviers: list[dict]) -> None:
+def render_comment_agir(
+    leviers: list[dict],
+    region_depts: pd.DataFrame,
+    data: dict,
+    region_name: str,
+) -> None:
     st.markdown(
         '<div class="section-header" style="margin-top:56px;">'
         '<div class="section-eyebrow">COMMENT AGIR</div>'
@@ -397,6 +406,9 @@ def render_comment_agir(leviers: list[dict]) -> None:
 
     for i, lev in enumerate(leviers[:3], 1):
         depts_str = ", ".join(lev.get("depts", [])) or "n.d."
+        amplitude = project_levier_amplitude_region(
+            lev, region_depts, data, region_name
+        )
         st.markdown(
             f'<div class="reco-card p{i}">'
             f'<div class="reco-title">{lev["intitule"].capitalize()}</div>'
@@ -405,6 +417,7 @@ def render_comment_agir(leviers: list[dict]) -> None:
             f'<strong>Public\u202f:</strong> {lev["public_cible"]}<br>'
             f'<strong>Territoires\u202f:</strong> {depts_str}'
             f'</div>'
+            f'{render_amplitude_region_html(amplitude)}'
             f'</div>',
             unsafe_allow_html=True,
         )
