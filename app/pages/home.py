@@ -92,13 +92,9 @@ def render(data: dict) -> None:
 
     # ── LABEL + SEARCHBOX LIVE ────────────────────────────────────────────────
     st.markdown(
-        '<div style="margin:48px 0 6px;">'
-        '<div style="font-size:11px;font-weight:700;letter-spacing:0.12em;'
-        'text-transform:uppercase;color:#9C9A92;margin-bottom:4px;">'
-        'EXPLORER UN TERRITOIRE'
-        '</div>'
-        '<div style="font-size:22px;font-weight:300;color:#0A1938;'
-        'letter-spacing:-0.01em;margin-bottom:14px;line-height:1.2;">'
+        '<div class="home-search-intro">'
+        '<div class="home-search-eyebrow">EXPLORER UN TERRITOIRE</div>'
+        '<div class="home-search-title">'
         'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em> '
         'ou une r\u00e9gion.'
         '</div>'
@@ -124,48 +120,12 @@ def render(data: dict) -> None:
         elif level == "commune":
             navigate("commune", commune_code=code)
 
-    # ── SUGGESTIONS + CARTE + KPIs ───────────────────────────────────────────
-    _render_quick_suggestions(master)
-
+    # ── CARTE + KPIs ───────────────────────────────────────────────────────────
     col_map, col_kpi = st.columns([1.6, 1], gap="large")
     with col_map:
         _render_national_map(master, geojson)
     with col_kpi:
         _render_national_kpis(data)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# SUGGESTIONS RAPIDES
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _render_quick_suggestions(master: pd.DataFrame) -> None:
-    if "score_global" not in master.columns:
-        return
-
-    st.markdown(
-        '<div class="suggestions-label">Suggestions · zones critiques</div>',
-        unsafe_allow_html=True,
-    )
-
-    top_crit = (
-        master.dropna(subset=["score_global", "Nom du département"])
-        .sort_values("score_global")
-        .head(4)
-    )
-
-    cols = st.columns(min(4, len(top_crit)))
-    for i, (_, row) in enumerate(top_crit.iterrows()):
-        with cols[i]:
-            score_val = row.get("score_global", 0)
-            dept_name = row.get("Nom du département", "")
-            dept_code = row.get("dept", "")
-            if st.button(
-                f"⚠ {dept_name}",
-                key=f"sugg_{dept_code}",
-                help=f"Zone critique · Score {score_val:.0f}/100",
-                use_container_width=True,
-            ):
-                navigate("dept", dept_code=dept_code)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

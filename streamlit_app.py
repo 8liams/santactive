@@ -89,7 +89,7 @@ header[data-testid="stHeader"] {
 /* ─── RESTE ──────────────────────────────────────────────────────────────── */
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
-.block-container { padding-top: 1rem !important; max-width: 100% !important; }
+.block-container { padding-top: 0.5rem !important; max-width: 100% !important; }
 </style>
 """, unsafe_allow_html=True)
 

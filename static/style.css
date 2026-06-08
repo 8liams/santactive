@@ -325,38 +325,58 @@ div[data-testid="stExpander"] > div {
 
 /* ─── HOME HERO ──────────────────────────────────────────────────────────── */
 .home-hero {
-    padding: 56px 0 32px;
+    padding: 24px 0 18px;
     border-bottom: 1px solid #E8E6DD;
-    margin-bottom: 48px;
+    margin-bottom: 24px;
 }
 .hero-eyebrow {
-    font-size: 11px;
-    letter-spacing: 0.22em;
+    font-size: 10px;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: #1A3D8F;
     font-weight: 500;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 .hero-title {
     font-family: var(--serif) !important;
-    font-size: 68px !important;
-    line-height: 0.98 !important;
+    font-size: 46px !important;
+    line-height: 1.05 !important;
     letter-spacing: -0.02em !important;
     font-weight: 400 !important;
     color: #0A0A0A !important;
-    margin-bottom: 24px !important;
-    max-width: 900px;
+    margin-bottom: 14px !important;
+    max-width: 820px;
 }
 .hero-title em {
     font-style: italic;
     color: #1A3D8F;
 }
 .hero-lead {
-    font-size: 18px;
-    line-height: 1.55;
+    font-size: 15px;
+    line-height: 1.5;
     color: #2B2B2B;
-    max-width: 620px;
-    margin-bottom: 32px;
+    max-width: 580px;
+    margin-bottom: 0;
+}
+
+.home-search-intro {
+    margin: 0 0 8px;
+}
+.home-search-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #9C9A92;
+    margin-bottom: 4px;
+}
+.home-search-title {
+    font-size: 19px;
+    font-weight: 300;
+    color: #0A1938;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+    line-height: 1.25;
 }
 
 /* ─── HOME SEARCH ────────────────────────────────────────────────────────── */
@@ -386,14 +406,6 @@ div[data-testid="stExpander"] > div {
 .search-results .stButton > button:hover {
     border-color: #1A3D8F !important;
     background: #F3F6FC !important;
-}
-.suggestions-label {
-    font-size: 10px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: #6B6B68;
-    font-weight: 500;
-    margin: 24px 0 12px;
 }
 
 /* ─── HOME MAP ───────────────────────────────────────────────────────────── */
@@ -2114,9 +2126,10 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
     .sa-tip-body  { color: rgba(255,255,255,0.85) !important; }
 
     /* ── Hero ────────────────────────────────────────────────────────────── */
-    .hero-title    { font-size: clamp(28px, 8vw, 44px) !important; line-height: 1.05 !important; }
+    .hero-title    { font-size: clamp(24px, 7vw, 36px) !important; line-height: 1.08 !important; }
+    .hero-lead     { font-size: 14px !important; }
     .hero-subtitle { font-size: 13px !important; }
-    .home-hero     { padding: 24px 0 16px !important; }
+    .home-hero     { padding: 16px 0 12px !important; margin-bottom: 16px !important; }
 
     /* ── Titres de section ───────────────────────────────────────────────── */
     .section-title    { font-size: clamp(18px, 5vw, 26px) !important; }
