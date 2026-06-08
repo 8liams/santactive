@@ -114,14 +114,11 @@ def render(data: dict) -> None:
         '<p class="comparer-level-hint">'
         'Comparer 2 à 4 <strong>départements</strong> ou '
         '<strong>régions</strong> en fonction de leurs indicateurs clés.'
-        '</p>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<p class="comparer-level-hint" style="margin-top:12px;">'
+        '</p>'
+        '<p class="comparer-level-hint comparer-level-step">'
         'Choisissez votre niveau d&rsquo;analyse'
-        '</p>',
+        '</p>'
+        '<span class="comparer-toggle-anchor" aria-hidden="true"></span>',
         unsafe_allow_html=True,
     )
 
@@ -150,6 +147,20 @@ def render(data: dict) -> None:
 
     is_region = st.session_state["comparer_territory_kind"] == "region"
     kind = "region" if is_region else "dept"
+    mode_name = "Régions" if is_region else "Départements"
+    mode_desc = (
+        "Indicateurs agrégés à l'échelle régionale (18 régions)."
+        if is_region
+        else "Indicateurs à l'échelle départementale (101 départements)."
+    )
+    st.markdown(
+        f'<div class="comparer-mode-banner comparer-mode-{kind}">'
+        f'<span class="comparer-mode-kicker">Niveau actif</span>'
+        f'<strong class="comparer-mode-name">{mode_name}</strong>'
+        f'<span class="comparer-mode-desc">{mode_desc}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     if is_region:
         source_df = regions_df
@@ -175,12 +186,17 @@ def render(data: dict) -> None:
             if not base.empty:
                 default = [base.iloc[0]["Nom du département"]]
 
+    placeholder = (
+        "Ex : Bretagne, Occitanie"
+        if is_region
+        else "Ex : Ain, Aisne"
+    )
     selected: list[str] = st.multiselect(
-        "Sélectionnez les territoires à comparer",
+        f"Sélectionnez 2 à 4 {_territory_label(kind, plural=True)}",
         options=options,
         default=default,
         max_selections=4,
-        placeholder="ex : deux noms de départements",
+        placeholder=placeholder,
         key=f"comparer_selection_{kind}",
     )
 

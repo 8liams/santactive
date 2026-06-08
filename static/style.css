@@ -1545,21 +1545,28 @@ div[data-testid="stRadio"] svg { display: none !important; }
 .comparer-level-hint {
     font-size: 14px;
     color: #6B6B68;
-    margin: 24px 0 14px;
+    margin: 24px 0 0;
     line-height: 1.5;
+}
+.comparer-level-step {
+    margin-top: 12px !important;
+    margin-bottom: 14px !important;
 }
 .comparer-level-hint strong {
     color: #2B2B2B;
     font-weight: 600;
 }
-/* Boutons rectangulaires (style site), pas pills — cible la rangée sous le hint */
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+.comparer-toggle-anchor {
+    display: none !important;
+}
+/* Boutons Départements / Régions */
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] {
     gap: 16px !important;
-    margin-bottom: 20px !important;
+    margin-bottom: 12px !important;
     max-width: 440px;
 }
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] .stButton > button {
     border-radius: 4px !important;
     font-family: Marianne, Inter, sans-serif !important;
@@ -1569,27 +1576,68 @@ div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
     min-height: 42px !important;
     transition: background 0.15s ease, border-color 0.15s ease !important;
 }
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] .stButton > button[kind="primary"] {
     background: #1A3D8F !important;
     color: #FFFFFF !important;
     border: none !important;
 }
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] .stButton > button[kind="primary"]:hover {
     background: #2E6BE6 !important;
 }
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"] {
     background: #FFFFFF !important;
     color: #2B2B2B !important;
     border: 1.5px solid #D8D6CE !important;
 }
-div[data-testid="stVerticalBlock"]:has(.comparer-level-hint)
+div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     + div[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"]:hover {
     border-color: #1A3D8F !important;
     color: #1A3D8F !important;
     background: #F0F3FA !important;
+}
+
+/* Bandeau niveau actif (départements / régions) */
+.comparer-mode-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 14px;
+    max-width: 640px;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    border-left: 3px solid #1A3D8F;
+    background: #F0F3FA;
+}
+.comparer-mode-banner.comparer-mode-region {
+    border-left-color: #A51C30;
+    background: #FEF3F3;
+}
+.comparer-mode-kicker {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6B6B68;
+}
+.comparer-mode-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0A1938;
+}
+.comparer-mode-desc {
+    font-size: 13px;
+    color: #4B4B48;
+    flex: 1 1 100%;
+    line-height: 1.45;
+}
+@media screen and (min-width: 640px) {
+    .comparer-mode-desc {
+        flex: 1 1 auto;
+    }
 }
 
 /* ─── KPI card (fiche commune contexte départemental) ─────────────────────── */
