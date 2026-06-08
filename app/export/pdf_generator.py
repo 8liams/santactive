@@ -14,7 +14,6 @@ from datetime import date
 import pandas as pd
 
 from ..config import PALETTE
-from ..scoring import fmt_score_affichage
 
 
 # ─── Utilitaires ──────────────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ def _generate_weasyprint(dept_row, gauge_fig, radar_fig) -> bytes:
 
         <div class="section">
             <h2>Synthèse</h2>
-            <p>Score global : <b>{fmt_score_affichage(dept_row.get('score_global'))}/100</b>
+            <p>Score global : <b>{_safe(dept_row.get('score_global'))}/100</b>
                — Zone <b>{dept_row.get('zone_short', '—')}</b></p>
             <img src="data:image/png;base64,{gauge_b64}" />
         </div>
@@ -190,7 +189,7 @@ def _generate_reportlab(dept_row, gauge_fig, radar_fig) -> bytes:
 
     # Synthèse
     story.append(Paragraph("Synthèse", s_h2))
-    score_val = fmt_score_affichage(dept_row.get("score_global"))
+    score_val = _safe(dept_row.get("score_global"))
     zone_val  = dept_row.get("zone_short", "—")
     story.append(Paragraph(
         f"Score global : <b>{score_val}/100</b> — Zone <b>{zone_val}</b>", s_body))

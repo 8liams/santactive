@@ -88,45 +88,31 @@ def gauge_investissement(row) -> float:
     return 100 - float(sg)
 
 
-def score_affichage(value) -> float | None:
-    """Convertit un score interne en score affiché (100 = fragile, 0 = favorable).
+def rang_affichage(rang, total) -> int | None:
+    """Convertit le rang national interne en indice de fragilité affiché.
 
-    Les calculs métier conservent le score interne ; cette fonction ne sert
+    Formule : total − rang + 1 (100 = plus fragile, 1 = plus favorable).
+    Les calculs métier conservent rang_national ; cette fonction ne sert
     qu'à la présentation utilisateur.
     """
-    if value is None:
+    if rang is None or total is None:
         return None
     try:
-        v = float(value)
-        if pd.isna(v):
+        r = int(rang)
+        t = int(total)
+        if pd.isna(r) or pd.isna(t) or t <= 0 or r <= 0:
             return None
-        return round(100.0 - v, 1)
+        return t - r + 1
     except (TypeError, ValueError):
         return None
 
 
-def fmt_score_affichage(value, decimals: int = 1) -> str:
-    """Formate un score interne pour affichage utilisateur."""
-    d = score_affichage(value)
+def fmt_rang_affichage(rang, total) -> str:
+    """Formate l'indice de fragilité nationale pour affichage utilisateur."""
+    d = rang_affichage(rang, total)
     if d is None:
         return "N/D"
-    if decimals == 0:
-        return f"{int(round(d))}"
-    return f"{d:.{decimals}f}"
-
-
-def invert_score_text(text: str) -> str:
-    """Inverse les valeurs X/100 dans un texte (affichage uniquement)."""
-    import re
-
-    def _repl(match: re.Match) -> str:
-        try:
-            internal = float(match.group(1))
-            return f"{fmt_score_affichage(internal, decimals=0)}/100"
-        except (TypeError, ValueError):
-            return match.group(0)
-
-    return re.sub(r"(\d+(?:\.\d+)?)/100", _repl, str(text))
+    return str(d)
 
 
 # ── Calcul principal ──────────────────────────────────────────────────────────

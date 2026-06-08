@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from .scoring import fmt_score_affichage, invert_score_text
+from .scoring import fmt_rang_affichage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -203,8 +203,9 @@ def generate_department_pdf(
     # ── ③ SCORE GLOBAL + ZONE ─────────────────────────────────────────────────
     ranked    = master.dropna(subset=["score_global"]).sort_values("score_global")
     rang      = int((ranked["dept"] == r["dept"]).cumsum().max()) if score else 0
-    score_str = fmt_score_affichage(score)
     total     = len(ranked)
+    score_str = _fmt(score, "{:.1f}")
+    frag_str  = fmt_rang_affichage(rang, total) if rang else "N/D"
 
     score_block = Table([[
         Paragraph(
@@ -224,7 +225,8 @@ def generate_department_pdf(
                    textColor=colors.HexColor("#444444")),
             ),
             Paragraph(
-                f'<font size="9" color="#999999">Rang national : {rang} / {total}</font>',
+                f'<font size="9" color="#999999">Indice de fragilité nationale : '
+                f'{frag_str} / {total}</font>',
                 _s("rang", fontName="Helvetica", fontSize=9, alignment=TA_RIGHT, textColor=GRIS_SEC),
             ),
         ],
@@ -467,15 +469,6 @@ def generate_department_pdf(
     if recos:
         _section_heading("Leviers d'action recommandés", story)
 
-        def _display_stat(val: str, lbl: str) -> str:
-            if "score" in lbl.lower() and "/100" in str(val):
-                try:
-                    internal = float(str(val).replace("/100", "").strip())
-                    return f"{fmt_score_affichage(internal, decimals=0)}/100"
-                except (TypeError, ValueError):
-                    pass
-            return str(val)
-
         for i, reco in enumerate(recos[:4], 1):
             stats     = reco.get("stats", [])
 
@@ -486,7 +479,7 @@ def generate_department_pdf(
                        textColor=BLEU_NUIT, spaceAfter=4),
                 ),
                 Paragraph(
-                    invert_score_text(reco.get("prose", "")),
+                    reco.get("prose", ""),
                     _s(f"rp{i}", fontSize=9, textColor=GRIS_TXT, leading=13),
                 ),
             ]
@@ -495,8 +488,7 @@ def generate_department_pdf(
                 stat_items = []
                 for val, lbl in stats[:3]:
                     stat_items.append(Paragraph(
-                        f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">'
-                        f'{_display_stat(val, lbl)}</font></b>'
+                        f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">{val}</font></b>'
                         f'<br/><font size="8" color="#666666">{lbl}</font>',
                         _s(f"rs{i}{val[:2]}", fontName="Helvetica-Bold", fontSize=14,
                            textColor=BLEU_NUIT, alignment=TA_CENTER, leading=18),
@@ -573,8 +565,7 @@ def generate_department_pdf(
         ("APL médecins gén.",      _fmt(apl, "{:.2f}"),    _fmt(apl_nat, "{:.2f}"),    True),
         ("Temps d'accès (min)",    _fmt(temps, "{:.0f}"),   _fmt(temp_nat, "{:.0f}"),   False),
         ("Médecins gén. / 100k",   _fmt(med_gen, "{:.0f}"), _fmt(med_nat, "{:.0f}"),    True),
-        ("Score global / 100",     fmt_score_affichage(score),
-         fmt_score_affichage(score_med) if score_med is not None else "—", False),
+        ("Score global / 100",     _fmt(score, "{:.1f}"),   _fmt(score_med, "{:.1f}"),  True),
     ]:
         try:
             ecart_str = _ecart(dept_v, nat_v, higher)

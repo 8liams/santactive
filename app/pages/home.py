@@ -7,7 +7,6 @@ import streamlit as st
 from streamlit_searchbox import st_searchbox
 
 from ..config import PALETTE
-from ..scoring import fmt_score_affichage
 from ..search import SearchResult, search_territory
 from ..router import navigate
 from ..components.tooltip import info_tooltip
@@ -163,7 +162,7 @@ def _render_quick_suggestions(master: pd.DataFrame) -> None:
             if st.button(
                 f"⚠ {dept_name}",
                 key=f"sugg_{dept_code}",
-                help=f"Zone critique · Score {fmt_score_affichage(score_val, decimals=0)}/100",
+                help=f"Zone critique · Score {score_val:.0f}/100",
                 use_container_width=True,
             ):
                 navigate("dept", dept_code=dept_code)

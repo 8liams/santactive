@@ -7,7 +7,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ..config import PALETTE, PLOTLY_TEMPLATE
-from ..scoring import fmt_score_affichage
 from ..router import navigate
 
 
@@ -119,11 +118,7 @@ def render(data: dict) -> None:
             else:
                 is_best = abs(v - best_val) < 1e-9
                 klass = "cell-best" if is_best else ""
-                if col == "score_global":
-                    disp = fmt_score_affichage(v)
-                    cells += f'<td class="{klass}">{disp}{unit}</td>'
-                else:
-                    cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
+                cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
         rows_html += f'<tr><td class="metric-label">{label}</td>{cells}</tr>'
 
     st.markdown(

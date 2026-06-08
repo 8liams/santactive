@@ -37,8 +37,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "<br>• Établissements (30 %) : densité hôpitaux FINESS /100k"
             "<br><br>"
             "Chaque dimension est normalisée en rang percentile national "
-            "(méthode DREES). Le score 50 correspond à la médiane nationale. "
-            "100 indique une situation très fragile, 0 une situation très favorable."
+            "(méthode DREES). Le score 50 correspond à la médiane nationale."
             "<br><br>"
             "<strong>Source :</strong> calcul Sant'active · données "
             "RPPS janv. 2026, FINESS mars 2026, ANCT 2023"
@@ -155,15 +154,17 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         ),
     },
     "rang_national": {
-        "title": "Rang national",
+        "title": "Indice de fragilité nationale",
         "body": (
-            "Position du département parmi les 101 départements français "
-            "classés par score global croissant. "
-            "Rang 1 = situation la plus dégradée. "
-            "Rang 101 = situation la plus favorable."
+            "Position du département sur l'échelle de fragilité territoriale, "
+            "parmi les départements classés par score global Sant'active. "
+            "100 = situation la plus dégradée du pays. "
+            "1 = situation la plus favorable."
             "<br><br>"
-            "Le rang dépend directement du score global Sant'active "
-            "et évolue si de nouvelles données sont intégrées."
+            "Calculé à partir du rang national interne "
+            "(total − rang + 1), sans modifier le score global."
+            "<br><br>"
+            "L'indice évolue si de nouvelles données sont intégrées."
         ),
     },
     "densite": {

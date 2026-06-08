@@ -10,7 +10,6 @@ from ..action_impact import (
     render_amplitude_region_html,
 )
 from ..components import render_national_choropleth
-from ..scoring import fmt_score_affichage
 from ..region_pilotage import (
     _patho_metrics,
     build_territoire_card,
@@ -519,14 +518,14 @@ def render_diagnostic_region(region_depts: pd.DataFrame, region_name: str) -> No
     if nb_crit > 0:
         phrase = (
             f"{nb_crit} département{'s' if nb_crit > 1 else ''} en zone critique. "
-            f"{worst['Nom du département']} ({fmt_score_affichage(worst['score_global'])}/100) "
-            f"— {best['Nom du département']} ({fmt_score_affichage(best['score_global'])}/100)."
+            f"{worst['Nom du département']} ({worst['score_global']:.1f}/100) "
+            f"— {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
     else:
         phrase = (
             f"Situation homogène. "
-            f"{worst['Nom du département']} ({fmt_score_affichage(worst['score_global'])}/100) "
-            f"— {best['Nom du département']} ({fmt_score_affichage(best['score_global'])}/100)."
+            f"{worst['Nom du département']} ({worst['score_global']:.1f}/100) "
+            f"— {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
 
     st.markdown(
@@ -606,7 +605,7 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
     for i, (_, d) in enumerate(sorted_depts.iterrows(), 1):
         zone = d.get("zone_short", "\u2014")
         score = d.get("score_global")
-        score_str = fmt_score_affichage(score) if pd.notna(score) else "\u2014"
+        score_str = f"{score:.1f}" if pd.notna(score) else "\u2014"
         pop = d.get("population_num", 0)
         pop_str = f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "\u2014"
         dept_code = d["dept"]

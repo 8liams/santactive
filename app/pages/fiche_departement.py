@@ -13,7 +13,7 @@ from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate
-from ..scoring import fmt_score_affichage, invert_score_text, score_affichage
+from ..scoring import fmt_rang_affichage
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -64,8 +64,10 @@ def render_share_buttons(r: pd.Series) -> None:
     etabs      = r.get("structures_pour_100k")
     prix       = r.get("prix_m2_moyen")
 
-    score_str  = f"{fmt_score_affichage(score)}/100" if score and pd.notna(score) else "N/D"
-    rang_str   = f"{int(rang)}/101"        if rang  and pd.notna(rang)  else "N/D"
+    score_str  = f"{float(score):.1f}/100" if score and pd.notna(score) else "N/D"
+    nb_classes = int(r.get("nb_classes", 101) or 101)
+    rang_aff   = fmt_rang_affichage(rang, nb_classes) if rang and pd.notna(rang) else "N/D"
+    rang_str   = f"{rang_aff}/{nb_classes}" if rang_aff != "N/D" else "N/D"
     apl_str    = f"{float(apl):.1f}"       if apl   and pd.notna(apl)   else "N/D"
     desert_str = "Oui, désert médical officiel (APL < 2.5)" if apl and float(apl) < 2.5 else "Non"
 
@@ -83,7 +85,7 @@ INDICATEURS CLÉS — {dept_nom.upper()}
 ═══════════════════════════════════════
 
 Score global Sant'active : {score_str}
-Rang national            : {rang_str} (rang 1 = situation la plus dégradée)
+Indice de fragilité nationale : {rang_str} (100 = situation la plus dégradée)
 Zone                     : {zone}
 
 APL (accessibilité médecins) : {apl_str} consult./an/hab.
@@ -238,8 +240,8 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     typologie_str = typologie_labels.get(str(r.get("typologie", "inconnu")), "—")
 
     badge_class = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
-    score_str = fmt_score_affichage(score) if pd.notna(score) else "N/D"
-    rang_str  = str(int(rang_num)) if isinstance(rang_num, (int, float)) and pd.notna(rang_num) else "N/D"
+    score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
+    rang_str  = fmt_rang_affichage(rang_num, nb_total) if isinstance(rang_num, (int, float)) and pd.notna(rang_num) else "N/D"
 
     st.markdown(
         '<div class="fiche-header">'
@@ -262,7 +264,7 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         f'<span class="value">{score_str}<span class="small">/100</span></span>'
         '</div>'
         '<div class="fiche-meta-item">'
-        f'<span class="label">RANG NATIONAL {info_tooltip("rang_national")}</span>'
+        f'<span class="label">INDICE DE FRAGILITÉ NATIONALE {info_tooltip("rang_national")}</span>'
         f'<span class="value">{rang_str}<span class="small">/{nb_total}</span></span>'
         '</div>'
         '</div>'
@@ -468,7 +470,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
     val_65     = float(r.get("pct_plus_65",          0) or 0)
     val_prix   = float(r.get("prix_m2_moyen",        0) or 0)
 
-    def _render_bar(label, sublabel, score_internal, raw_val, unit,
+    def _render_bar(label, sublabel, score, raw_val, unit,
                     tooltip_key=None, indent=False):
         tip = info_tooltip(tooltip_key) if tooltip_key else ""
         indent_css = (
@@ -479,27 +481,24 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         lbl_weight = "500"  if indent else "600"
         num_size   = "20px" if indent else "26px"
         mb         = "14px" if indent else "24px"
-        score_disp = score_affichage(score_internal)
-        if score_disp is None:
-            score_disp = 50.0
         try:
-            pos = max(2, min(98, int(score_disp)))
+            pos = max(2, min(98, int(float(score))))
         except (ValueError, TypeError):
             pos = 50
 
-        if score_disp >= 67:
+        if score < 33:
             dot_color = "#A51C30"
-        elif score_disp <= 33:
-            dot_color = "#1B5E3F"
-        else:
+        elif score < 67:
             dot_color = "#C8922A"
+        else:
+            dot_color = "#1B5E3F"
 
         try:
-            d = int(score_disp - 50)
+            d = int(float(score) - 50)
         except (ValueError, TypeError):
             d = 0
         d_str   = f"+{d}\u202fpts vs médiane" if d >= 0 else f"{d}\u202fpts vs médiane"
-        d_color = "#A51C30" if d > 0 else ("#1B5E3F" if d < 0 else "#6B6B68")
+        d_color = "#1B5E3F" if d >= 0 else "#A51C30"
         val_str = (
             f'<span style="color:#6B6B68;margin-left:6px;">·</span>'
             f' <span style="color:#6B6B68;">{raw_val:.1f}\u202f{unit}</span>'
@@ -518,16 +517,16 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
             f'</div>'
             f'<div style="text-align:right;">'
             f'<div style="font-size:{num_size};font-weight:300;'
-            f'color:#0A1938;line-height:1;">{int(round(score_disp))}</div>'
+            f'color:#0A1938;line-height:1;">{int(score)}</div>'
             f'<div style="font-size:11px;color:{d_color};'
             f'font-weight:600;margin-top:2px;">{d_str}</div>'
             f'</div>'
             f'</div>'
             f'<div style="position:relative;height:8px;border-radius:4px;'
             f'background:linear-gradient(to right,'
-            f'#D0E8DC 0%,#D0E8DC 33%,'
+            f'#F5D0D0 0%,#F5D0D0 33%,'
             f'#F0E8D8 33%,#F0E8D8 67%,'
-            f'#F5D0D0 67%,#F5D0D0 100%);">'
+            f'#D0E8DC 67%,#D0E8DC 100%);">'
             f'<div style="position:absolute;left:50%;top:-3px;'
             f'width:1.5px;height:14px;background:#8B8B8B;'
             f'transform:translateX(-50%);opacity:0.5;"></div>'
@@ -1164,24 +1163,13 @@ def _generate_recommendations(
     return recos[:4]
 
 
-def _display_reco_stat(val: str, label: str) -> str:
-    """Inverse les scores affichés dans les stats de recommandation."""
-    if "score" in label.lower() and "/100" in str(val):
-        try:
-            internal = float(str(val).replace("/100", "").strip())
-            return f"{fmt_score_affichage(internal, decimals=0)}/100"
-        except (TypeError, ValueError):
-            pass
-    return val
-
-
 def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
     """Affiche une carte de recommandation (style uniforme, sans hiérarchie)."""
     impact = project_levier_impact(reco, r, data)
 
     stats_html = "".join(
         f'<div class="reco-stat">'
-        f'<span class="val">{_display_reco_stat(v, l)}</span>'
+        f'<span class="val">{v}</span>'
         f'<span class="lbl">{l}</span>'
         f'</div>'
         for v, l in reco.get("stats", [])
@@ -1191,7 +1179,7 @@ def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
     st.html(
         '<div class="reco-card reco-card-neutral">'
         f'<div class="reco-title">{reco["title"]}</div>'
-        f'<div class="reco-prose">{invert_score_text(reco["prose"])}</div>'
+        f'<div class="reco-prose">{reco["prose"]}</div>'
         f'{stats_block}'
         f'{render_impact_html(impact)}'
         '</div>'
@@ -1922,10 +1910,7 @@ def render_suggestions_comparaison(r: pd.Series, master: pd.DataFrame) -> None:
     for i, sim in enumerate(suggestions[:3]):
         with cols[i]:
             score_val = sim["score"]
-            score_str = (
-                f"{fmt_score_affichage(score_val, decimals=0)}/100"
-                if pd.notna(score_val) else "—"
-            )
+            score_str = f"{score_val:.0f}/100" if pd.notna(score_val) else "—"
             zone_sug  = str(sim["zone"])
             badge_cls = {"Critique": "crit", "Intermédiaire": "inter",
                          "Favorable": "fav"}.get(zone_sug, "")
