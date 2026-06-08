@@ -7,13 +7,15 @@ import html
 import pandas as pd
 import streamlit as st
 
-from ..action_impact import (
-    project_levier_amplitude_region,
-    render_amplitude_region_html,
-)
+from ..action_impact import render_amplitude_region_html
 from ..components import render_national_choropleth
 from ..components.share_bar import region_share_context, render_fiche_share_bar
 from ..pdf_export import generate_region_pdf
+from ..region_decision import (
+    build_decision_synthesis,
+    enrich_leviers_decision,
+    enrich_priorities_decision,
+)
 from ..region_pilotage import (
     _patho_metrics,
     build_territoire_card,
@@ -27,13 +29,6 @@ from ..components.nav import NavCrumb, dept_link_html, render_breadcrumb
 from ..router import navigate
 
 # Affichage uniquement — les calculs internes restent inchangés
-_PRIORITE_DISPLAY: dict[str, tuple[str, str]] = {
-    "candidat expérimentation": ("Priorité immédiate", "crit"),
-    "très prioritaire": ("Priorité forte", "crit"),
-    "prioritaire": ("Priorité secondaire", "inter"),
-    "à surveiller": ("Surveillance", "fav"),
-}
-
 _PUBLIC_SHORT: dict[str, str] = {
     "Seniors (65 ans et plus)": "Seniors",
     "Maladies cardiovasculaires": "Maladies cardiovasculaires",
@@ -59,15 +54,27 @@ def render(data: dict) -> None:
     region_name = region_depts.iloc[0]["Nom de la région"]
     region_code_val = str(region_depts.iloc[0].get("Code région", ""))
 
-    priorities = compute_dept_priorities(region_depts, data.get("patho"))
+    priorities_raw = compute_dept_priorities(region_depts, data.get("patho"))
     delais_region = compute_specialites_tension(data.get("delais"), region_code_val)
-    publics = compute_publics_prioritaires(region_depts, data.get("patho"), priorities)
+    publics = compute_publics_prioritaires(
+        region_depts, data.get("patho"), priorities_raw
+    )
+    priorities = enrich_priorities_decision(
+        priorities_raw, region_depts, data.get("patho"), master
+    )
     summary = compute_region_summary(
-        priorities, region_depts, delais_region, publics=publics
+        priorities_raw, region_depts, delais_region, publics=publics
     )
-    leviers = compute_leviers_action(
-        region_depts, priorities, data.get("patho"), delais_region
+    leviers = enrich_leviers_decision(
+        compute_leviers_action(
+            region_depts, priorities_raw, data.get("patho"), delais_region
+        ),
+        region_depts,
+        priorities,
+        data,
+        region_name,
     )
+    decision_synthesis = build_decision_synthesis(priorities, leviers, publics)
 
     render_topbar(region_name)
     render_share_section(
@@ -82,9 +89,9 @@ def render(data: dict) -> None:
     )
     render_ou_agir(priorities, region_depts, data)
     render_pour_qui(publics)
-    render_comment_agir(leviers, region_depts, data, region_name)
+    render_comment_agir(leviers, decision_synthesis)
     render_donnees_detaillees(
-        region_depts, region_name, data, delais_region, priorities
+        region_depts, region_name, data, delais_region, priorities_raw
     )
 
 
@@ -286,34 +293,40 @@ def render_hero(
 
 # ── Bloc 2 — Où agir ? ───────────────────────────────────────────────────────
 
-def _priorite_badge(internal: str) -> str:
-    label, cls = _PRIORITE_DISPLAY.get(internal, ("Surveillance", "fav"))
+def _score_priorite_html(score: int) -> str:
+    if score >= 80:
+        color = "#A51C30"
+    elif score >= 60:
+        color = "#B07D00"
+    else:
+        color = "#0A1938"
     return (
-        f'<span class="fiche-zone-badge {cls}" '
-        f'style="font-size:10px;padding:3px 8px;">{label}</span>'
+        f'<span style="font-weight:600;color:{color};font-feature-settings:\'tnum\';">'
+        f'{int(score)}</span>'
+        f'<span style="color:#9C9A92;font-size:12px;">/100</span>'
     )
 
 
-def _short_raison(text: str) -> str:
-    """Raccourcit une raison pour l'affichage."""
-    low = text.lower()
-    if "désert médical" in low or ("apl" in low and "2" in low):
-        return "Désert médical"
-    if "communes" in low and "15" in low:
-        return "Communes éloignées des soins"
-    if "65 ans" in low or "seniors" in low:
-        return "Forte part de seniors"
-    if "accès aux soins dégradé" in low:
-        return "Accès aux soins dégradé"
-    if "offre hospitalière" in low or "structures" in low:
-        return "Offre hospitalière limitée"
-    if "temps d'accès" in low:
-        return "Temps d'accès élevé"
-    if "prévalence" in low:
-        if "(" in text:
-            return text.split("(")[-1].rstrip(").")[:50]
-        return text[:50]
-    return text[:55]
+def _faisabilite_badge(label: str) -> str:
+    cls = {"Élevée": "fav", "Moyenne": "inter", "Complexe": "crit"}.get(label, "inter")
+    return (
+        f'<span class="fiche-zone-badge {cls}" '
+        f'style="font-size:10px;padding:3px 8px;">{html.escape(label)}</span>'
+    )
+
+
+def _impact_territoire_html(row: pd.Series) -> str:
+    label = str(row.get("impact_label", "Impact moyen"))
+    pop = row.get("impact_pop")
+    pop_str = (
+        f"≈ {int(pop):,}".replace(",", "\u202f") + " habitants concernés"
+        if pd.notna(pop) and pop else "Population non estimée"
+    )
+    return (
+        f'<div style="font-size:13px;font-weight:500;color:#0A1938;">'
+        f'{html.escape(label)}</div>'
+        f'<div style="font-size:11px;color:#6B6B68;margin-top:2px;">{pop_str}</div>'
+    )
 
 
 def render_ou_agir(
@@ -332,25 +345,30 @@ def render_ou_agir(
     rows_html: list[str] = []
     for _, row in priorities.iterrows():
         dept_code = str(row["dept"]).zfill(2)
-        internal = row["priorite"]
-        label, _ = _PRIORITE_DISPLAY.get(internal, ("Surveillance", "fav"))
-        bg = "#FEF9F9" if label in ("Priorité immédiate", "Priorité forte") else "white"
+        score = int(row.get("score_priorite", 0))
+        bg = "#FEF9F9" if score >= 75 else "white"
+        justif = str(row.get("justification_prioritaire", row.get("lecture_rapide", "")))
         rows_html.append(
             f'<div class="region-priority-row" style="background:{bg};">'
             f'<div class="region-priority-dept">'
             f'{dept_link_html(dept_code, str(row["Nom du département"]), css_class="region-dept-name")}'
             f"</div>"
-            f'<div class="region-priority-meta">{_priorite_badge(internal)}</div>'
+            f'<div class="region-priority-score">{_score_priorite_html(score)}</div>'
+            f'<div class="region-priority-impact">{_impact_territoire_html(row)}</div>'
+            f'<div class="region-priority-fais">'
+            f'{_faisabilite_badge(str(row.get("faisabilite_label", "Moyenne")))}'
+            f"</div>"
             f'<div class="region-priority-lecture">'
-            f'{html.escape(str(row["lecture_rapide"]))}</div>'
+            f'{html.escape(justif)}</div>'
             f"</div>"
         )
 
     st.markdown(
         '<div class="region-priority-table sa-tbl-scroll">'
         '<div class="region-priority-header">'
-        "<span>Département</span><span>Priorité</span>"
-        "<span>Lecture rapide</span>"
+        "<span>Département</span><span>Score de priorité</span>"
+        "<span>Impact potentiel estimé</span><span>Faisabilité</span>"
+        "<span>Justification</span>"
         "</div>"
         + "".join(rows_html)
         + "</div>",
@@ -379,12 +397,10 @@ def render_ou_agir(
         code = str(row["dept"]).zfill(2)
         profile = build_territoire_card(row, patho_map.get(code), region_depts)
         public = profile["publics"][0] if profile["publics"] else "N/D"
-        raisons = [_short_raison(r) for r in row.get("raisons", [])[:3]]
-        raisons_html = "".join(
-            f'<li style="margin-bottom:6px;font-size:13px;color:#4A4A4A;">{r}</li>'
-            for r in raisons
-        )
-        synthese = str(row.get("lecture_rapide", ""))
+        score = int(row.get("score_priorite", 0))
+        justif = str(row.get("justification_prioritaire", row.get("lecture_rapide", "")))
+        impact_html = _impact_territoire_html(row)
+        fais = str(row.get("faisabilite_label", "Moyenne"))
 
         with cols_ui[i]:
             dept_name = str(row["Nom du département"])
@@ -393,10 +409,21 @@ def render_ou_agir(
                 f'<div class="reco-title region-territory-title">'
                 f'{dept_link_html(code, dept_name, css_class="region-card-dept-link")}'
                 f"</div>"
-                f'<ul style="padding-left:18px;margin:12px 0;">{raisons_html}</ul>'
+                f'<div class="reco-stats" style="margin:12px 0;">'
+                f'<div class="reco-stat">'
+                f'<span class="val">{score}<span style="font-size:14px;color:#9C9A92;">/100</span></span>'
+                f'<span class="lbl">Score de priorité</span>'
+                f"</div>"
+                f'<div class="reco-stat">'
+                f'<span class="val" style="font-size:15px;">{fais}</span>'
+                f'<span class="lbl">Faisabilité</span>'
+                f"</div>"
+                f"</div>"
+                f'<div style="font-size:12px;color:#4A4A4A;margin-bottom:10px;">'
+                f'{impact_html}</div>'
                 f'<div style="font-size:11px;color:#9C9A92;margin-bottom:8px;">'
                 f'PUBLIC\u202f: {public}</div>'
-                f'<div class="reco-prose" style="font-size:13px;">{synthese}</div>'
+                f'<div class="reco-prose" style="font-size:13px;">{html.escape(justif)}</div>'
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -446,11 +473,104 @@ def render_pour_qui(publics: list[dict]) -> None:
 
 # ── Bloc 4 — Comment agir ? ───────────────────────────────────────────────────
 
+def _render_decision_synthesis_card(synthesis: dict[str, str]) -> None:
+    items = (
+        ("Territoire cible", synthesis.get("territoire_cible", "N/D")),
+        ("Public cible", synthesis.get("public_cible", "N/D")),
+        ("Action prioritaire", synthesis.get("action_prioritaire", "N/D")),
+        ("Action rapide", synthesis.get("action_rapide", "N/D")),
+    )
+    grid = "".join(
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">{html.escape(lbl)}</span>'
+        f'<span class="reco-impact-val">{html.escape(val)}</span>'
+        f"</div>"
+        for lbl, val in items
+    )
+    st.markdown(
+        f'<div class="reco-card reco-card-neutral" style="min-height:auto;margin-bottom:28px;">'
+        f'<div class="reco-title">Ce qu\'il faut retenir</div>'
+        f'<div class="reco-impact" style="margin-top:14px;">'
+        f'<div class="reco-impact-grid">{grid}</div>'
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_levier_enrichment_html(lev: dict) -> str:
+    impact_pop = html.escape(str(lev.get("impact_pop_str", "n.d.")))
+    impact_niv = html.escape(str(lev.get("impact_niveau", "Impact moyen")))
+    fais = html.escape(str(lev.get("faisabilite_label", "Moyenne")))
+    pourquoi = html.escape(str(lev.get("pourquoi_levier", "")))
+    return (
+        '<div class="reco-impact" style="margin-top:16px;">'
+        '<div class="reco-impact-grid">'
+        '<div class="reco-impact-item">'
+        '<span class="reco-impact-lbl">Impact attendu</span>'
+        f'<span class="reco-impact-val">{impact_niv}<br>'
+        f'<span style="font-size:12px;color:#6B6B68;">≈ {impact_pop}</span></span>'
+        "</div>"
+        '<div class="reco-impact-item">'
+        '<span class="reco-impact-lbl">Faisabilité</span>'
+        f'<span class="reco-impact-val">{fais}</span>'
+        "</div>"
+        "</div></div>"
+        '<div class="reco-prose" style="font-size:13px;margin-top:14px;">'
+        f"<strong>Pourquoi ce levier\u202f?</strong> {pourquoi}"
+        "</div>"
+    )
+
+
+def render_top3_actions_regionales(leviers: list[dict]) -> None:
+    top3 = leviers[:3]
+    if not top3:
+        return
+
+    st.markdown(
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
+        'text-transform:uppercase;color:#9C9A92;margin:0 0 16px;">'
+        "Top 3 actions régionales recommandées</div>",
+        unsafe_allow_html=True,
+    )
+
+    for i, lev in enumerate(top3, 1):
+        amplitude = lev.get("amplitude")
+        pop = html.escape(str(lev.get("impact_pop_str", "n.d.")))
+        horizon = html.escape(
+            amplitude.horizon if amplitude else str(lev.get("horizon", "Moyen terme"))
+        )
+        pourquoi = html.escape(str(lev.get("pourquoi_maintenant", "")))
+        impact_niv = html.escape(str(lev.get("impact_niveau", "Impact moyen")))
+        st.markdown(
+            f'<div class="reco-card p{i}" style="min-height:auto;">'
+            f'<div class="reco-number">{i}.</div>'
+            f'<div class="reco-title">{html.escape(lev["intitule"].capitalize())}</div>'
+            f'<div class="reco-prose" style="font-size:13px;margin-top:10px;">'
+            f"<strong>Pourquoi maintenant\u202f?</strong> {pourquoi}"
+            "</div>"
+            f'<div class="reco-impact" style="margin-top:14px;">'
+            f'<div class="reco-impact-grid">'
+            f'<div class="reco-impact-item">'
+            f'<span class="reco-impact-lbl">Impact potentiel</span>'
+            f'<span class="reco-impact-val">{impact_niv}</span>'
+            f"</div>"
+            f'<div class="reco-impact-item">'
+            f'<span class="reco-impact-lbl">Population concernée</span>'
+            f'<span class="reco-impact-val">{pop}</span>'
+            f"</div>"
+            f'<div class="reco-impact-item">'
+            f'<span class="reco-impact-lbl">Horizon</span>'
+            f'<span class="reco-impact-val">{horizon}</span>'
+            f"</div>"
+            f"</div></div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_comment_agir(
     leviers: list[dict],
-    region_depts: pd.DataFrame,
-    data: dict,
-    region_name: str,
+    decision_synthesis: dict[str, str],
 ) -> None:
     st.markdown(
         '<div class="section-header" style="margin-top:56px;">'
@@ -464,21 +584,33 @@ def render_comment_agir(
         st.info("Aucun levier identifié avec les données disponibles.")
         return
 
+    _render_decision_synthesis_card(decision_synthesis)
+    render_top3_actions_regionales(leviers)
+
+    st.markdown(
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
+        'text-transform:uppercase;color:#9C9A92;margin:36px 0 16px;">'
+        "Leviers détaillés</div>",
+        unsafe_allow_html=True,
+    )
+
     for i, lev in enumerate(leviers[:3], 1):
         depts_str = ", ".join(lev.get("depts", [])) or "n.d."
-        amplitude = project_levier_amplitude_region(
-            lev, region_depts, data, region_name
+        amplitude = lev.get("amplitude")
+        amplitude_html = (
+            render_amplitude_region_html(amplitude) if amplitude else ""
         )
         st.markdown(
             f'<div class="reco-card p{i}">'
             f'<div class="reco-title">{lev["intitule"].capitalize()}</div>'
             f'<div class="reco-prose" style="font-size:13px;">'
-            f'<strong>Problème\u202f:</strong> {lev.get("tension", "N/D")}<br>'
-            f'<strong>Public\u202f:</strong> {lev["public_cible"]}<br>'
-            f'<strong>Territoires\u202f:</strong> {depts_str}'
-            f'</div>'
-            f'{render_amplitude_region_html(amplitude)}'
-            f'</div>',
+            f'<strong>Problème\u202f:</strong> {html.escape(str(lev.get("tension", "N/D")))}<br>'
+            f'<strong>Public\u202f:</strong> {html.escape(str(lev["public_cible"]))}<br>'
+            f'<strong>Territoires\u202f:</strong> {html.escape(depts_str)}'
+            f"</div>"
+            f"{_render_levier_enrichment_html(lev)}"
+            f"{amplitude_html}"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
