@@ -297,38 +297,33 @@ def render_ou_agir(
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        '<div class="sa-tbl-scroll"><div style="min-width:520px;">'
-        '<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr 72px;'
-        'padding:10px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-        'font-size:10px;font-weight:700;letter-spacing:0.08em;color:#6B6B68;'
-        'text-transform:uppercase;border-bottom:none;">'
-        '<span>Rang</span><span>Département</span><span>Priorité</span>'
-        '<span>Lecture rapide</span>'
-        '</div></div></div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="dept-table-nav sa-tbl-scroll">', unsafe_allow_html=True)
+    rows_html: list[str] = []
     for _, row in priorities.iterrows():
         dept_code = str(row["dept"]).zfill(2)
-        rang = int(row["priorite_rang"])
         internal = row["priorite"]
         label, _ = _PRIORITE_DISPLAY.get(internal, ("Surveillance", "fav"))
         bg = "#FEF9F9" if label in ("Priorité immédiate", "Priorité forte") else "white"
-
-        st.markdown(
-            f'<div class="dept-table-nav-row" style="grid-template-columns:40px 1fr 130px 1.4fr;'
-            f'background:{bg};">'
-            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{rang:02d}</span>'
-            f'{dept_link_html(dept_code, str(row["Nom du département"]))}'
-            f'{_priorite_badge(internal)}'
-            f'<span style="font-size:12px;color:#6B6B68;line-height:1.45;">'
-            f'{html.escape(str(row["lecture_rapide"]))}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
+        rows_html.append(
+            f'<div class="region-priority-row" style="background:{bg};">'
+            f'<div class="region-priority-dept">'
+            f'{dept_link_html(dept_code, str(row["Nom du département"]), css_class="region-dept-name")}'
+            f"</div>"
+            f'<div class="region-priority-meta">{_priorite_badge(internal)}</div>'
+            f'<div class="region-priority-lecture">'
+            f'{html.escape(str(row["lecture_rapide"]))}</div>'
+            f"</div>"
         )
-    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="region-priority-table sa-tbl-scroll">'
+        '<div class="region-priority-header">'
+        "<span>Département</span><span>Priorité</span>"
+        "<span>Lecture rapide</span>"
+        "</div>"
+        + "".join(rows_html)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
     # Focus top 3
     top3 = priorities.head(3)
@@ -360,15 +355,17 @@ def render_ou_agir(
         synthese = str(row.get("lecture_rapide", ""))
 
         with cols_ui[i]:
+            dept_name = str(row["Nom du département"])
             st.markdown(
-                f'<div class="reco-card p{i + 1}">'
-                f'<span class="reco-priority p{i + 1}">Rang {int(row["priorite_rang"]):02d}</span>'
-                f'<div class="reco-title">{row["Nom du département"]}</div>'
+                f'<div class="reco-card region-territory-card p{i + 1}">'
+                f'<div class="reco-title region-territory-title">'
+                f'{dept_link_html(code, dept_name, css_class="region-card-dept-link")}'
+                f"</div>"
                 f'<ul style="padding-left:18px;margin:12px 0;">{raisons_html}</ul>'
                 f'<div style="font-size:11px;color:#9C9A92;margin-bottom:8px;">'
                 f'PUBLIC\u202f: {public}</div>'
                 f'<div class="reco-prose" style="font-size:13px;">{synthese}</div>'
-                f'</div>',
+                f"</div>",
                 unsafe_allow_html=True,
             )
 
@@ -618,21 +615,7 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
         "score_global", na_position="last"
     ).reset_index(drop=True)
 
-    st.markdown(
-        '<div class="sa-tbl-scroll"><div style="min-width:640px;">'
-        '<div style="display:grid;grid-template-columns:36px 1fr 60px 110px 80px 100px;'
-        'gap:0 12px;padding:8px 16px;background:#F3F2EC;border-radius:4px 4px 0 0;'
-        'font-size:11px;font-weight:700;letter-spacing:0.1em;color:#6B6B68;'
-        'text-transform:uppercase;">'
-        '<span>#</span><span>D\u00e9partement</span><span>Code</span>'
-        '<span>Zone</span>'
-        '<span style="text-align:right;">Score</span>'
-        '<span style="text-align:right;">Population</span>'
-        '</div></div></div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown('<div class="dept-table-nav sa-tbl-scroll">', unsafe_allow_html=True)
+    rows_html: list[str] = []
     for i, (_, d) in enumerate(sorted_depts.iterrows(), 1):
         zone = d.get("zone_short", "N/D")
         score = d.get("score_global")
@@ -648,23 +631,33 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
             else ("#E5B04A" if zone == "Intermédiaire" else "#1B5E3F")
         )
         bg = "#FEF9F9" if zone == "Critique" else "white"
-
-        st.markdown(
-            f'<div class="dept-table-nav-row dept-table-nav-row--rank" '
-            f'style="background:{bg};">'
-            f'<span style="font-size:12px;font-weight:700;color:#9C9A92;">{i:02d}</span>'
-            f'{dept_link_html(dept_code, str(dept_name))}'
-            f'<span style="font-size:12px;color:#9C9A92;">{dept_code}</span>'
+        rows_html.append(
+            f'<div class="region-ranking-row" style="background:{bg};">'
+            f'<span class="region-ranking-rank">{i:02d}</span>'
+            f'<span class="region-ranking-dept">'
+            f'{dept_link_html(dept_code, str(dept_name), css_class="region-dept-name")}'
+            f"</span>"
+            f'<span class="region-ranking-code">{dept_code}</span>'
+            f'<span class="region-ranking-zone">'
             f'<span class="fiche-zone-badge {badge_cls}" '
-            f'style="font-size:10px;padding:3px 8px;justify-self:start;">{zone}</span>'
-            f'<span style="text-align:right;font-weight:600;color:{score_color};">'
-            f'{score_str}</span>'
-            f'<span style="text-align:right;font-size:12px;color:#6B6B68;">'
-            f'{pop_str}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
+            f'style="font-size:10px;padding:3px 8px;">{zone}</span>'
+            f"</span>"
+            f'<span class="region-ranking-score" style="color:{score_color};">'
+            f"{score_str}</span>"
+            f'<span class="region-ranking-pop">{pop_str}</span>'
+            f"</div>"
         )
-    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="region-ranking-table sa-tbl-scroll">'
+        '<div class="region-ranking-header">'
+        "<span>#</span><span>D\u00e9partement</span><span>Code</span>"
+        "<span>Zone</span><span>Score</span><span>Population</span>"
+        "</div>"
+        + "".join(rows_html)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_delais_detail(delais_region: pd.DataFrame, region_name: str) -> None:

@@ -66,21 +66,35 @@ def render_breadcrumb(crumbs: list[NavCrumb], *, key_prefix: str = "bc") -> None
 
 
 def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
-    """Barre de navigation mobile (boutons Streamlit, même onglet)."""
-    items: list[tuple[View, str]] = [
+    """Barre mobile alignée sur la sidebar desktop (2 rangées)."""
+    nav_main: list[tuple[View, str]] = [
         ("home", "Accueil"),
-        ("enjeux", "Enjeux"),
-        ("comparer", "Comparer"),
-        ("methodologie", "Méthodo"),
+        ("enjeux", "À quoi ça sert ?"),
+        ("comparer", "Comparaison"),
+    ]
+    nav_resources: list[tuple[View, str]] = [
+        ("methodologie", "Méthodologie"),
         ("about", "À propos"),
     ]
+
     with st.container(key="sa_mobile_nav"):
-        cols = st.columns(len(items), gap="small")
-        for col, (view, label) in zip(cols, items):
+        cols_main = st.columns(len(nav_main), gap="small")
+        for col, (view, label) in zip(cols_main, nav_main):
             with col:
                 if st.button(
                     label,
-                    key=f"{key_prefix}_{view}",
+                    key=f"{key_prefix}_main_{view}",
+                    use_container_width=True,
+                    type="primary" if view == current_view else "secondary",
+                ):
+                    navigate(view)
+
+        cols_res = st.columns(len(nav_resources), gap="small")
+        for col, (view, label) in zip(cols_res, nav_resources):
+            with col:
+                if st.button(
+                    label,
+                    key=f"{key_prefix}_res_{view}",
                     use_container_width=True,
                     type="primary" if view == current_view else "secondary",
                 ):
