@@ -9,11 +9,14 @@ def render(data: dict) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">SANT\'ACTIVE · POUR QUI · POURQUOI</div>'
-        '<h2 class="section-title">À quoi sert Sant\'active, <em>et pour qui.</em></h2>'
+        '<h2 class="section-title">'
+        'Les territoires ne manquent pas de données.<br>'
+        '<em>Ils manquent de lisibilité.</em>'
+        '</h2>'
         '<p class="section-lead">'
-        'Sant\'active transforme des données ouvertes officielles en diagnostics '
-        'actionnables pour ceux qui décident sur les territoires. '
-        'Voici les enjeux auxquels nous répondons et les profils qui utilisent l\'outil.'
+        'Sant\'active agrège les données officielles et les traduit en diagnostics '
+        'actionnables pour les ARS, les élus et les professionnels de santé '
+        'qui n\'ont pas le temps de chercher.'
         '</p>'
         '</div>',
         unsafe_allow_html=True,
