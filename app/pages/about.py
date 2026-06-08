@@ -202,7 +202,7 @@ def render(data: dict) -> None:
 
     membres = [
         {"nom": "Sarah Aït Ouhmad",    "linkedin": "https://www.linkedin.com/in/sarah-ait-ouhmad-76947b220/"},
-        {"nom": "Nour Amri",           "linkedin": "https://www.linkedin.com/in/nour-amri-610538197/"},
+        {"nom": "Nour Amri",           "linkedin": "https://www.linkedin.com/in/nour-amri-1b3071297/"},
         {"nom": "Orelle Azoulay",      "linkedin": "https://www.linkedin.com/in/orelle-azoulay-742488254/"},
         {"nom": "Anna Damour",         "linkedin": "https://www.linkedin.com/in/anna-damour-a1b586221/"},
         {"nom": "Ackyl Junior Dangi",  "linkedin": "https://www.linkedin.com/in/ackyl-junior-d-872185244/"},
