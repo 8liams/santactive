@@ -73,7 +73,13 @@ def render(data: dict) -> None:
     render_share_section(
         region_name, region_code_val, region_depts, summary, priorities, leviers
     )
-    render_hero(region_depts, region_name, summary, publics)
+    render_hero(
+        region_depts, region_name, summary, publics,
+        master=master,
+        region_code=region_code_val,
+        priorities=priorities,
+        leviers=leviers,
+    )
     render_ou_agir(priorities, region_depts, data)
     render_pour_qui(publics)
     render_comment_agir(leviers, region_depts, data, region_name)
@@ -197,6 +203,11 @@ def render_hero(
     region_name: str,
     summary: dict,
     publics: list[dict],
+    *,
+    master: pd.DataFrame,
+    region_code: str,
+    priorities: pd.DataFrame,
+    leviers: list[dict],
 ) -> None:
     pop_tot = region_depts["population_num"].sum()
     nb_depts = len(region_depts)
@@ -246,9 +257,30 @@ def render_hero(
         region_depts, region_name, summary, publics
     )
     st.markdown(
-        f'<div class="diagnostic-prose" style="max-width:900px;margin-bottom:48px;">'
+        f'<div class="diagnostic-prose" style="max-width:900px;margin-bottom:24px;">'
         f'{synthesis}</div>',
         unsafe_allow_html=True,
+    )
+
+    from ..audio_diagnostic import (
+        build_region_audio_diagnostic_text,
+        render_audio_diagnostic_button,
+    )
+
+    def _region_audio_text() -> str:
+        return build_region_audio_diagnostic_text(
+            region_name,
+            region_code,
+            region_depts,
+            master,
+            priorities,
+            leviers,
+            summary,
+        )
+
+    render_audio_diagnostic_button(
+        scope_key=f"region_{region_code}",
+        build_text=_region_audio_text,
     )
 
 
