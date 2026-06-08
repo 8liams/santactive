@@ -1741,6 +1741,9 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
 .stMainBlockContainer > div:first-child .section-header {
     margin-top: 12px;
 }
+
+/* ─── Section headers — trait rouge latéral ─────────────────────────────── */
+.section-header {
     margin: 32px 0 18px;
     padding-left: 16px;
     border-left: 3px solid #A51C30;
