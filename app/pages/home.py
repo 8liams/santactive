@@ -253,7 +253,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
         metric=col_key,
         colormap_name=cmap_name,
         reverse=reverse_scale,
-        height=160,
+        height=112,
     )
 
 

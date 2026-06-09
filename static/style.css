@@ -2353,11 +2353,20 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     .st-key-home_dom_cartouches {
         margin-top: 4px !important;
         margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
         overflow: hidden !important;
         max-width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+    .st-key-home_dom_cartouches > [data-testid="stVerticalBlock"] {
+        height: auto !important;
+        min-height: 0 !important;
+        gap: 0 !important;
     }
     .st-key-home_dom_cartouches [data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
+        align-items: flex-start !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         gap: 6px !important;
@@ -2372,10 +2381,14 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         min-width: 118px !important;
         max-width: 118px !important;
         flex: 0 0 118px !important;
+        align-self: flex-start !important;
         padding: 0 2px !important;
+        height: auto !important;
     }
     .st-key-home_dom_cartouches [data-testid="stColumn"] > [data-testid="stVerticalBlock"] {
-        gap: 10px !important;
+        gap: 8px !important;
+        height: auto !important;
+        min-height: 0 !important;
     }
     .st-key-home_dom_cartouches .dom-cartouche-head {
         padding-bottom: 10px !important;
@@ -2386,16 +2399,14 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     .st-key-home_dom_cartouches [data-testid="stColumn"] .element-container:has(
         iframe[title="streamlit_folium.st_folium"]
     ) {
-        margin-top: 2px !important;
-        padding-top: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
         overflow: hidden !important;
         flex-shrink: 0 !important;
-    }
-    .st-key-home_dom_cartouches iframe,
-    .st-key-home_dom_cartouches [data-testid="stIFrame"] iframe {
-        min-height: 110px !important;
-        height: 110px !important;
-        max-height: 110px !important;
+        height: 112px !important;
+        min-height: 0 !important;
+        max-height: 112px !important;
+        line-height: 0 !important;
     }
 
     /* ── Tooltips centrées ──────────────────────────────────────────────── */
@@ -2462,9 +2473,16 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         max-width: 100% !important;
     }
 
-    /* ── Cartographie Folium : hauteur minimale tactile (pas les autres iframes) */
-    iframe[title="streamlit_folium.st_folium"] {
+    /* ── Cartographie Folium : carte nationale uniquement (pas les mini-cartes DOM) */
+    .st-key-home_map_kpi iframe[title="streamlit_folium.st_folium"] {
         min-height: 450px !important;
+    }
+    /* Mini-cartes DOM-TOM : hauteur fixe compacte (après la règle carte nationale) */
+    .st-key-home_dom_cartouches iframe[title="streamlit_folium.st_folium"] {
+        min-height: 112px !important;
+        height: 112px !important;
+        max-height: 112px !important;
+        display: block !important;
     }
     /* Searchbox accueil : iframe compact (évite le vide de 450px sous la recherche) */
     iframe[title="streamlit_searchbox.searchbox"] {
