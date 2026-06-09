@@ -286,11 +286,11 @@ def render_dom_cartouches(
                 score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
 
                 st.markdown(
-                    f'<div style="font-size:11px;font-weight:700;color:#0A1938;'
-                    f'margin-bottom:4px;text-align:center;">{cfg["nom"]}</div>'
-                    f'<div style="font-size:10px;text-align:center;margin-bottom:4px;">'
-                    f'<span style="color:{zone_color};font-weight:600;">{score_display}</span>'
-                    f'</div>',
+                    f'<div class="dom-cartouche-head">'
+                    f'<div class="dom-cartouche-name">{cfg["nom"]}</div>'
+                    f'<div class="dom-cartouche-score">'
+                    f'<span style="color:{zone_color};">{score_display}</span>'
+                    f'</div></div>',
                     unsafe_allow_html=True,
                 )
 

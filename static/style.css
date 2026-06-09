@@ -1340,6 +1340,28 @@ iframe[title="streamlit_folium.st_folium"] {
     border-radius: 4px;
 }
 
+/* ─── Cartouches DOM-TOM (accueil) ─────────────────────────────────────────── */
+.dom-cartouche-head {
+    text-align: center;
+    padding: 0 2px 6px;
+    margin-bottom: 2px;
+    position: relative;
+    z-index: 2;
+    background: #FAFAF8;
+}
+.dom-cartouche-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0A1938;
+    line-height: 1.3;
+    margin-bottom: 3px;
+}
+.dom-cartouche-score {
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
 /* ─── Ranking table (fiche région) ────────────────────────────────────────── */
 .ranking-table {
     width: 100%;
@@ -2352,14 +2374,28 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         flex: 0 0 118px !important;
         padding: 0 2px !important;
     }
-    .st-key-home_dom_cartouches [data-testid="stVerticalBlock"] {
-        gap: 2px !important;
+    .st-key-home_dom_cartouches [data-testid="stColumn"] > [data-testid="stVerticalBlock"] {
+        gap: 10px !important;
+    }
+    .st-key-home_dom_cartouches .dom-cartouche-head {
+        padding-bottom: 10px !important;
+        margin-bottom: 4px !important;
+        flex-shrink: 0 !important;
+    }
+    .st-key-home_dom_cartouches [data-testid="stColumn"] [data-testid="stIFrame"],
+    .st-key-home_dom_cartouches [data-testid="stColumn"] .element-container:has(
+        iframe[title="streamlit_folium.st_folium"]
+    ) {
+        margin-top: 2px !important;
+        padding-top: 0 !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
     }
     .st-key-home_dom_cartouches iframe,
     .st-key-home_dom_cartouches [data-testid="stIFrame"] iframe {
-        min-height: 120px !important;
-        height: 120px !important;
-        max-height: 140px !important;
+        min-height: 110px !important;
+        height: 110px !important;
+        max-height: 110px !important;
     }
 
     /* ── Tooltips centrées ──────────────────────────────────────────────── */
@@ -2414,30 +2450,32 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         white-space: nowrap !important;
     }
 
-    /* ── Accueil : carte + KPI empilés ──────────────────────────────────── */
-    .st-key-home_map_kpi [data-testid="stHorizontalBlock"] {
+    /* ── Accueil : carte + KPI empilés (direct enfant uniquement — pas DOM-TOM) */
+    .st-key-home_map_kpi > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] {
         flex-direction: column !important;
         gap: 20px !important;
     }
-    .st-key-home_map_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    .st-key-home_map_kpi > [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         width: 100% !important;
         flex: 1 1 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
     }
 
-    /* ── Cartographie Folium : hauteur minimale tactile ───────────────────── */
-    [data-testid="stVerticalBlock"] iframe,
-    [data-testid="stIFrame"] iframe,
-    .element-container iframe {
+    /* ── Cartographie Folium : hauteur minimale tactile (pas les autres iframes) */
+    iframe[title="streamlit_folium.st_folium"] {
         min-height: 450px !important;
     }
-    .st-key-home_dom_cartouches iframe,
-    .st-key-home_dom_cartouches [data-testid="stIFrame"] iframe {
-        min-height: 120px !important;
-        height: 120px !important;
+    /* Searchbox accueil : iframe compact (évite le vide de 450px sous la recherche) */
+    iframe[title="streamlit_searchbox.searchbox"] {
+        min-height: 0 !important;
+        height: 52px !important;
+        max-height: 56px !important;
     }
-
+    [data-testid="stIFrame"]:has(iframe[title="streamlit_searchbox.searchbox"]) {
+        min-height: 0 !important;
+        height: auto !important;
+    }
     /* ── Barre de partage fiche : boutons compacts en ligne ─────────────── */
     .fiche-share-bar {
         padding: 10px 12px !important;
@@ -2731,6 +2769,18 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         font-size: 15px !important;
         padding: 13px 15px !important;
         max-width: 100% !important;
+    }
+    div[data-testid="stSearchboxContainer"] {
+        margin-bottom: 12px !important;
+    }
+    .element-container:has(iframe[title="streamlit_searchbox.searchbox"]) {
+        margin-bottom: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+    }
+    .st-key-home_map_kpi {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 }
 
