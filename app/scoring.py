@@ -89,9 +89,9 @@ def gauge_investissement(row) -> float:
 
 
 def rang_affichage(rang, total) -> int | None:
-    """Convertit le rang national interne en indice de fragilité affiché.
+    """Convertit le rang interne (1 = pire) en position de classement affichée.
 
-    Formule : total − rang + 1 (100 = plus fragile, 1 = plus favorable).
+    Formule : total − rang + 1 (1 = meilleur score, N = pire).
     Les calculs métier conservent rang_national ; cette fonction ne sert
     qu'à la présentation utilisateur.
     """
@@ -108,11 +108,21 @@ def rang_affichage(rang, total) -> int | None:
 
 
 def fmt_rang_affichage(rang, total) -> str:
-    """Formate l'indice de fragilité nationale pour affichage utilisateur."""
+    """Formate le rang affiché (1 = meilleur score) — alias numérique."""
     d = rang_affichage(rang, total)
     if d is None:
         return "N/D"
     return str(d)
+
+
+def fmt_classement_national(rang, total) -> str:
+    """Formate le classement national en ordinal (1er, 2ème…, Nème)."""
+    pos = rang_affichage(rang, total)
+    if pos is None:
+        return "N/D"
+    if pos == 1:
+        return "1er"
+    return f"{pos}\u202fème"
 
 
 # ── Calcul principal ──────────────────────────────────────────────────────────

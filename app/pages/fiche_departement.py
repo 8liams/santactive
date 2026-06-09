@@ -18,7 +18,7 @@ from ..components.nav import NavCrumb, internal_href, render_breadcrumb
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate, navigate_compare
-from ..scoring import fmt_rang_affichage
+from ..scoring import fmt_classement_national
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -127,7 +127,11 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
 
     badge_class = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
     score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
-    rang_str  = fmt_rang_affichage(rang_num, nb_total) if isinstance(rang_num, (int, float)) and pd.notna(rang_num) else "N/D"
+    classement_str = (
+        fmt_classement_national(rang_num, nb_total)
+        if isinstance(rang_num, (int, float)) and pd.notna(rang_num)
+        else "N/D"
+    )
 
     st.markdown(
         '<div class="fiche-header">'
@@ -144,14 +148,14 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         f'<h1 class="fiche-title">{r["Nom du département"]}</h1>'
         f'<div class="fiche-zone-badge {badge_class}">Zone {zone.lower()}</div>'
         '</div>'
-        '<div class="fiche-meta">'
+        '<div class="fiche-meta fiche-meta--scores">'
         '<div class="fiche-meta-item">'
-        f'<span class="label">SCORE GLOBAL {info_tooltip("score_global")}</span>'
+        f'<span class="label">SCORE GLOBAL {info_tooltip("score_global", open_dir="right")}</span>'
         f'<span class="value">{score_str}<span class="small">/100</span></span>'
         '</div>'
         '<div class="fiche-meta-item">'
-        f'<span class="label">INDICE DE FRAGILITÉ NATIONALE {info_tooltip("rang_national")}</span>'
-        f'<span class="value">{rang_str}<span class="small">/{nb_total}</span></span>'
+        f'<span class="label">CLASSEMENT NATIONAL {info_tooltip("rang_national", open_dir="right")}</span>'
+        f'<span class="value">{classement_str}<span class="small">/{nb_total}</span></span>'
         '</div>'
         '</div>'
         '</div>',

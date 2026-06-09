@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from ..scoring import fmt_rang_affichage
+from ..scoring import fmt_classement_national
 
 BASE_URL = "https://santactive.streamlit.app"
 
@@ -38,8 +38,12 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
     nb_classes = int(r.get("nb_classes", 101) or 101)
 
     score_str = f"{float(score):.1f}/100" if score is not None and pd.notna(score) else "N/D"
-    rang_aff  = fmt_rang_affichage(rang, nb_classes) if rang is not None and pd.notna(rang) else "N/D"
-    rang_str  = f"{rang_aff}/{nb_classes}" if rang_aff != "N/D" else "N/D"
+    classement = (
+        fmt_classement_national(rang, nb_classes)
+        if rang is not None and pd.notna(rang)
+        else "N/D"
+    )
+    rang_str = f"{classement}/{nb_classes}" if classement != "N/D" else "N/D"
     apl_str   = f"{float(apl):.1f}/hab." if apl is not None and pd.notna(apl) else "N/D"
 
     fiche_url = build_fiche_url("dept", dept_code=dept_code)
@@ -48,7 +52,7 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
         f"Bonjour,\n\n"
         f"Voici la fiche Sant'active du département {dept_nom} ({dept_code}).\n\n"
         f"Score global : {score_str}\n"
-        f"Indice de fragilité nationale : {rang_str}\n"
+        f"Classement national : {rang_str}\n"
         f"Zone : {zone}\n"
         f"APL médian : {apl_str}\n\n"
         f"Consulter la fiche complète :\n{fiche_url}\n\n"

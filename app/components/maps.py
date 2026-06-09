@@ -267,105 +267,106 @@ def render_dom_cartouches(
         colors = list(reversed(colors))
     cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
 
-    cols = st.columns(5)
+    with st.container(key="home_dom_cartouches"):
+        cols = st.columns(5)
 
-    for i, (code_dom, cfg) in enumerate(DOM_CONFIG.items()):
-        with cols[i]:
-            # En-tête : nom + score
-            score_val = data_map.get(code_dom)
-            zone_row = master[master["dept"].astype(str) == code_dom]
-            zone = zone_row.iloc[0].get("zone_short", "") if not zone_row.empty else ""
+        for i, (code_dom, cfg) in enumerate(DOM_CONFIG.items()):
+            with cols[i]:
+                # En-tête : nom + score
+                score_val = data_map.get(code_dom)
+                zone_row = master[master["dept"].astype(str) == code_dom]
+                zone = zone_row.iloc[0].get("zone_short", "") if not zone_row.empty else ""
 
-            zone_color = (
-                "#A51C30" if zone == "Critique"
-                else "#E8A838" if zone == "Intermédiaire"
-                else "#1B5E3F" if zone == "Favorable"
-                else "#9C9A92"
-            )
-            score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
+                zone_color = (
+                    "#A51C30" if zone == "Critique"
+                    else "#E8A838" if zone == "Intermédiaire"
+                    else "#1B5E3F" if zone == "Favorable"
+                    else "#9C9A92"
+                )
+                score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
 
-            st.markdown(
-                f'<div style="font-size:11px;font-weight:700;color:#0A1938;'
-                f'margin-bottom:4px;text-align:center;">{cfg["nom"]}</div>'
-                f'<div style="font-size:10px;text-align:center;margin-bottom:4px;">'
-                f'<span style="color:{zone_color};font-weight:600;">{score_display}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-            # Contours communaux pour ce DOM (mis en cache)
-            geojson = _fetch_communes_geojson(code_dom)
-            if geojson is None or not geojson.get("features"):
                 st.markdown(
-                    f'<div style="height:{height}px;background:#F3F2EC;'
-                    f'border-radius:4px;display:flex;align-items:center;'
-                    f'justify-content:center;font-size:11px;color:#9C9A92;">'
-                    f'Carte indisponible</div>',
+                    f'<div style="font-size:11px;font-weight:700;color:#0A1938;'
+                    f'margin-bottom:4px;text-align:center;">{cfg["nom"]}</div>'
+                    f'<div style="font-size:10px;text-align:center;margin-bottom:4px;">'
+                    f'<span style="color:{zone_color};font-weight:600;">{score_display}</span>'
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
-                continue
 
-            # Couleur uniforme = score du département
-            dept_color = "#E8E6DD"
-            if score_val is not None:
-                try:
-                    dept_color = cmap(score_val)
-                except Exception:
-                    dept_color = "#E8E6DD"
+                # Contours communaux pour ce DOM (mis en cache)
+                geojson = _fetch_communes_geojson(code_dom)
+                if geojson is None or not geojson.get("features"):
+                    st.markdown(
+                        f'<div style="height:{height}px;background:#F3F2EC;'
+                        f'border-radius:4px;display:flex;align-items:center;'
+                        f'justify-content:center;font-size:11px;color:#9C9A92;">'
+                        f'Carte indisponible</div>',
+                        unsafe_allow_html=True,
+                    )
+                    continue
 
-            def _style(feature, _color=dept_color):
-                return {"fillColor": _color, "color": "#FFFFFF",
-                        "weight": 0.5, "fillOpacity": 0.88}
+                # Couleur uniforme = score du département
+                dept_color = "#E8E6DD"
+                if score_val is not None:
+                    try:
+                        dept_color = cmap(score_val)
+                    except Exception:
+                        dept_color = "#E8E6DD"
 
-            def _highlight(feature):
-                return {"fillColor": "#0A1938", "color": "#0A1938",
-                        "weight": 1.5, "fillOpacity": 0.2}
+                def _style(feature, _color=dept_color):
+                    return {"fillColor": _color, "color": "#FFFFFF",
+                            "weight": 0.5, "fillOpacity": 0.88}
 
-            m = folium.Map(
-                location=[cfg["lat"], cfg["lon"]],
-                zoom_start=cfg["zoom"],
-                tiles=TILE_URL,
-                attr=TILE_ATTR,
-                zoom_control=False,
-                scrollWheelZoom=False,
-                dragging=False,
-                doubleClickZoom=False,
-                touchZoom=False,
-            )
+                def _highlight(feature):
+                    return {"fillColor": "#0A1938", "color": "#0A1938",
+                            "weight": 1.5, "fillOpacity": 0.2}
 
-            # Masque l'attribution Leaflet (trop grande sur les mini-cartes)
-            m.get_root().header.add_child(
-                folium.Element(
-                    "<style>"
-                    ".leaflet-control-attribution{display:none!important;}"
-                    "</style>"
+                m = folium.Map(
+                    location=[cfg["lat"], cfg["lon"]],
+                    zoom_start=cfg["zoom"],
+                    tiles=TILE_URL,
+                    attr=TILE_ATTR,
+                    zoom_control=False,
+                    scrollWheelZoom=False,
+                    dragging=False,
+                    doubleClickZoom=False,
+                    touchZoom=False,
                 )
-            )
 
-            folium.GeoJson(
-                geojson,
-                style_function=_style,
-                highlight_function=_highlight,
-                tooltip=folium.GeoJsonTooltip(
-                    fields=["nom", "code"],
-                    aliases=["Commune", "Code INSEE"],
-                    localize=True,
-                    sticky=False,
-                    class_name="sa-tooltip",
-                ),
-            ).add_to(m)
+                # Masque l'attribution Leaflet (trop grande sur les mini-cartes)
+                m.get_root().header.add_child(
+                    folium.Element(
+                        "<style>"
+                        ".leaflet-control-attribution{display:none!important;}"
+                        "</style>"
+                    )
+                )
 
-            event = st_folium(
-                m,
-                width=None,
-                height=height,
-                returned_objects=["last_object_clicked"],
-                key=f"dom_map_{code_dom}",
-            )
+                folium.GeoJson(
+                    geojson,
+                    style_function=_style,
+                    highlight_function=_highlight,
+                    tooltip=folium.GeoJsonTooltip(
+                        fields=["nom", "code"],
+                        aliases=["Commune", "Code INSEE"],
+                        localize=True,
+                        sticky=False,
+                        class_name="sa-tooltip",
+                    ),
+                ).add_to(m)
 
-            if event and event.get("last_object_clicked"):
-                from ..router import navigate
-                navigate("dept", dept_code=code_dom)
+                event = st_folium(
+                    m,
+                    width=None,
+                    height=height,
+                    returned_objects=["last_object_clicked"],
+                    key=f"dom_map_{code_dom}",
+                )
+
+                if event and event.get("last_object_clicked"):
+                    from ..router import navigate
+                    navigate("dept", dept_code=code_dom)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

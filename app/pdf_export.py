@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from .scoring import fmt_rang_affichage
+from .scoring import fmt_classement_national
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -205,7 +205,7 @@ def generate_department_pdf(
     rang      = int((ranked["dept"] == r["dept"]).cumsum().max()) if score else 0
     total     = len(ranked)
     score_str = _fmt(score, "{:.1f}")
-    frag_str  = fmt_rang_affichage(rang, total) if rang else "N/D"
+    frag_str  = fmt_classement_national(rang, total) if rang else "N/D"
 
     score_block = Table([[
         Paragraph(
@@ -225,7 +225,7 @@ def generate_department_pdf(
                    textColor=colors.HexColor("#444444")),
             ),
             Paragraph(
-                f'<font size="9" color="#999999">Indice de fragilité nationale : '
+                f'<font size="9" color="#999999">Classement national : '
                 f'{frag_str} / {total}</font>',
                 _s("rang", fontName="Helvetica", fontSize=9, alignment=TA_RIGHT, textColor=GRIS_SEC),
             ),

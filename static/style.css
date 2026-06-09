@@ -220,12 +220,17 @@ div[data-testid="stExpander"] > div {
 /* ─── APP GLOBAL : fond papier ───────────────────────────────────────────── */
 .stApp { background: var(--bg-paper); }
 
-/* Empêche le scroll horizontal global sur desktop (tooltips absolus) */
+/* Empêche le scroll horizontal global sur desktop */
 /* Sur mobile on override plus bas pour permettre le scroll des tableaux */
 @media screen and (min-width: 769px) {
     .stMain, .stMainBlockContainer, .block-container {
         overflow-x: clip !important;
         max-width: 100% !important;
+    }
+    /* Contenu principal au-dessus de la sidebar (z-index 100) pour les tooltips */
+    [data-testid="stMain"] {
+        position: relative;
+        z-index: 110;
     }
 }
 
@@ -797,11 +802,11 @@ div[data-testid="stExpander"] > div {
 }
 .fiche-title-row {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
-    gap: 32px;
+    gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 .fiche-title {
     font-family: var(--serif) !important;
@@ -816,12 +821,12 @@ div[data-testid="stExpander"] > div {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 18px;
+    padding: 8px 14px;
     border-radius: 3px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     flex-shrink: 0;
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 .fiche-zone-badge::before {
     content: '';
@@ -834,6 +839,11 @@ div[data-testid="stExpander"] > div {
 .fiche-zone-badge.inter { background: var(--inter-soft); color: var(--inter); }
 .fiche-zone-badge.fav   { background: var(--fav-soft);   color: var(--fav);   }
 .fiche-meta { display: flex; gap: 48px; flex-wrap: wrap; }
+.fiche-meta--scores {
+    gap: 40px;
+    margin-top: 0;
+    padding-top: 4px;
+}
 .fiche-meta-item .label {
     font-size: 10px;
     letter-spacing: 0.18em;
@@ -1467,6 +1477,10 @@ iframe[title="streamlit_folium.st_folium"] {
     position: relative;
     cursor: help;
     line-height: 1;
+    z-index: 1;
+}
+.sa-tip:hover {
+    z-index: 100000;
 }
 .sa-tip-icon {
     display: inline-flex;
@@ -1495,17 +1509,16 @@ iframe[title="streamlit_folium.st_folium"] {
     pointer-events: none;
     transition: opacity 0.15s, visibility 0.15s;
     position: absolute;
-    /* Apparaît EN DESSOUS de l'icône, bord droit aligné avec l'icône  */
-    /* → s'étend vers la gauche, reste dans la zone visible             */
+    /* Par défaut : s'étend vers la gauche (labels en milieu / droite de page) */
     right: 0;
     left: auto;
     top: calc(100% + 6px);
     width: 280px;
-    max-width: 280px;
+    max-width: min(320px, calc(100vw - 270px));
     background: #0A1938;
     border-radius: 6px;
     padding: 14px 16px;
-    z-index: 9999;
+    z-index: 100001;
     box-shadow: 0 8px 32px rgba(0,0,0,0.28);
     white-space: normal;
     overflow: hidden;
@@ -1513,6 +1526,29 @@ iframe[title="streamlit_folium.st_folium"] {
 .sa-tip:hover .sa-tip-box {
     visibility: visible;
     opacity: 1;
+}
+/* Zones gauche (fiche département, header scores…) : ouvrir vers la droite */
+.fiche-header .sa-tip-box,
+.fiche-meta .sa-tip-box,
+.fiche-meta-item .sa-tip-box,
+.map-header .sa-tip-box,
+.kpi-stack-header .sa-tip-box,
+.section-header .sa-tip-box,
+.subsection-title .sa-tip-box,
+.methodology-card .sa-tip-box,
+.home-hero .sa-tip-box,
+.sa-tip--open-right .sa-tip-box {
+    left: 0;
+    right: auto;
+}
+/* Ne pas clipper les tooltips dans les en-têtes de fiche */
+.fiche-header,
+.fiche-meta,
+.fiche-meta-item,
+.fiche-meta-item .label,
+.section-header,
+.subsection-title {
+    overflow: visible !important;
 }
 .sa-tip-title {
     display: block;
@@ -2253,10 +2289,18 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     .main,
     .block-container {
         margin-left: 0 !important;
-        padding-top: 52px !important;
+        padding-top: 44px !important;
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
         width: 100% !important;
+    }
+    [data-testid="stMainBlockContainer"] > div:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    .stMarkdown:has(.sa-mobile-nav) + div,
+    .stMarkdown:has(.sa-mobile-nav) {
+        margin-bottom: 0 !important;
     }
 
     /* ── Tableaux → cartes (pas de scroll horizontal) ───────────────────── */
@@ -2283,22 +2327,39 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         max-width: 100% !important;
     }
 
-    /* ── Mini-cartes DOM-TOM : scroll horizontal conservé ─────────────────── */
-    [data-testid="stHorizontalBlock"]:has(
-        > [data-testid="stColumn"]:nth-child(5)
-    ) {
+    /* ── Mini-cartes DOM-TOM : carrousel horizontal local ─────────────────── */
+    .st-key-home_dom_cartouches {
+        margin-top: 4px !important;
+        margin-bottom: 0 !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+    }
+    .st-key-home_dom_cartouches [data-testid="stHorizontalBlock"] {
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        gap: 4px !important;
-        padding-bottom: 6px !important;
+        gap: 6px !important;
+        padding-bottom: 4px !important;
+        margin-bottom: 0 !important;
+        scrollbar-width: none;
     }
-    [data-testid="stHorizontalBlock"]:has(
-        > [data-testid="stColumn"]:nth-child(5)
-    ) > [data-testid="stColumn"] {
-        min-width: 120px !important;
-        max-width: 120px !important;
-        flex: 0 0 120px !important;
+    .st-key-home_dom_cartouches [data-testid="stHorizontalBlock"]::-webkit-scrollbar {
+        display: none;
+    }
+    .st-key-home_dom_cartouches [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        min-width: 118px !important;
+        max-width: 118px !important;
+        flex: 0 0 118px !important;
+        padding: 0 2px !important;
+    }
+    .st-key-home_dom_cartouches [data-testid="stVerticalBlock"] {
+        gap: 2px !important;
+    }
+    .st-key-home_dom_cartouches iframe,
+    .st-key-home_dom_cartouches [data-testid="stIFrame"] iframe {
+        min-height: 120px !important;
+        height: 120px !important;
+        max-height: 140px !important;
     }
 
     /* ── Tooltips centrées ──────────────────────────────────────────────── */
@@ -2326,7 +2387,8 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     .hero-eyebrow { margin-bottom: 8px !important; }
     .hero-lead     { font-size: 14px !important; line-height: 1.45 !important; }
     .hero-subtitle { font-size: 13px !important; }
-    .home-hero     { padding: 12px 0 10px !important; margin-bottom: 12px !important; }
+    .home-hero     { padding: 4px 0 8px !important; margin-bottom: 8px !important; }
+    .home-search-intro { margin: 0 0 6px !important; }
 
     /* ── Filtres carte nationale (pills) ────────────────────────────────── */
     div[data-testid="stPills"] {
@@ -2370,62 +2432,86 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     .element-container iframe {
         min-height: 450px !important;
     }
-
-    /* ── Barre de partage fiche : boutons empilés ───────────────────────── */
-    .fiche-share-bar {
-        padding: 14px 16px !important;
-        margin-bottom: 12px !important;
+    .st-key-home_dom_cartouches iframe,
+    .st-key-home_dom_cartouches [data-testid="stIFrame"] iframe {
+        min-height: 120px !important;
+        height: 120px !important;
     }
-    .fiche-share-title { font-size: 16px !important; }
+
+    /* ── Barre de partage fiche : boutons compacts en ligne ─────────────── */
+    .fiche-share-bar {
+        padding: 10px 12px !important;
+        margin-bottom: 8px !important;
+    }
+    .fiche-share-title { font-size: 15px !important; }
+    .fiche-share-lead  { font-size: 12px !important; margin-bottom: 2px !important; }
+    .fiche-topbar {
+        padding: 4px 0 6px !important;
+        margin-bottom: 2px !important;
+    }
     .st-key-fiche_share_actions [data-testid="stHorizontalBlock"] {
-        flex-direction: column !important;
-        flex-wrap: nowrap !important;
-        gap: 10px !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
     .st-key-fiche_share_actions [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-        width: 100% !important;
-        flex: 1 1 100% !important;
-        min-width: 100% !important;
+        width: auto !important;
+        flex: 1 1 calc(50% - 4px) !important;
+        min-width: min(48%, 148px) !important;
         max-width: 100% !important;
         padding: 0 !important;
     }
     .st-key-fiche_share_actions iframe {
-        height: 48px !important;
-        min-height: 48px !important;
+        height: 38px !important;
+        min-height: 38px !important;
     }
     .st-key-fiche_share_actions .stButton > button,
     .st-key-fiche_share_actions .stDownloadButton > button {
         width: 100% !important;
-        min-height: 48px !important;
+        min-height: 38px !important;
         margin-bottom: 0 !important;
-        font-size: 14px !important;
-        white-space: normal !important;
-        padding: 10px 16px !important;
+        font-size: 12px !important;
+        white-space: nowrap !important;
+        padding: 6px 10px !important;
     }
 
     /* ── Header fiche région / département ──────────────────────────────── */
     .fiche-header {
-        padding: 14px 0 12px !important;
-        margin-bottom: 16px !important;
+        padding: 8px 0 10px !important;
+        margin-bottom: 12px !important;
     }
     .fiche-title-row {
-        flex-direction: column !important;
-        align-items: flex-start !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
         gap: 10px !important;
-        margin-bottom: 12px !important;
+        margin-bottom: 8px !important;
+    }
+    .fiche-zone-badge {
+        padding: 6px 10px !important;
+        font-size: 11px !important;
+        margin-bottom: 0 !important;
+    }
+    .fiche-meta,
+    .fiche-meta--scores {
+        gap: 20px !important;
+        padding-top: 0 !important;
+    }
+    .fiche-meta-item .value {
+        font-size: 20px !important;
     }
     .fiche-title {
         font-size: clamp(28px, 8vw, 40px) !important;
         line-height: 1.05 !important;
-    }
-    .fiche-zone-badge {
-        padding: 8px 14px !important;
-        font-size: 12px !important;
-        margin-bottom: 0 !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
     }
     .fiche-meta {
-        flex-direction: column !important;
-        gap: 14px !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 14px 20px !important;
         width: 100% !important;
     }
     .fiche-meta-item .value {
@@ -2492,6 +2578,22 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         border: none !important;
         border-radius: 0 !important;
         min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+    }
+    .sa-tbl-scroll:has(.region-priority-table),
+    .sa-tbl-scroll:has(.region-ranking-table) {
+        overflow-x: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+    .reco-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
     }
     .region-priority-row,
     .region-ranking-row {
@@ -2499,8 +2601,11 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 6px !important;
-        padding: 14px 0 !important;
+        padding: 12px 2px !important;
         border-bottom: 1px solid #F0EDE5 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
     }
     .region-priority-dept .region-dept-name,
     .region-ranking-row .region-dept-name {

@@ -162,17 +162,16 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         ),
     },
     "rang_national": {
-        "title": "Indice de fragilité nationale",
+        "title": "Classement national",
         "body": (
-            "Position du département sur l'échelle de fragilité territoriale, "
-            "parmi les départements classés par score global Sant'active. "
-            "100 = situation la plus dégradée du pays. "
-            "1 = situation la plus favorable."
+            "Position du département dans le classement national par score "
+            "global Sant'active."
             "<br><br>"
-            "Calculé à partir du rang national interne "
-            "(total − rang + 1), sans modifier le score global."
+            "<strong>1er</strong> = meilleure situation relative du pays. "
+            "Un rang élevé (ex. 85ème) indique une position plus basse "
+            "dans le classement."
             "<br><br>"
-            "L'indice évolue si de nouvelles données sont intégrées."
+            "Le classement évolue si de nouvelles données sont intégrées."
         ),
     },
     "densite": {
@@ -251,7 +250,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
 }
 
 
-def info_tooltip(key: str, size: int = 14) -> str:
+def info_tooltip(key: str, size: int = 14, *, open_dir: str = "auto") -> str:
     """Génère le HTML d'une icône ⓘ avec tooltip CSS pur au survol.
 
     Utilise exclusivement CSS (:hover) — compatible avec st.markdown()
@@ -259,7 +258,8 @@ def info_tooltip(key: str, size: int = 14) -> str:
 
     Args:
         key  : clé dans le dictionnaire TOOLTIPS
-        size : taille de l'icône en px (défaut 14)
+        size     : taille de l'icône en px (défaut 14)
+        open_dir : « right » force l'ouverture vers la droite (évite la sidebar)
 
     Returns:
         str : HTML inline à injecter via st.markdown(unsafe_allow_html=True)
@@ -273,9 +273,10 @@ def info_tooltip(key: str, size: int = 14) -> str:
 
     title = tip["title"]
     body  = tip["body"]
+    dir_class = " sa-tip--open-right" if open_dir == "right" else ""
 
     return (
-        f'<span class="sa-tip">'
+        f'<span class="sa-tip{dir_class}">'
         f'<span class="sa-tip-icon" style="font-size:{size - 2}px;">'
         f'ⓘ'
         f'</span>'
