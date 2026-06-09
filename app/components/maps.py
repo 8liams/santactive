@@ -209,7 +209,7 @@ def render_national_choropleth(
 
     event = st_folium(
         m,
-        width=None,
+        use_container_width=True,
         height=height,
         returned_objects=["last_active_drawing", "last_object_clicked"],
         key=key,
@@ -358,7 +358,7 @@ def render_dom_cartouches(
 
                 event = st_folium(
                     m,
-                    width=None,
+                    use_container_width=True,
                     height=height,
                     returned_objects=["last_object_clicked"],
                     key=f"dom_map_{code_dom}",
@@ -613,6 +613,12 @@ def render_commune_choropleth(
         t_fields = ["nom", "code", "val_display"]
         t_aliases = ["Commune", "Code INSEE", metric_label]
 
+    # Folium vérifie les champs tooltip sur la 1ère feature uniquement : tous
+    # les polygones doivent exposer les mêmes clés (sinon AssertionError).
+    for feat in geojson_enriched["features"]:
+        for field in t_fields:
+            feat["properties"].setdefault(field, "N/D")
+
     tooltip = folium.GeoJsonTooltip(
         fields=t_fields,
         aliases=t_aliases,
@@ -678,7 +684,7 @@ def render_commune_choropleth(
         m,
         center=center,
         zoom=zoom,
-        width=None,
+        use_container_width=True,
         height=height,
         returned_objects=["last_object_clicked"],
         key=key,
