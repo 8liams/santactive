@@ -9,6 +9,7 @@ import streamlit as st
 View = Literal["home", "dept", "region", "commune", "comparer", "methodologie", "about", "enjeux"]
 
 _TERRITORY_PARAMS = ("dept_code", "region_code", "commune_code")
+_NAV_LOCK_KEY = "_nav_programmatic"
 
 
 def get_current_view() -> View:
@@ -35,6 +36,26 @@ def _set_query_params(view: View, params: dict[str, str]) -> None:
     st.query_params.update(qp)
 
 
+def _session_territory_params() -> dict[str, str]:
+    return {
+        k: str(st.session_state[k])
+        for k in _TERRITORY_PARAMS
+        if st.session_state.get(k) not in (None, "")
+    }
+
+
+def _url_matches_session(view: View, params: dict[str, str]) -> bool:
+    qp = dict(st.query_params)
+    if _qp_first(qp.get("view")) != view:
+        return False
+    for k in _TERRITORY_PARAMS:
+        in_url = _qp_first(qp.get(k))
+        in_sess = params.get(k)
+        if in_url != in_sess:
+            return False
+    return True
+
+
 def navigate(view: View, **params) -> None:
     """Change de vue et passe des paramètres.
 
@@ -51,6 +72,7 @@ def navigate(view: View, **params) -> None:
     for k, v in str_params.items():
         st.session_state[k] = v
 
+    st.session_state[_NAV_LOCK_KEY] = True
     _set_query_params(view, str_params)
     st.rerun()
 
@@ -67,11 +89,27 @@ def navigate_compare(*dept_codes: str) -> None:
 
 
 def init_from_url() -> None:
-    """Synchronise l'état depuis l'URL à chaque chargement."""
+    """Synchronise session ↔ URL (liens HTML ou navigation programmatique)."""
     qp = dict(st.query_params)
-    view = _qp_first(qp.get("view"))
-    if view:
-        st.session_state["view"] = view
+    url_view = _qp_first(qp.get("view"))
+
+    if st.session_state.pop(_NAV_LOCK_KEY, None):
+        view: View = st.session_state.get("view", "home")  # type: ignore[assignment]
+        params = _session_territory_params()
+        if not _url_matches_session(view, params):
+            _set_query_params(view, params)
+        return
+
+    if "view" not in st.session_state:
+        st.session_state["view"] = url_view or "home"
+        for k in _TERRITORY_PARAMS:
+            val = _qp_first(qp.get(k))
+            if val:
+                st.session_state[k] = val
+        return
+
+    if url_view and url_view != st.session_state.get("view"):
+        st.session_state["view"] = url_view
     for k in _TERRITORY_PARAMS:
         val = _qp_first(qp.get(k))
         if val:

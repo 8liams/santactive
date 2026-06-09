@@ -65,6 +65,30 @@ def render_breadcrumb(crumbs: list[NavCrumb], *, key_prefix: str = "bc") -> None
     )
 
 
+def render_sidebar_nav(
+    current_view: View,
+    items: list[tuple[str, View]],
+    *,
+    key_prefix: str = "snav",
+) -> None:
+    """Liens sidebar desktop — même mécanisme que le fil d'Ariane (href, pas st.button)."""
+    del key_prefix
+    links: list[str] = []
+    for label, view in items:
+        active = " sa-sidebar-nav-link--active" if view == current_view else ""
+        href = internal_href(view)
+        links.append(
+            f'<a href="{href}" target="_self" class="sa-sidebar-nav-link{active}">'
+            f"{html.escape(label)}</a>"
+        )
+    st.markdown(
+        '<nav class="sa-sidebar-nav" aria-label="Navigation principale">'
+        + "".join(links)
+        + "</nav>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
     """Bandeau mobile fixe — liens horizontaux (HTML, pas de colonnes Streamlit)."""
     del key_prefix

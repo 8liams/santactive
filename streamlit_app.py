@@ -20,7 +20,7 @@ from app.pages import (
     home,
     methodologie,
 )  # noqa: E402  (importés après set_page_config)
-from app.components.nav import render_mobile_nav
+from app.components.nav import render_mobile_nav, render_sidebar_nav
 from app.router import get_current_view, init_from_url, navigate
 from app.scoring import compute_scores
 
@@ -178,20 +178,14 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    _nav = [
-        ("Accueil",           "home",     "home"),
-        ("À quoi ça sert ?",  "enjeux",   "enjeux"),
-        ("Comparaison",       "comparer", "comparer"),
-    ]
-    for label, target, v_key in _nav:
-        is_active = view == v_key
-        if st.button(
-            label,
-            use_container_width=True,
-            type="primary" if is_active else "secondary",
-            key=f"nav_{v_key}",
-        ):
-            navigate(target)
+    render_sidebar_nav(
+        view,
+        [
+            ("Accueil", "home"),
+            ("À quoi ça sert ?", "enjeux"),
+            ("Comparaison", "comparer"),
+        ],
+    )
 
     # ── Recherche rapide sidebar ──────────────────────────────────────────────
     st.sidebar.markdown(
@@ -228,21 +222,14 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if st.button(
-        "Méthodologie",
-        use_container_width=True,
-        type="primary" if view == "methodologie" else "secondary",
-        key="nav_methodo",
-    ):
-        navigate("methodologie")
-
-    if st.button(
-        "À propos",
-        use_container_width=True,
-        type="primary" if view == "about" else "secondary",
-        key="nav_about",
-    ):
-        navigate("about")
+    render_sidebar_nav(
+        view,
+        [
+            ("Méthodologie", "methodologie"),
+            ("À propos", "about"),
+        ],
+        key_prefix="snav_res",
+    )
 
     # ── Footer ───────────────────────────────────────────────────────────────
     st.markdown(
