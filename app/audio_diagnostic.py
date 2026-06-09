@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from .components.delais import APL_SEUIL_DESERT
+from .scoring import rang_affichage
 
 _AUDIO_VOICE = "fr-FR-DeniseNeural"
 _AUDIO_DISCLAIMER = (
@@ -57,7 +58,8 @@ def _territory_label_for_speech(nom: str, *, kind: str = "dept") -> str:
 
 
 def _ordinal_fr(n: int) -> str:
-    return "1re" if n == 1 else f"{n}e"
+    """Ordinal oral aligné sur l'affichage fiche (1er, 2ème…)."""
+    return "1er" if n == 1 else f"{n}ème"
 
 
 def _join_names_fr(names: list[str], *, max_names: int = 5) -> str:
@@ -71,17 +73,26 @@ def _join_names_fr(names: list[str], *, max_names: int = 5) -> str:
     return ", ".join(items[:-1]) + f" et {items[-1]}"
 
 
-def _national_score_rank(row: pd.Series, master: pd.DataFrame) -> tuple[int | None, int]:
-    """Rang national (1 = score le plus faible / plus fragile)."""
-    ranked = (
-        master.dropna(subset=["score_global"])
-        .sort_values("score_global")
-        .reset_index(drop=True)
-    )
-    matches = ranked.index[ranked["dept"] == row["dept"]].tolist()
-    if not matches:
-        return None, len(ranked)
-    return matches[0] + 1, len(ranked)
+def _national_classement(row: pd.Series, master: pd.DataFrame) -> tuple[int | None, int]:
+    """Classement national affiché (1 = meilleur score) et effectif."""
+    total = int(row.get("nb_classes") or 0)
+    if total <= 0:
+        ranked = master.dropna(subset=["score_global"])
+        total = len(ranked)
+    rang = row.get("rang_national")
+    if rang is None or (isinstance(rang, float) and pd.isna(rang)):
+        ranked = (
+            master.dropna(subset=["score_global"])
+            .sort_values("score_global")
+            .reset_index(drop=True)
+        )
+        matches = ranked.index[ranked["dept"] == row["dept"]].tolist()
+        if not matches:
+            return None, len(ranked)
+        rang = matches[0] + 1
+        total = len(ranked)
+    pos = rang_affichage(rang, total)
+    return pos, total
 
 
 def _pop_weighted_mean(depts: pd.DataFrame, col: str) -> float:
@@ -263,11 +274,11 @@ def build_audio_diagnostic_text(
             f"Le score Sant'active s'élève à {float(score):.1f} sur 100."
         )
 
-    rang, total = _national_score_rank(row, master)
-    if rang is not None:
+    classement, total = _national_classement(row, master)
+    if classement is not None:
         parts.append(
-            f"Le département est classé {_ordinal_fr(rang)} sur {total} "
-            f"au classement national de fragilité sanitaire."
+            f"Le département se situe au {_ordinal_fr(classement)} rang "
+            f"sur {total} au classement national Sant'active."
         )
 
     apl_part = _apl_sentence_dept(row)
@@ -380,11 +391,12 @@ def build_region_audio_diagnostic_text(
             f"en zone critique."
         )
 
-    rang, total = _region_national_rank(region_code, master)
-    if rang is not None:
+    rang_interne, total = _region_national_rank(region_code, master)
+    classement = rang_affichage(rang_interne, total)
+    if classement is not None:
         parts.append(
-            f"La région est classée {_ordinal_fr(rang)} sur {total} "
-            f"au classement national de fragilité sanitaire."
+            f"La région se situe au {_ordinal_fr(classement)} rang "
+            f"sur {total} au classement national Sant'active."
         )
 
     apl_med = region_depts["apl_median_dept"].median()
