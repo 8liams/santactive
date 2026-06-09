@@ -203,15 +203,17 @@ def render_fiche_share_bar(
 
     n_cols = 4 if extra_col is not None else 3
     widths = [1, 1, 1, 1] if n_cols == 4 else [1, 1, 1.2]
-    cols = st.columns(widths)
 
-    with cols[0]:
-        _render_copy_button(fiche_url, key_prefix)
+    with st.container(key="fiche_share_actions"):
+        cols = st.columns(widths)
 
-    with cols[1]:
-        mailto_js = json.dumps(mailto)
-        components.html(
-            f"""<!DOCTYPE html>
+        with cols[0]:
+            _render_copy_button(fiche_url, key_prefix)
+
+        with cols[1]:
+            mailto_js = json.dumps(mailto)
+            components.html(
+                f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;">
 <a href={mailto_js} class="btn-share-email">Envoyer par e-mail</a>
@@ -238,36 +240,36 @@ def render_fiche_share_bar(
   .btn-share-email:hover {{ background: #F3F2EC; }}
 </style>
 </body></html>""",
-            height=46,
-        )
-
-    with cols[2]:
-        if pdf_bytes:
-            st.download_button(
-                label="Télécharger le PDF",
-                data=pdf_bytes,
-                file_name=pdf_filename,
-                mime="application/pdf",
-                use_container_width=True,
-                type="primary",
-                key=f"{key_prefix}_pdf",
-            )
-        elif pdf_error:
-            st.button(
-                "PDF indisponible",
-                disabled=True,
-                use_container_width=True,
-                help=pdf_error,
-                key=f"{key_prefix}_pdf_err",
-            )
-        else:
-            st.button(
-                "Télécharger le PDF",
-                disabled=True,
-                use_container_width=True,
-                key=f"{key_prefix}_pdf_na",
+                height=46,
             )
 
-    if extra_col is not None and n_cols == 4:
-        with cols[3]:
-            extra_col()
+        with cols[2]:
+            if pdf_bytes:
+                st.download_button(
+                    label="Télécharger le PDF",
+                    data=pdf_bytes,
+                    file_name=pdf_filename,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    type="primary",
+                    key=f"{key_prefix}_pdf",
+                )
+            elif pdf_error:
+                st.button(
+                    "PDF indisponible",
+                    disabled=True,
+                    use_container_width=True,
+                    help=pdf_error,
+                    key=f"{key_prefix}_pdf_err",
+                )
+            else:
+                st.button(
+                    "Télécharger le PDF",
+                    disabled=True,
+                    use_container_width=True,
+                    key=f"{key_prefix}_pdf_na",
+                )
+
+        if extra_col is not None and n_cols == 4:
+            with cols[3]:
+                extra_col()

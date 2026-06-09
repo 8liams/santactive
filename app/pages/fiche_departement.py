@@ -680,12 +680,13 @@ def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
         )
         rows_html += (
             f'<tr>'
-            f'<td class="cell-rank">{i + 1}</td>'
+            f'<td class="cell-rank" data-label="Rang">{i + 1}</td>'
             f'<td class="metric-label">{commune_name}</td>'
-            f'<td>{pop_str}</td>'
-            f'<td>{impact_str}</td>'
-            f'<td>{niveau}</td>'
-            f'<td style="font-size:13px;color:#4A4A4A;line-height:1.45;">'
+            f'<td data-label="Population concernée">{pop_str}</td>'
+            f'<td data-label="Impact potentiel">{impact_str}</td>'
+            f'<td data-label="Niveau de priorité">{niveau}</td>'
+            f'<td data-label="Facteurs principaux" '
+            f'style="font-size:13px;color:#4A4A4A;line-height:1.45;">'
             f'{facteur}</td>'
             f'</tr>'
         )

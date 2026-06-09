@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -544,17 +546,21 @@ def _render_comparison_table(
                 dept_vals[name] = float(v)
 
         if nat is None or pd.isna(nat):
-            nat_cell = '<td class="cell-na">N/D</td>'
+            nat_cell = '<td class="cell-na" data-label="Réf. nationale">N/D</td>'
         else:
             nat_cell = (
-                f'<td class="cell-national-ref">{format(nat, fmt)}{unit}</td>'
+                f'<td class="cell-national-ref" data-label="Réf. nationale">'
+                f'{format(nat, fmt)}{unit}</td>'
             )
 
         dept_cells = ""
         for name in selected:
+            safe_name = html.escape(name)
             v = values.get(name)
             if v is None or (isinstance(v, float) and pd.isna(v)):
-                dept_cells += '<td class="cell-na">N/D</td>'
+                dept_cells += (
+                    f'<td class="cell-na" data-label="{safe_name}">N/D</td>'
+                )
                 continue
             pos = _position_vs_national(float(v), nat, col) if nat is not None else None
             klass = {
@@ -562,7 +568,10 @@ def _render_comparison_table(
                 "worse": "cell-below-nat",
                 "at": "cell-at-nat",
             }.get(pos or "", "")
-            dept_cells += f'<td class="{klass}">{format(v, fmt)}{unit}</td>'
+            dept_cells += (
+                f'<td class="{klass}" data-label="{safe_name}">'
+                f'{format(v, fmt)}{unit}</td>'
+            )
 
         interpretation = _interpretation_territoriale(col, nat, dept_vals, selected)
         rows_html += (
@@ -570,7 +579,8 @@ def _render_comparison_table(
             f'<td class="metric-label">{label}</td>'
             f'{nat_cell}'
             f'{dept_cells}'
-            f'<td class="cell-lecture">{interpretation}</td>'
+            f'<td class="cell-lecture" data-label="Interprétation">'
+            f'{interpretation}</td>'
             f'</tr>'
         )
 

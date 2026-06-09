@@ -7,18 +7,15 @@ import html
 import pandas as pd
 import streamlit as st
 
-from ..action_impact import render_amplitude_region_html
 from ..components import render_national_choropleth
 from ..components.share_bar import region_share_context, render_fiche_share_bar
 from ..pdf_export import generate_region_pdf
 from ..region_decision import (
-    build_decision_synthesis,
+    build_action_prioritaire,
     enrich_leviers_decision,
     enrich_priorities_decision,
 )
 from ..region_pilotage import (
-    _patho_metrics,
-    build_territoire_card,
     compute_dept_priorities,
     compute_leviers_action,
     compute_publics_prioritaires,
@@ -74,7 +71,7 @@ def render(data: dict) -> None:
         data,
         region_name,
     )
-    decision_synthesis = build_decision_synthesis(priorities, leviers, publics)
+    action_prioritaire = build_action_prioritaire(leviers, region_name)
 
     render_topbar(region_name)
     render_share_section(
@@ -87,9 +84,10 @@ def render(data: dict) -> None:
         priorities=priorities,
         leviers=leviers,
     )
-    render_ou_agir(priorities, region_depts, data)
+    render_ou_agir(priorities)
     render_pour_qui(publics)
-    render_comment_agir(leviers, decision_synthesis)
+    render_action_prioritaire(action_prioritaire)
+    render_comment_agir(leviers)
     render_donnees_detaillees(
         region_depts, region_name, data, delais_region, priorities_raw
     )
@@ -329,16 +327,18 @@ def _impact_territoire_html(row: pd.Series) -> str:
     )
 
 
-def render_ou_agir(
-    priorities: pd.DataFrame,
-    region_depts: pd.DataFrame,
-    data: dict,
-) -> None:
+def render_ou_agir(priorities: pd.DataFrame) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">OÙ AGIR</div>'
         '<h2 class="section-title">Territoires <em>prioritaires.</em></h2>'
-        '</div>',
+        '</div>'
+        '<p class="diagnostic-prose" style="font-size:14px;max-width:900px;'
+        'margin:-8px 0 24px;line-height:1.6;">'
+        'Classement des départements où une action régionale pourrait produire '
+        'le plus d\u2019impact au regard des besoins de santé, de la population '
+        'concernée et de la faisabilité d\u2019intervention.'
+        '</p>',
         unsafe_allow_html=True,
     )
 
@@ -374,59 +374,6 @@ def render_ou_agir(
         + "</div>",
         unsafe_allow_html=True,
     )
-
-    # Focus top 3
-    top3 = priorities.head(3)
-    if top3.empty:
-        return
-
-    st.markdown(
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9C9A92;margin:36px 0 16px;">'
-        'Pourquoi ces territoires ressortent</div>',
-        unsafe_allow_html=True,
-    )
-
-    patho_map = _patho_metrics(
-        data.get("patho"),
-        region_depts["dept"].astype(str).str.zfill(2).tolist(),
-    )
-
-    cols_ui = st.columns(min(3, len(top3)))
-    for i, (_, row) in enumerate(top3.iterrows()):
-        code = str(row["dept"]).zfill(2)
-        profile = build_territoire_card(row, patho_map.get(code), region_depts)
-        public = profile["publics"][0] if profile["publics"] else "N/D"
-        score = int(row.get("score_priorite", 0))
-        justif = str(row.get("justification_prioritaire", row.get("lecture_rapide", "")))
-        impact_html = _impact_territoire_html(row)
-        fais = str(row.get("faisabilite_label", "Moyenne"))
-
-        with cols_ui[i]:
-            dept_name = str(row["Nom du département"])
-            st.markdown(
-                f'<div class="reco-card region-territory-card p{i + 1}">'
-                f'<div class="reco-title region-territory-title">'
-                f'{dept_link_html(code, dept_name, css_class="region-card-dept-link")}'
-                f"</div>"
-                f'<div class="reco-stats" style="margin:12px 0;">'
-                f'<div class="reco-stat">'
-                f'<span class="val">{score}<span style="font-size:14px;color:#9C9A92;">/100</span></span>'
-                f'<span class="lbl">Score de priorité</span>'
-                f"</div>"
-                f'<div class="reco-stat">'
-                f'<span class="val" style="font-size:15px;">{fais}</span>'
-                f'<span class="lbl">Faisabilité</span>'
-                f"</div>"
-                f"</div>"
-                f'<div style="font-size:12px;color:#4A4A4A;margin-bottom:10px;">'
-                f'{impact_html}</div>'
-                f'<div style="font-size:11px;color:#9C9A92;margin-bottom:8px;">'
-                f'PUBLIC\u202f: {public}</div>'
-                f'<div class="reco-prose" style="font-size:13px;">{html.escape(justif)}</div>'
-                f"</div>",
-                unsafe_allow_html=True,
-            )
 
 
 # ── Bloc 3 — Pour qui agir ? ──────────────────────────────────────────────────
@@ -471,14 +418,18 @@ def render_pour_qui(publics: list[dict]) -> None:
             )
 
 
-# ── Bloc 4 — Comment agir ? ───────────────────────────────────────────────────
+# ── Bloc 4 — Action prioritaire ───────────────────────────────────────────────
 
-def _render_decision_synthesis_card(synthesis: dict[str, str]) -> None:
+def render_action_prioritaire(card: dict[str, str] | None) -> None:
+    if not card:
+        return
+
     items = (
-        ("Territoire cible", synthesis.get("territoire_cible", "N/D")),
-        ("Public cible", synthesis.get("public_cible", "N/D")),
-        ("Action prioritaire", synthesis.get("action_prioritaire", "N/D")),
-        ("Action rapide", synthesis.get("action_rapide", "N/D")),
+        ("Action recommandée", card["action"]),
+        ("Population potentiellement concernée", card["population"]),
+        ("Territoires prioritaires", card["territoires"]),
+        ("Faisabilité", card["faisabilite"]),
+        ("Horizon", card["horizon"]),
     )
     grid = "".join(
         f'<div class="reco-impact-item">'
@@ -488,95 +439,82 @@ def _render_decision_synthesis_card(synthesis: dict[str, str]) -> None:
         for lbl, val in items
     )
     st.markdown(
-        f'<div class="reco-card reco-card-neutral" style="min-height:auto;margin-bottom:28px;">'
-        f'<div class="reco-title">Ce qu\'il faut retenir</div>'
-        f'<div class="reco-impact" style="margin-top:14px;">'
+        f'<div class="reco-card p1" style="min-height:auto;margin-top:48px;">'
+        f'<div class="reco-title">Action régionale prioritaire</div>'
+        f'<div class="reco-impact" style="margin-top:16px;">'
         f'<div class="reco-impact-grid">{grid}</div>'
+        f"</div>"
+        f'<div class="reco-prose" style="font-size:14px;margin-top:18px;">'
+        f'<strong>Justification\u202f:</strong> '
+        f'<em>{html.escape(card["justification"])}</em>'
         f"</div></div>",
         unsafe_allow_html=True,
     )
 
 
-def _render_levier_enrichment_html(lev: dict) -> str:
-    impact_pop = html.escape(str(lev.get("impact_pop_str", "n.d.")))
+# ── Bloc 5 — Comment agir ? ───────────────────────────────────────────────────
+
+def _render_levier_fiche_html(lev: dict, index: int) -> str:
+    amplitude = lev.get("amplitude")
+    pop = html.escape(str(lev.get("impact_pop_str", "n.d.")))
+    horizon = html.escape(
+        amplitude.horizon if amplitude else str(lev.get("horizon", "Moyen terme"))
+    )
+    pourquoi = html.escape(str(lev.get("pourquoi_maintenant", "")))
     impact_niv = html.escape(str(lev.get("impact_niveau", "Impact moyen")))
     fais = html.escape(str(lev.get("faisabilite_label", "Moyenne")))
-    pourquoi = html.escape(str(lev.get("pourquoi_levier", "")))
+    depts = html.escape(", ".join(lev.get("depts", [])) or "n.d.")
+    public = html.escape(str(lev.get("public_cible", "N/D")))
+
     return (
-        '<div class="reco-impact" style="margin-top:16px;">'
-        '<div class="reco-impact-grid">'
-        '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Impact attendu</span>'
-        f'<span class="reco-impact-val">{impact_niv}<br>'
-        f'<span style="font-size:12px;color:#6B6B68;">≈ {impact_pop}</span></span>'
+        f'<div class="reco-card p{index}" style="min-height:auto;">'
+        f'<div class="reco-number">{index}.</div>'
+        f'<div class="reco-title">{html.escape(lev["intitule"].capitalize())}</div>'
+        f'<div class="reco-prose" style="font-size:13px;margin-top:12px;">'
+        f"<strong>Pourquoi maintenant\u202f?</strong><br>{pourquoi}"
         "</div>"
-        '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Faisabilité</span>'
+        f'<div class="reco-impact" style="margin-top:16px;">'
+        f'<div class="reco-impact-grid">'
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Impact attendu</span>'
+        f'<span class="reco-impact-val">{impact_niv}</span>'
+        f"</div>"
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Population concernée</span>'
+        f'<span class="reco-impact-val">{pop}</span>'
+        f"</div>"
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Territoires concernés</span>'
+        f'<span class="reco-impact-val">{depts}</span>'
+        f"</div>"
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Public cible</span>'
+        f'<span class="reco-impact-val">{public}</span>'
+        f"</div>"
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Faisabilité</span>'
         f'<span class="reco-impact-val">{fais}</span>'
-        "</div>"
-        "</div></div>"
-        '<div class="reco-prose" style="font-size:13px;margin-top:14px;">'
-        f"<strong>Pourquoi ce levier\u202f?</strong> {pourquoi}"
-        "</div>"
+        f"</div>"
+        f'<div class="reco-impact-item">'
+        f'<span class="reco-impact-lbl">Horizon</span>'
+        f'<span class="reco-impact-val">{horizon}</span>'
+        f"</div>"
+        f"</div></div>"
+        f"</div>"
     )
 
 
-def render_top3_actions_regionales(leviers: list[dict]) -> None:
-    top3 = leviers[:3]
-    if not top3:
-        return
-
-    st.markdown(
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9C9A92;margin:0 0 16px;">'
-        "Top 3 actions régionales recommandées</div>",
-        unsafe_allow_html=True,
-    )
-
-    for i, lev in enumerate(top3, 1):
-        amplitude = lev.get("amplitude")
-        pop = html.escape(str(lev.get("impact_pop_str", "n.d.")))
-        horizon = html.escape(
-            amplitude.horizon if amplitude else str(lev.get("horizon", "Moyen terme"))
-        )
-        pourquoi = html.escape(str(lev.get("pourquoi_maintenant", "")))
-        impact_niv = html.escape(str(lev.get("impact_niveau", "Impact moyen")))
-        st.markdown(
-            f'<div class="reco-card p{i}" style="min-height:auto;">'
-            f'<div class="reco-number">{i}.</div>'
-            f'<div class="reco-title">{html.escape(lev["intitule"].capitalize())}</div>'
-            f'<div class="reco-prose" style="font-size:13px;margin-top:10px;">'
-            f"<strong>Pourquoi maintenant\u202f?</strong> {pourquoi}"
-            "</div>"
-            f'<div class="reco-impact" style="margin-top:14px;">'
-            f'<div class="reco-impact-grid">'
-            f'<div class="reco-impact-item">'
-            f'<span class="reco-impact-lbl">Impact potentiel</span>'
-            f'<span class="reco-impact-val">{impact_niv}</span>'
-            f"</div>"
-            f'<div class="reco-impact-item">'
-            f'<span class="reco-impact-lbl">Population concernée</span>'
-            f'<span class="reco-impact-val">{pop}</span>'
-            f"</div>"
-            f'<div class="reco-impact-item">'
-            f'<span class="reco-impact-lbl">Horizon</span>'
-            f'<span class="reco-impact-val">{horizon}</span>'
-            f"</div>"
-            f"</div></div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-
-def render_comment_agir(
-    leviers: list[dict],
-    decision_synthesis: dict[str, str],
-) -> None:
+def render_comment_agir(leviers: list[dict]) -> None:
     st.markdown(
         '<div class="section-header" style="margin-top:56px;">'
         '<div class="section-eyebrow">COMMENT AGIR</div>'
-        '<h2 class="section-title">Leviers <em>recommandés.</em></h2>'
-        '</div>',
+        '<h2 class="section-title">Actions régionales <em>recommandées.</em></h2>'
+        '</div>'
+        '<p class="diagnostic-prose" style="font-size:14px;max-width:900px;'
+        'margin:-8px 0 24px;line-height:1.6;">'
+        'Actions régionales recommandées à partir des besoins observés, '
+        'des publics concernés et du potentiel d\u2019impact estimé.'
+        '</p>',
         unsafe_allow_html=True,
     )
 
@@ -584,35 +522,8 @@ def render_comment_agir(
         st.info("Aucun levier identifié avec les données disponibles.")
         return
 
-    _render_decision_synthesis_card(decision_synthesis)
-    render_top3_actions_regionales(leviers)
-
-    st.markdown(
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9C9A92;margin:36px 0 16px;">'
-        "Leviers détaillés</div>",
-        unsafe_allow_html=True,
-    )
-
     for i, lev in enumerate(leviers[:3], 1):
-        depts_str = ", ".join(lev.get("depts", [])) or "n.d."
-        amplitude = lev.get("amplitude")
-        amplitude_html = (
-            render_amplitude_region_html(amplitude) if amplitude else ""
-        )
-        st.markdown(
-            f'<div class="reco-card p{i}">'
-            f'<div class="reco-title">{lev["intitule"].capitalize()}</div>'
-            f'<div class="reco-prose" style="font-size:13px;">'
-            f'<strong>Problème\u202f:</strong> {html.escape(str(lev.get("tension", "N/D")))}<br>'
-            f'<strong>Public\u202f:</strong> {html.escape(str(lev["public_cible"]))}<br>'
-            f'<strong>Territoires\u202f:</strong> {html.escape(depts_str)}'
-            f"</div>"
-            f"{_render_levier_enrichment_html(lev)}"
-            f"{amplitude_html}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown(_render_levier_fiche_html(lev, i), unsafe_allow_html=True)
 
 
 # ── Données détaillées (accordéon) ────────────────────────────────────────────

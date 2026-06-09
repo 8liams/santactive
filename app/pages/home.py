@@ -121,11 +121,12 @@ def render(data: dict) -> None:
             navigate("commune", commune_code=code)
 
     # ── CARTE + KPIs ───────────────────────────────────────────────────────────
-    col_map, col_kpi = st.columns([1.6, 1], gap="large")
-    with col_map:
-        _render_national_map(master, geojson)
-    with col_kpi:
-        _render_national_kpis(data)
+    with st.container(key="home_map_kpi"):
+        col_map, col_kpi = st.columns([1.6, 1], gap="large")
+        with col_map:
+            _render_national_map(master, geojson)
+        with col_kpi:
+            _render_national_kpis(data)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

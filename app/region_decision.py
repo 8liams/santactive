@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .action_impact import (
-    HORIZON_COURT,
-    project_levier_amplitude_region,
-)
+from .action_impact import project_levier_amplitude_region
 from .region_pilotage import (
     _patho_fragment_stats,
     _patho_metrics,
@@ -38,17 +35,6 @@ _IMPACT_POP_MULT: dict[str, float] = {
     "moyen": 0.42,
     "limité": 0.25,
 }
-
-_PUBLIC_SHORT: dict[str, str] = {
-    "Seniors (65 ans et plus)": "Seniors",
-    "Maladies cardiovasculaires": "Maladies cardiovasculaires",
-    "Maladies psychiatriques": "Santé mentale",
-    "Maladies respiratoires chroniques": "Maladies respiratoires",
-    "Maladies neurologiques ou dégénératives": "Neurologie",
-    "Diabète": "Diabète",
-    "Cancers": "Cancers",
-}
-
 
 def _num(val, default=float("nan")) -> float:
     try:
@@ -373,35 +359,84 @@ def enrich_leviers_decision(
     return enriched
 
 
-def build_decision_synthesis(
-    priorities: pd.DataFrame,
-    leviers: list[dict],
-    publics: list[dict],
-) -> dict[str, str]:
-    """Synthèse « Ce qu'il faut retenir » pour la section action."""
-    top_dept = (
-        str(priorities.iloc[0]["Nom du département"])
-        if not priorities.empty else "N/D"
-    )
-    top_public = "N/D"
-    if publics:
-        top_public = _PUBLIC_SHORT.get(
-            publics[0].get("label", ""), publics[0].get("label", "N/D")
+def _build_justification_action_prioritaire(lev: dict, region_name: str) -> str:
+    """Phrase unique expliquant pourquoi le levier #1 ressort en tête."""
+    intitule = str(lev.get("intitule", "")).lower()
+    action = str(lev.get("intitule", "cette action")).capitalize()
+    n_depts = len(lev.get("depts") or [])
+
+    if "cardio" in intitule:
+        return (
+            f"La {action.lower()} apparaît comme l'action la plus pertinente "
+            f"en {region_name} au regard du nombre de patients concernés, "
+            f"de la concentration géographique des besoins et du potentiel "
+            f"d'impact régional."
+        )
+    if "diabète" in intitule or "diabete" in intitule:
+        return (
+            f"Le {action.lower()} ressort en tête en {region_name} "
+            f"compte tenu des volumes CNAM identifiés sur {n_depts} "
+            f"département{'s' if n_depts > 1 else ''} et du potentiel "
+            f"d'intervention à court terme."
+        )
+    if "senior" in intitule or "gériatrique" in intitule or "geriatrique" in intitule:
+        return (
+            f"La {action.lower()} concentre les signaux démographiques "
+            f"et d'accès les plus marqués en {region_name}, "
+            f"sur {n_depts} département{'s' if n_depts > 1 else ''} "
+            f"à forte part de seniors."
+        )
+    if "téléexpertise" in intitule or "teleexpertise" in intitule:
+        return (
+            f"La {action.lower()} répond aux contraintes d'accès "
+            f"aux spécialistes observées en {region_name}, "
+            f"avec un déploiement possible sur {n_depts} "
+            f"département{'s' if n_depts > 1 else ''}."
+        )
+    if "santé mentale" in intitule or "psychiatr" in intitule:
+        return (
+            f"La {action.lower()} fait émerger en {region_name} "
+            f"par la combinaison prévalence CNAM et difficultés "
+            f"d'accès aux soins sur {n_depts} "
+            f"département{'s' if n_depts > 1 else ''}."
         )
 
-    top_action = leviers[0]["intitule"].capitalize() if leviers else "N/D"
+    pourquoi = str(lev.get("pourquoi_levier", "")).strip()
+    if pourquoi:
+        return (
+            f"{action} apparaît comme l'action la plus pertinente "
+            f"en {region_name}\u202f: {pourquoi[0].lower() + pourquoi[1:]}"
+            if pourquoi[0].isupper() else
+            f"{action} apparaît comme l'action la plus pertinente "
+            f"en {region_name}\u202f: {pourquoi}"
+        )
+    return (
+        f"{action} ressort comme la priorité régionale en {region_name} "
+        f"au regard des besoins observés, des publics concernés "
+        f"et du potentiel d'impact estimé."
+    )
 
-    fast_lev = next(
-        (lev for lev in leviers if lev.get("horizon") == HORIZON_COURT),
-        leviers[1] if len(leviers) > 1 else (leviers[0] if leviers else None),
-    )
-    fast_action = (
-        fast_lev["intitule"].capitalize() if fast_lev else "N/D"
-    )
+
+def build_action_prioritaire(
+    leviers: list[dict],
+    region_name: str,
+) -> dict[str, str] | None:
+    """Carte stratégique « Action régionale prioritaire » (levier #1)."""
+    if not leviers:
+        return None
+
+    lev = leviers[0]
+    amplitude = lev.get("amplitude")
+    depts = lev.get("depts") or []
 
     return {
-        "territoire_cible": top_dept,
-        "public_cible": top_public,
-        "action_prioritaire": top_action,
-        "action_rapide": fast_action,
+        "action": str(lev["intitule"]).capitalize(),
+        "population": str(lev.get("impact_pop_str", "n.d.")),
+        "territoires": ", ".join(depts) if depts else "n.d.",
+        "faisabilite": str(lev.get("faisabilite_label", "Moyenne")),
+        "horizon": (
+            amplitude.horizon if amplitude
+            else str(lev.get("horizon", "Moyen terme"))
+        ),
+        "justification": _build_justification_action_prioritaire(lev, region_name),
     }
