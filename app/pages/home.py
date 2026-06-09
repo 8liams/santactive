@@ -188,7 +188,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     # Fallback si la colonne est absente ou entièrement vide
     if col_key not in master.columns or master[col_key].isna().all():
         st.caption(
-            f"Indicateur « {selected_metric} » non disponible, "
+            f"Indicateur « {selected_label} » non disponible, "
             "affichage du score global."
         )
         col_key, cmap_name, reverse_scale = "score_global", "score", False
@@ -212,8 +212,8 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             if code:
                 navigate("dept", dept_code=str(code))
 
-    # Légende HTML (Folium n'affiche pas de colorbar native)
-    if "zone_short" in master.columns:
+    # Légende zones — uniquement pour le score global (terciles Sant'active)
+    if col_key == "score_global" and "zone_short" in master.columns:
         counts = master["zone_short"].value_counts()
         st.markdown(
             '<div class="map-legend">'
@@ -366,9 +366,32 @@ def _render_national_kpis(data: dict) -> None:
 
     st.markdown(
         '<div class="methodology-card">'
-        '<strong>Comment on calcule ces scores ?</strong>'
-        ' APL ANCT 2023 (65\u202f%) + temps d\'accès pondéré (35\u202f%), '
-        'densité en établissements et délais de RDV.'
+        '<strong>Comment sont calculés les scores\u202f?</strong>'
+        '<p style="margin:10px 0 0;line-height:1.55;">'
+        'Le score Sant\u2019active synthétise l\u2019accès aux soins à partir de '
+        '<strong>6 indicateurs publics</strong> couvrant l\u2019accessibilité, '
+        'l\u2019offre médicale et le contexte territorial.'
+        '</p>'
+        '<p style="margin:8px 0 0;line-height:1.55;">'
+        'Les départements sont comparés entre eux à l\u2019échelle nationale '
+        'grâce à une normalisation en rang percentile.'
+        '</p>'
+        '<p style="margin:10px 0 6px;line-height:1.55;">'
+        '<strong>Les indicateurs pris en compte sont\u202f:</strong>'
+        '</p>'
+        '<ul style="margin:0 0 8px 18px;padding:0;line-height:1.55;">'
+        '<li>APL (30\u202f%)</li>'
+        '<li>Temps d\u2019accès médian (20\u202f%)</li>'
+        '<li>Médecins généralistes /100k (20\u202f%)</li>'
+        '<li>Structures de soins /100k (15\u202f%)</li>'
+        '<li>Part des 65 ans et plus (10\u202f%)</li>'
+        '<li>Prix immobilier médian (5\u202f%)</li>'
+        '</ul>'
+        '<p style="margin:0;line-height:1.55;">'
+        'Un score supérieur à 50 indique une situation meilleure que la '
+        'médiane nationale. Pour le détail complet de la méthode, consulter '
+        'la page <em>Méthodologie</em>.'
+        '</p>'
         '</div>',
         unsafe_allow_html=True,
     )

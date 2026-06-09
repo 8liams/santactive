@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import streamlit as st
 
-from ..router import View, navigate
+from ..router import View
 
 
 @dataclass(frozen=True)
@@ -66,26 +66,26 @@ def render_breadcrumb(crumbs: list[NavCrumb], *, key_prefix: str = "bc") -> None
 
 
 def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
-    """Barre mobile compacte — grille 2×2 + ligne « À propos »."""
-    nav_rows: list[list[tuple[View, str]]] = [
-        [("home", "Accueil"), ("comparer", "Comparaison")],
-        [("enjeux", "À quoi ça sert ?"), ("methodologie", "Méthodologie")],
-        [("about", "À propos")],
+    """Bandeau mobile fixe — liens horizontaux (HTML, pas de colonnes Streamlit)."""
+    del key_prefix
+    items: list[tuple[View, str]] = [
+        ("home", "Accueil"),
+        ("comparer", "Comparaison"),
+        ("enjeux", "À quoi ça sert ?"),
+        ("methodologie", "Méthodologie"),
+        ("about", "À propos"),
     ]
-
-    with st.container(key="sa_mobile_nav"):
-        for row_idx, row in enumerate(nav_rows):
-            if len(row) == 1:
-                _sp, col, _sp2 = st.columns([0.35, 1.3, 0.35], gap="small")
-                cols = [col]
-            else:
-                cols = st.columns(len(row), gap="small")
-            for col, (view, label) in zip(cols, row):
-                with col:
-                    if st.button(
-                        label,
-                        key=f"{key_prefix}_r{row_idx}_{view}",
-                        use_container_width=True,
-                        type="primary" if view == current_view else "secondary",
-                    ):
-                        navigate(view)
+    links: list[str] = []
+    for view, label in items:
+        active = " sa-mnav-link--active" if view == current_view else ""
+        href = internal_href(view)
+        links.append(
+            f'<a href="{href}" target="_self" class="sa-mnav-link{active}">'
+            f"{html.escape(label)}</a>"
+        )
+    st.markdown(
+        '<nav class="sa-mobile-nav" aria-label="Navigation principale">'
+        + "".join(links)
+        + "</nav>",
+        unsafe_allow_html=True,
+    )

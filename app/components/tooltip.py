@@ -30,17 +30,25 @@ TOOLTIPS: dict[str, dict[str, str]] = {
     "score_global": {
         "title": "Score global Sant'active",
         "body": (
-            "Indicateur synthétique sur 100 calculé à partir de trois "
-            "dimensions pondérées :"
-            "<br>• Accès aux soins (35 %) : APL + temps d'accès médian"
-            "<br>• Professionnels de santé (35 %) : densité médecins /100k"
-            "<br>• Établissements (30 %) : densité hôpitaux FINESS /100k"
+            "Indicateur synthétique sur 100 calculé à partir de "
+            "<strong>6 dimensions pondérées</strong>."
             "<br><br>"
-            "Chaque dimension est normalisée en rang percentile national "
-            "(méthode DREES). Le score 50 correspond à la médiane nationale."
+            "<strong>• Accessibilité aux soins :</strong>"
+            "<br>APL (30 %) + temps d'accès médian (20 %)"
             "<br><br>"
-            "<strong>Source :</strong> calcul Sant'active · données "
-            "RPPS janv. 2026, FINESS mars 2026, ANCT 2023"
+            "<strong>• Offre médicale :</strong>"
+            "<br>médecins généralistes (20 %) + structures de soins (15 %)"
+            "<br><br>"
+            "<strong>• Contexte territorial :</strong>"
+            "<br>part des 65 ans et plus (10 %) + prix immobilier (5 %)"
+            "<br><br>"
+            "Chaque dimension est convertie en rang percentile national."
+            "<br>Un score de 50 correspond à la médiane nationale."
+            "<br>Le score est calculé uniquement si au moins 3 dimensions "
+            "sont disponibles."
+            "<br><br>"
+            "<strong>Source :</strong> calcul Sant'active v2 · INSEE · ANCT · "
+            "RPPS · FINESS · DVF"
         ),
     },
     "temps_acces": {
@@ -184,44 +192,40 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         ),
     },
     "score_acces": {
-        "title": "Score d'accès aux soins",
+        "title": "Accessibilité aux soins",
         "body": (
-            "Composante du score global (poids 35 %). Combine :"
-            "<br>• APL (65 %) : nombre de consultations disponibles "
-            "par an et par habitant"
-            "<br>• Temps d'accès médian (35 %) : trajet vers "
-            "l'établissement hospitalier le plus proche"
+            "Sous-score d'accessibilité aux soins."
             "<br><br>"
-            "Normalisé en rang percentile national. "
-            "Score 50 = médiane nationale."
+            "Combine :"
+            "<br>• APL (accessibilité potentielle localisée)"
+            "<br>• Temps d'accès médian aux établissements de santé"
+            "<br><br>"
+            "Ce sous-score facilite la lecture du diagnostic mais ne "
+            "constitue pas à lui seul le score global Sant'active."
         ),
     },
     "score_pros": {
-        "title": "Score professionnels de santé",
+        "title": "Offre médicale",
         "body": (
-            "Composante du score global (poids 35 %). "
-            "Basé sur la densité de médecins généralistes actifs "
-            "pour 100 000 habitants (données RPPS)."
+            "Sous-score de présence médicale."
             "<br><br>"
-            "Normalisé en rang percentile national. "
-            "Score 50 = médiane nationale."
+            "Basé sur la densité de médecins généralistes pour "
+            "100 000 habitants."
             "<br><br>"
-            "<strong>Limite :</strong> inclut tous modes d'exercice. "
-            "L'APL reste l'indicateur d'accès réel de référence."
+            "Ce sous-score facilite la lecture du diagnostic mais ne "
+            "constitue pas à lui seul le score global Sant'active."
         ),
     },
     "score_etabs": {
-        "title": "Score établissements de santé",
+        "title": "Structures de soins",
         "body": (
-            "Composante du score global (poids 30 %). "
-            "Basé sur la densité d'hôpitaux et cliniques FINESS agréés "
+            "Sous-score d'offre de soins."
+            "<br><br>"
+            "Basé sur la densité d'établissements et structures de santé "
             "pour 100 000 habitants."
             "<br><br>"
-            "Normalisé en rang percentile national. "
-            "Score 50 = médiane nationale."
-            "<br><br>"
-            "<strong>Limite :</strong> comptabilise la présence "
-            "d'établissements, pas leur capacité ni leur spécialité."
+            "Ce sous-score facilite la lecture du diagnostic mais ne "
+            "constitue pas à lui seul le score global Sant'active."
         ),
     },
     "recommandation": {

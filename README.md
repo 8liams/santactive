@@ -66,18 +66,27 @@ dashboard_dat/
 
 ## Méthodologie du score
 
-Chaque département reçoit trois scores en **rang percentile national** (0–100) :
+Chaque indicateur est transformé en **rang percentile national** (0–100) :
+100 = meilleure situation relative, 50 = médiane nationale, 0 = plus défavorable.
 
-- `score_acces`  — inverse du temps d'accès médian aux soins
-- `score_pros`   — professionnels de santé pour 100 000 habitants
-- `score_etabs`  — hôpitaux + cliniques pour 100 000 habitants
+Le **score global** Sant'active v2 est une moyenne pondérée de **6 dimensions** :
 
-Le **score global** est une moyenne pondérée :
+| Dimension | Poids |
+|-----------|-------|
+| APL (accessibilité aux soins de ville) | 30 % |
+| Temps d'accès médian | 20 % |
+| Médecins généralistes / 100k | 20 % |
+| Structures de soins / 100k | 15 % |
+| Part des 65 ans et plus | 10 % |
+| Prix immobilier médian | 5 % |
 
-```
-score_global = 0.35 × score_acces + 0.35 × score_pros + 0.30 × score_etabs
-```
+Si une dimension manque, son poids est redistribué sur les dimensions disponibles.
+Un score global n'est calculé que si **au moins 3 dimensions** sont disponibles.
 
-Si une composante manque, `score_global = NaN` (pas d'imputation). Les zones
-(Critique / Intermédiaire / Favorable) sont définies par les **terciles réels** du score
-global (33ᵉ et 66ᵉ centiles), et non par des seuils fixes.
+Les sous-scores `score_acces`, `score_pros` et `score_etabs` facilitent la lecture
+du diagnostic mais ne constituent pas à eux seuls la formule du score global.
+
+Les zones (Critique / Intermédiaire / Favorable) sont définies par les **terciles réels**
+du score global (33ᵉ et 66ᵉ centiles), et non par des seuils fixes.
+
+Voir `app/scoring.py` → `DIMENSIONS` et `compute_scores()`.

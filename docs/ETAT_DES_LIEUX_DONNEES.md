@@ -192,7 +192,7 @@ Les colonnes suivantes sont **calculées et présentes** dans `master`, mais **r
 | > 80 | `peri_urbain` |
 | ≤ 80 | `rural` |
 
-> ⚠️ **`POIDS_SCORE`** dans `app/config.py` (0,35 / 0,35 / 0,30) correspond à l'**ancienne v1** et **n'est plus utilisé** par le scoring actuel.
+> Pondérations officielles : `app/scoring.py` → `DIMENSIONS` (Sant'active v2, 6 dimensions).
 
 ### 3.2 `gauge_investissement()` · `app/scoring.py`
 

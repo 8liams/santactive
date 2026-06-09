@@ -70,21 +70,22 @@ header[data-testid="stHeader"] {
     overflow: hidden !important;
 }
 
-/* ─── SIDEBAR TOUJOURS VISIBLE (force override du collapse Streamlit) ───── */
-[data-testid="stSidebar"] {
-    transform: none !important;
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    min-width: 245px !important;
-    max-width: 245px !important;
-    width: 245px !important;
-    position: relative !important;
-    z-index: 100 !important;
+/* ─── SIDEBAR visible sur desktop uniquement ───────────────────────────── */
+@media screen and (min-width: 769px) {
+    [data-testid="stSidebar"] {
+        transform: none !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        min-width: 245px !important;
+        max-width: 245px !important;
+        width: 245px !important;
+        position: relative !important;
+        z-index: 100 !important;
+    }
+    [data-testid="stSidebarCollapseButton"]   { display: none !important; }
+    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
 }
-/* Masque les boutons ouvrir/fermer devenus inutiles */
-[data-testid="stSidebarCollapseButton"]   { display: none !important; }
-[data-testid="stSidebarCollapsedControl"] { display: none !important; }
 
 /* ─── RESTE ──────────────────────────────────────────────────────────────── */
 #MainMenu { visibility: hidden; }

@@ -23,15 +23,11 @@ DELAIS_RDV_PATH = "static/data/delais_rdv_drees.csv"
 # Valeur affichée lorsqu'une donnée est absente (évite le tiret cadratin « — »)
 NA_DISPLAY = "N/D"
 
-# ─── Pondérations du score global ─────────────────────────────────────────────
-# NB : env = 0 car le score environnemental est à maille régionale (pas départementale).
-#      Il est conservé comme indicateur info-only affiché séparément.
-POIDS_SCORE = {
-    "acces": 0.35,
-    "pros":  0.35,
-    "etabs": 0.30,
-    "env":   0.00,
-}
+# ─── Pondérations du score global (Sant'active v2) ────────────────────────────
+# Source de vérité : app/scoring.py → DIMENSIONS et compute_scores().
+# 6 dimensions : APL 30 %, temps 20 %, médecins 20 %, structures 15 %,
+# seniors 10 %, foncier 5 %.
+# Le score environnemental (enviro_score) reste info-only, hors score global.
 
 # ─── Labels des zones (terciles) ──────────────────────────────────────────────
 ZONE_LABELS = {
