@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.DS_Store
+.idea
+.vscode
+.devcontainer
+docs
+*.md
+.streamlit/secrets.toml
