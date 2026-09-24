@@ -1,6 +1,20 @@
 """Configuration centralisée : IDs Drive, constantes métier, pondérations."""
 
-# ─── Google Drive — identifiants des datasets ─────────────────────────────────
+from pathlib import Path
+
+# ─── Sources locales (prioritaires) ───────────────────────────────────────────
+DATA_DIR = Path("static/data")
+
+POP_PATH   = DATA_DIR / "population.csv"
+PROS_PATH  = DATA_DIR / "professionnels.csv.gz"
+ETABS_PATH = DATA_DIR / "etablissements.csv.gz"
+TEMPS_PATH = DATA_DIR / "temps_acces.csv.gz"
+IMMO_PATH  = DATA_DIR / "immobilier.csv.gz"
+ENV_PATH   = DATA_DIR / "environnement.csv"
+PATHO_PATH = DATA_DIR / "pathologies.csv.gz"
+MEDIC_PATH = DATA_DIR / "medicaments.csv"
+
+# ─── Google Drive — secours si le fichier local est absent ─────────────────────
 POP_FILE_ID   = "11rOLt12iXUxbEQTRlZlbuil_AEp2jxue"
 PROS_FILE_ID  = "1_wkO1vtWE2WO9aZmiI8lNPdbecO5V3pA"
 ETABS_FILE_ID = "1hZ71udkcpyquNPgGowvSxUrjrmK-n-PC"
@@ -15,7 +29,7 @@ GEOJSON_URL = (
     "france-geojson/master/departements-version-simplifiee.geojson"
 )
 
-# ─── Sources locales ──────────────────────────────────────────────────────────
+# ─── Autres sources locales ───────────────────────────────────────────────────
 # APL 2023 — snapshot ANCT (voir static/data/apl_2023.csv)
 # Pour mettre à jour : remplacer le CSV par la nouvelle version ANCT
 DELAIS_RDV_PATH = "static/data/delais_rdv_drees.csv"

@@ -13,18 +13,25 @@ import streamlit as st
 from .config import (
     DELAIS_RDV_PATH,
     ENV_FILE_ID,
+    ENV_PATH,
     ETABS_FILE_ID,
+    ETABS_PATH,
     GEOJSON_URL,
     IMMO_FILE_ID,
+    IMMO_PATH,
     PATHO_FILE_ID,
+    PATHO_PATH,
     POP_FILE_ID,
+    POP_PATH,
     PROS_FILE_ID,
+    PROS_PATH,
     TEMPS_FILE_ID,
+    TEMPS_PATH,
 )
 
 
 def read_drive_csv(file_id: str, **kwargs) -> pd.DataFrame:
-    """Télécharge un CSV Google Drive (gère aussi les gros fichiers via gdown)."""
+    """Télécharge un CSV Google Drive (secours si fichier local absent)."""
     import gdown
 
     tmp = tempfile.mktemp(suffix=".csv")
@@ -41,6 +48,14 @@ def read_drive_csv(file_id: str, **kwargs) -> pd.DataFrame:
             os.unlink(tmp)
 
 
+def read_dataset(local_path: Path | str, file_id: str, **kwargs) -> pd.DataFrame:
+    """Lit un CSV local en priorité, sinon bascule sur Google Drive."""
+    path = Path(local_path)
+    if path.exists() and path.stat().st_size > 0:
+        return pd.read_csv(path, **kwargs)
+    return read_drive_csv(file_id, **kwargs)
+
+
 def _zd(s) -> str:
     """Zero-pad département code à 2 caractères."""
     return str(s).strip().zfill(2)
@@ -54,7 +69,7 @@ def load_all_data():
     """
 
     # ── Population ────────────────────────────────────────────────────────────
-    pop = read_drive_csv(POP_FILE_ID, sep=";")
+    pop = read_dataset(POP_PATH, POP_FILE_ID, sep=";")
     pop.columns = [c.replace("\r\n", " ").strip() for c in pop.columns]
     pop["dept"] = pop["code_departement"].apply(_zd)
     for c in pop.columns:
@@ -76,7 +91,7 @@ def load_all_data():
             )
 
     # ── Professionnels de santé ───────────────────────────────────────────────
-    _pros_raw = read_drive_csv(PROS_FILE_ID, sep=";", low_memory=False)
+    _pros_raw = read_dataset(PROS_PATH, PROS_FILE_ID, sep=";", low_memory=False)
     _pros_raw["dept"] = _pros_raw["code_departement"].apply(_zd)
     pros_dept = _pros_raw.groupby("dept").agg(
         nb_pros        =("specialite_libelle", "count"),
@@ -89,7 +104,7 @@ def load_all_data():
     del _pros_raw
 
     # ── Établissements ────────────────────────────────────────────────────────
-    _etabs_raw = read_drive_csv(ETABS_FILE_ID, sep=";")
+    _etabs_raw = read_dataset(ETABS_PATH, ETABS_FILE_ID, sep=";")
     _etabs_raw["dept"] = _etabs_raw["code_departement"].apply(_zd)
     etabs_dept = _etabs_raw.groupby("dept").agg(
         nb_etabs     =("Rslongue", "count"),
@@ -104,7 +119,7 @@ def load_all_data():
     del _etabs_raw
 
     # ── Temps d'accès (médiane + p90, robuste aux outliers) ──────────────────
-    _temps_raw = read_drive_csv(TEMPS_FILE_ID, sep=";")
+    _temps_raw = read_dataset(TEMPS_PATH, TEMPS_FILE_ID, sep=";")
     _temps_raw["dept"] = _temps_raw["code_departement"].apply(_zd)
     temps_dept = _temps_raw.groupby("dept").agg(
         temps_acces_median    =("temps_acces", "median"),
@@ -119,7 +134,7 @@ def load_all_data():
     del _temps_raw
 
     # ── Immobilier — médiane ──────────────────────────────────────────────────
-    _immo_raw = read_drive_csv(IMMO_FILE_ID, sep=";", low_memory=False)
+    _immo_raw = read_dataset(IMMO_PATH, IMMO_FILE_ID, sep=";", low_memory=False)
     _immo_raw["dept"] = _immo_raw["code_departement"].apply(_zd)
     immo_dept = _immo_raw.groupby("dept").agg(
         prix_m2_moyen   =("prix_m2",        "median"),
@@ -132,14 +147,14 @@ def load_all_data():
     del _immo_raw
 
     # ── Environnement (granularité régionale — info only) ────────────────────
-    env = read_drive_csv(ENV_FILE_ID, sep=";")
+    env = read_dataset(ENV_PATH, ENV_FILE_ID, sep=";")
     env.columns = ["Code_region", "nom_region", "enviro_score"]
     env["enviro_score"] = pd.to_numeric(
         env["enviro_score"].astype(str).str.replace(",", "."), errors="coerce")
 
     # ── Pathologies (jointure par code département "dept") ───────────────────
     try:
-        _patho_raw = read_drive_csv(PATHO_FILE_ID, sep=";", low_memory=False)
+        _patho_raw = read_dataset(PATHO_PATH, PATHO_FILE_ID, sep=";", low_memory=False)
         if "dept" in _patho_raw.columns:
             _patho_raw["dept"] = _patho_raw["dept"].astype(str).str.zfill(2)
         # Trim : ne garder que les 4 colonnes utiles
