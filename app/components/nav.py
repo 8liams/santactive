@@ -89,6 +89,25 @@ def render_sidebar_nav(
     )
 
 
+def render_topnav(current_view: View) -> None:
+    """Barre de navigation supérieure (desktop) : liens vers les pages principales."""
+    items = [("home", "Accueil"), ("comparer", "Comparer"), ("exploration", "Explorer"),
+             ("acces", "Accès routier"), ("methodologie", "Méthodologie"), ("about", "À propos")]
+    links = "".join(
+        f'<a class="sa-topnav-link{" sa-topnav-link--active" if v == current_view else ""}" '
+        f'href="{internal_href(v)}" target="_self">{label}</a>'
+        for v, label in items
+    )
+    st.markdown(
+        f'<nav class="sa-topnav" aria-label="Navigation principale">'
+        f'<a class="sa-topnav-brand" href="{internal_href("home")}" target="_self">Sant\u2019active</a>'
+        f'<div class="sa-topnav-links">{links}</div>'
+        f'<span class="sa-topnav-hint">Recherche dans le panneau latéral</span>'
+        f'</nav>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
     """Bandeau mobile fixe — liens horizontaux (HTML, pas de colonnes Streamlit)."""
     del key_prefix

@@ -191,26 +191,32 @@ def render_fiche_share_bar(
     pdf_error: str | None = None,
     extra_col: Any | None = None,
     key_prefix: str = "share",
+    compact: bool = False,
 ) -> None:
-    """Affiche la barre de partage (copie, e-mail, PDF)."""
+    """Affiche la barre de partage (copie, e-mail, PDF).
+
+    `compact=True` : rangée d'actions discrètes sous le fil d'Ariane (pas de
+    bandeau ni de texte d'explication)."""
     mailto = build_mailto(email_subject, email_body)
 
-    st.markdown(
-        f'<div class="fiche-share-bar">'
-        f'<div class="fiche-share-header">'
-        f'<span class="fiche-share-eyebrow">Partager</span>'
-        f'<span class="fiche-share-title">{share_title}</span>'
-        f'</div>'
-        f'<p class="fiche-share-lead">Copiez le lien direct, envoyez un e-mail '
-        f'prérempli ou téléchargez le rapport PDF.</p>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    if not compact:
+      st.markdown(
+          f'<div class="fiche-share-bar">'
+          f'<div class="fiche-share-header">'
+          f'<span class="fiche-share-eyebrow">Partager</span>'
+          f'<span class="fiche-share-title">{share_title}</span>'
+          f'</div>'
+          f'<p class="fiche-share-lead">Copiez le lien direct, envoyez un e-mail '
+          f'prérempli ou téléchargez le rapport PDF.</p>'
+          f'</div>',
+          unsafe_allow_html=True,
+      )
 
     n_cols = 4 if extra_col is not None else 3
-    widths = [1, 1, 1, 1] if n_cols == 4 else [1, 1, 1.2]
+    widths = ([1, 1, 1, 1, 2.5] if n_cols == 4 else [1, 1, 1.2, 2.5]) if compact else (
+        [1, 1, 1, 1] if n_cols == 4 else [1, 1, 1.2])
 
-    with st.container(key="fiche_share_actions"):
+    with st.container(key="fiche_share_actions_compact" if compact else "fiche_share_actions"):
         cols = st.columns(widths)
 
         with cols[0]:

@@ -104,6 +104,7 @@ def render_topbar(r: pd.Series, data: dict) -> None:
         pdf_error=pdf_error,
         extra_col=_compare_btn,
         key_prefix=f"dept_share_{dept_code}",
+        compact=True,
     )
 
 
@@ -315,15 +316,39 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
+    """Synthèse compacte des six dimensions, détail complet dans un panneau dépliable."""
+    from ..scoring import DIMENSIONS, get_score_breakdown
 
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">SCORECARD</div>'
-        '<h2 class="section-title">'
-        'Où ce département <em>décroche,</em> et où il tient bon\u00a0?</h2>'
+        '<h2 class="section-title">Où ce département <em>décroche,</em> et où il tient bon\u00a0?</h2>'
         '</div>',
         unsafe_allow_html=True,
     )
+    tiles = ""
+    for b in get_score_breakdown(r):
+        sc = b["score"]
+        if sc is None:
+            val, col, delta = "N/D", "#9C9A92", "donnée absente"
+        else:
+            col = "#A51C30" if sc < 33 else "#C8922A" if sc < 67 else "#1B5E3F"
+            d = int(sc - 50)
+            delta = f"{d:+d} pts vs médiane"
+            val = f"{int(sc)}"
+        tiles += (
+            f'<div class="sc-tile" style="border-top:3px solid {col};">'
+            f'<div class="sc-tile-label">{b["label"]} <span class="sc-tile-w">{int(b["weight"] * 100)}\u202f%</span></div>'
+            f'<div class="sc-tile-val" style="color:{col};">{val}</div>'
+            f'<div class="sc-tile-delta">{delta}</div></div>'
+        )
+    st.markdown(f'<div class="sc-tiles">{tiles}</div>', unsafe_allow_html=True)
+    with st.expander("Détail des six dimensions (valeurs, sources, explications)"):
+        _render_scorecard_detail(r, master)
+
+
+def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
+
 
     # ── Scores ────────────────────────────────────────────────────────────
     # Score ou valeur absente → NaN, affiché « N/D » (jamais 50 ni 0 inventés)

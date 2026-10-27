@@ -141,6 +141,7 @@ def render_share_section(
         pdf_bytes=pdf_bytes,
         pdf_filename=f"santactive_region_{slug}.pdf",
         pdf_error=pdf_error,
+        compact=True,
         key_prefix=f"region_share_{region_code}",
     )
 

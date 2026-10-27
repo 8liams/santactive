@@ -12,6 +12,8 @@ import streamlit as st
 from app.data_loading import load_all_data, load_drees_ps, load_geojson
 from app.pages import (
     about,
+    acces_ign,
+    exploration,
     comparer,
     enjeux,
     fiche_commune,
@@ -20,7 +22,7 @@ from app.pages import (
     home,
     methodologie,
 )  # noqa: E402  (importés après set_page_config)
-from app.components.nav import render_mobile_nav, render_sidebar_nav
+from app.components.nav import render_mobile_nav, render_sidebar_nav, render_topnav
 from app.router import get_current_view, init_from_url, navigate
 from app.scoring import compute_scores
 
@@ -52,7 +54,7 @@ st.set_page_config(
     page_title="Sant'active",
     page_icon=_page_icon,
     layout="wide",
-    initial_sidebar_state="auto",  # auto = rétractée sur mobile, ouverte sur desktop
+    initial_sidebar_state="collapsed",  # navigation supérieure ; panneau latéral = recherche et navigation
     menu_items={
         "Get Help": None,
         "Report a bug": None,
@@ -144,6 +146,7 @@ init_from_url()
 view = get_current_view()
 
 render_mobile_nav(view)
+render_topnav(view)
 
 # ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -268,6 +271,10 @@ elif view == "region":
     fiche_region.render(data)
 elif view == "commune":
     fiche_commune.render(data)
+elif view == "exploration":
+    exploration.render(data)
+elif view == "acces":
+    acces_ign.render(data)
 elif view == "methodologie":
     methodologie.render(data)
 elif view == "about":
