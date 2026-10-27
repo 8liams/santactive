@@ -454,45 +454,72 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
 }
 
 
+_IMPLICATIONS: dict[str, tuple[str, str, str]] = {
+    # (libellé court, unité, implication lorsque l'écart est défavorable)
+    "score_global": ("score global", "/100", "le territoire le moins bien classé cumule les signaux d'accès défavorables"),
+    "apl_dept": ("APL pondéré", " consult./an/hab.", "l'accès aux généralistes y justifie en priorité les leviers d'installation et d'exercice coordonné"),
+    "temps_acces_median": ("temps d'accès médian", " min", "l'éloignement y appelle des réponses de proximité (équipes mobiles, téléconsultation assistée)"),
+    "med_gen_pour_100k": ("densité de généralistes", " /100k", "la démographie médicale y est le premier facteur limitant"),
+    "structures_pour_100k": ("structures hospitalières", " /100k", "les consultations avancées et la coordination ville-hôpital y dépendent de sites moins nombreux"),
+    "prix_m2_moyen": ("prix médian au m²", " €", "le coût du foncier peut y freiner l'installation (à l'inverse, un prix bas est un levier)"),
+    "pct_plus_65": ("part des 65 ans et plus", " %", "la demande de soins liée à l'âge y est plus forte (parcours gériatriques, autonomie)"),
+    "nb_communes_critiques": ("communes à plus de 15 min", "", "l'isolement y concerne davantage de communes (transport solidaire, permanences itinérantes)"),
+}
+
+
+def _fr(v: float, fmt: str) -> str:
+    return format(v, fmt).replace(",", "\u202f").replace(".", ",")
+
+
 def _interpretation_territoriale(
     col: str,
     nat: float | None,
     dept_values: dict[str, float],
     selected: list[str],
 ) -> str:
-    """Phrase interprétative métier vs référence nationale (règles déterministes)."""
+    """Conclusion chiffrée : qui est le moins doté, de combien, où par rapport à la référence, implication."""
     if nat is None or pd.isna(nat):
         return "Référence nationale indisponible pour cet indicateur."
-
-    better, worse, at = [], [], []
-    for name in selected:
-        v = dept_values.get(name)
-        if v is None or (isinstance(v, float) and pd.isna(v)):
-            continue
-        pos = _position_vs_national(float(v), nat, col)
-        if pos == "better":
-            better.append(name)
-        elif pos == "worse":
-            worse.append(name)
-        else:
-            at.append(name)
-
-    if not better and not worse and not at:
+    vals = {n: float(v) for n, v in dept_values.items() if n in selected and v is not None and pd.notna(v)}
+    if not vals:
         return "Données insuffisantes pour interpréter cet indicateur."
+    lib, unit, implication = _IMPLICATIONS.get(col, (col, "", ""))
+    lower_better = col in NATIONAL_LOWER_IS_BETTER
+    fmt = next((f for _, c, f, _ in COMPARE_METRICS if c == col), ".1f")
+    pire = (max if lower_better else min)(vals, key=vals.get)
+    meilleur = (min if lower_better else max)(vals, key=vals.get)
+    v_pire, v_mieux = vals[pire], vals[meilleur]
+    pos = {n: _position_vs_national(v, nat, col) for n, v in vals.items()}
+    nb_worse = sum(1 for x in pos.values() if x == "worse")
 
-    phrases = _INTERPRETATIONS.get(col)
-    if not phrases:
-        scenario = _interpretation_scenario(better, worse, at)
-        if scenario == "mixed":
-            return "Écarts contrastés entre les territoires sélectionnés."
-        if scenario == "all_better":
-            return "Situation plus favorable que la référence nationale."
-        if scenario == "all_worse":
-            return "Situation plus contrainte que la référence nationale."
-        return "Situation proche de la référence nationale."
+    def _ecart_nat(v: float) -> str:
+        if abs(nat) < 1e-9:
+            return ""
+        d = (v - nat) / abs(nat) * 100
+        return f"{d:+.0f}\u202f% vs référence ({_fr(nat, fmt)}{unit})"
 
-    scenario = _interpretation_scenario(better, worse, at)
-    return phrases[scenario]
+    if len(vals) == 1:
+        n, v = next(iter(vals.items()))
+        sens = {"worse": "défavorable", "better": "favorable", "at": "comparable"}[pos[n]]
+        txt = f"{n}\u202f: {lib} de {_fr(v, fmt)}{unit}, {_ecart_nat(v)}, position {sens}."
+        if pos[n] == "worse" and implication:
+            txt += f" Implication\u202f: {implication}."
+        return txt
+
+    ecart = abs(v_pire - v_mieux)
+    rel = (ecart / abs(v_mieux) * 100) if abs(v_mieux) > 1e-9 else float("nan")
+    txt = (f"{pire} est le moins favorable ({lib} {_fr(v_pire, fmt)}{unit}, {_ecart_nat(v_pire)}) ; "
+           f"{meilleur} le plus favorable ({_fr(v_mieux, fmt)}{unit}). Écart\u202f: {_fr(ecart, fmt)}{unit}"
+           + (f" ({rel:.0f}\u202f%)" if pd.notna(rel) else "") + ".")
+    if nb_worse == len(vals):
+        txt += f" Les {len(vals)} territoires sont sous la référence nationale."
+    elif nb_worse == 0:
+        txt += " Aucun territoire n'est sous la référence nationale."
+    else:
+        txt += f" {nb_worse} territoire{'s' if nb_worse > 1 else ''} sur {len(vals)} sous la référence."
+    if nb_worse and implication:
+        txt += f" Implication\u202f: {implication}."
+    return txt
 
 
 def _render_comparison_table(

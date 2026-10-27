@@ -129,9 +129,11 @@ def _aggregate_by_code(
 def _dept_medians(df: pd.DataFrame) -> dict[str, float]:
     pop = pd.to_numeric(df.get("population"), errors="coerce")
     temps = pd.to_numeric(df.get("temps_acces"), errors="coerce")
+    prix = pd.to_numeric(df.get("prix_m2"), errors="coerce")
     return {
         "pop": float(pop.median()) if pop.notna().any() else 0.0,
-        "temps": float(temps.median()) if temps.notna().any() else 10.0,
+        "temps": float(temps.median()) if temps.notna().any() else float("nan"),
+        "prix": float(prix.median()) if prix is not None and prix.notna().any() else float("nan"),
     }
 
 
@@ -146,69 +148,40 @@ def estimate_impact_population(population, temps_acces) -> float | None:
 
 
 def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> str:
-    """Phrase courte et différenciée — règles déterministes."""
-    temps = row.get("temps_acces")
-    pop = row.get("population")
-    # NaN conservé (un percentile de 0 est une vraie valeur, pas une absence)
+    """Justification factuelle du classement d'une commune : facteurs observés seulement.
+
+    Temps d'accès (et écart à la médiane des communes du département), population,
+    prix au m² s'il est connu, rang des composantes. Aucune pathologie ni
+    démographie n'est disponible à la maille communale dans les données chargées :
+    on ne l'invente pas.
+    """
+    temps = to_num(row.get("temps_acces"))
+    pop = to_num(row.get("population"))
+    prix = to_num(row.get("prix_m2"))
     pct_besoin = to_num(row.get("pct_besoin"))
     pct_pop = to_num(row.get("pct_pop"))
-    pct_fais = to_num(row.get("pct_faisabilite"))
-    score = to_num(row.get("score_action"))
-
-    temps_f = float(temps) if pd.notna(temps) else None
-    pop_f = float(pop) if pd.notna(pop) else None
-    temps_med = dept_medians.get("temps", 10.0)
-    pop_med = dept_medians.get("pop", 0.0)
-
-    candidates: list[tuple[int, str]] = []
-
-    def _add(priority: int, phrase: str) -> None:
-        candidates.append((priority, phrase))
-
-    if temps_f is not None and temps_f > 15:
-        _add(90, "Temps d'accès supérieur à 15 min.")
-    if temps_f is not None and temps_med > 0 and temps_f > temps_med * 1.15:
-        _add(85, "Temps d'accès supérieur à la médiane départementale.")
-    if pop_f is not None and pop_med > 0 and pop_f >= pop_med * 1.2 and temps_f and temps_f > temps_med:
-        _add(88, "Accès aux soins éloigné et population importante.")
-    if pop_f is not None and 1_500 <= pop_f < 5_000 and temps_f and temps_f > temps_med:
-        _add(70, "Commune de taille intermédiaire avec accès contraint.")
-    if pop_f is not None and pop_f >= 5_000 and pct_besoin >= 55:
-        _add(82, "Population importante et temps d'accès dans le haut du département.")
-    if pct_besoin >= 70 and pct_pop >= 60:
-        _add(86, "Temps d'accès et population tous deux élevés dans le département.")
-    if pct_besoin >= 65 and pct_pop >= 50:
-        _add(80, "Potentiel élevé pour une action de proximité.")
-    if temps_f is not None and temps_f > 12 and pop_f and pop_f >= 2_000:
-        _add(75, "Bassin de vie concerné par des difficultés d'accès.")
-    if temps_f is not None and temps_med > 0 and temps_f > temps_med and pop_f and pop_med > 0 and pop_f >= pop_med * 0.8:
-        _add(72, "Isolement relatif malgré un bassin de population significatif.")
-    if pct_fais >= 65 and pct_besoin >= 50:
-        _add(68, "Conditions favorables à une expérimentation locale.")
-    if score >= 75 and pop_f and pop_f >= 3_000:
-        _add(78, "Commune susceptible d'accueillir une action pilote.")
-    if pct_besoin >= 55 and pct_pop < 45:
-        _add(55, "Temps d'accès relativement élevé pour une petite commune.")
-    if pop_f is not None and pop_f >= pop_med and pct_besoin >= 45:
-        _add(60, "Population concernée importante au regard du territoire.")
-    if score >= 50 and score < 65:
-        _add(45, "Zone à surveiller dans une logique de prévention.")
-    if pct_besoin >= 60 and pct_pop >= 55 and temps_f and temps_f > 10:
-        _add(77, "Commune cumulant plusieurs facteurs de vulnérabilité.")
-
-    if not candidates:
-        if temps_f is not None and temps_f > temps_med:
-            return "Temps d'accès supérieur à la médiane départementale."
-        if pop_f is not None and pop_f >= pop_med:
-            return "Population concernée importante au regard du territoire."
-        return "Indicateurs locaux à approfondir avec les acteurs de terrain."
-
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    top_priority = candidates[0][0]
-    top_rules = [p for pr, p in candidates if pr == top_priority]
-    code = str(row.get("code_commune", "0"))
-    idx = sum(ord(c) for c in code) % len(top_rules)
-    return top_rules[idx]
+    temps_med = to_num(dept_medians.get("temps"))
+    prix_med = to_num(dept_medians.get("prix"))
+    parts: list[str] = []
+    if pd.notna(temps):
+        if temps <= 0:
+            parts.append("offre de médecine générale présente dans la commune (0 min)")
+        else:
+            cmp = (f", {temps / temps_med:.1f}× la médiane du département ({temps_med:.0f} min)"
+                   if pd.notna(temps_med) and temps_med > 0 else "")
+            parts.append(f"temps d'accès {temps:.0f} min{cmp}")
+    if pd.notna(pop) and pop > 0:
+        rang = f" ({pct_pop:.0f}ᵉ percentile des communes du département)" if pd.notna(pct_pop) else ""
+        parts.append(f"{int(pop):,} habitants{rang}".replace(",", "\u202f"))
+    if pd.notna(prix) and prix > 0:
+        cmp = (f" ({(prix / prix_med - 1) * 100:+.0f}\u202f% vs département)"
+               if pd.notna(prix_med) and prix_med > 0 else "")
+        parts.append(f"{prix:,.0f}\u202f€/m²{cmp}".replace(",", "\u202f"))
+    if pd.notna(temps) and temps > 15:
+        parts.append("commune au-delà de 15 min")
+    if not parts:
+        return "Données communales insuffisantes pour justifier le classement."
+    return " · ".join(parts[0:1]) + (" · " + " · ".join(parts[1:]) if len(parts) > 1 else "") + "."
 
 
 def build_commune_opportunity_df(
