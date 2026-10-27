@@ -1,10 +1,10 @@
-specialite;delai_median_jours;delai_moyen_jours;source
-Médecin généraliste;2;6;DREES enquête délais attente 2016-2017
-Pédiatre;21;21;DREES enquête délais attente 2016-2017
-Radiologue;21;21;DREES enquête délais attente 2016-2017
-Chirurgien-dentiste;30;30;DREES enquête délais attente 2016-2017
-Gynécologue;45;45;DREES enquête délais attente 2016-2017
-Rhumatologue;45;45;DREES enquête délais attente 2016-2017
-Cardiologue;50;50;DREES enquête délais attente 2016-2017
-Dermatologue;52;61;DREES enquête délais attente 2016-2017
-Ophtalmologue;52;80;DREES enquête délais attente 2016-2017
+specialite;delai_median_jours;delai_moyen_jours;delai_d1_jours;delai_q1_jours;delai_q3_jours;delai_d9_jours;source
+Médecin généraliste;2;6;0;0;5;11;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Pédiatre;8;22;0;0;34;64;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Radiologue;11;21;1;4;27;48;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Chirurgien-dentiste;17;28;2;7;37;67;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Gynécologue;32;44;5;14;58;93;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Rhumatologue;31;45;3;13;59;96;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Cardiologue;37;50;7;17;66;104;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Dermatologue;50;61;6;20;92;126;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017
+Ophtalmologue;52;80;4;20;112;189;DREES ER 1085 (oct. 2018) tableau 1 - enquête délais d'attente 2016-2017

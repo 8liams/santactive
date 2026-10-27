@@ -34,8 +34,10 @@ def load_delais_nationaux() -> pd.DataFrame:
                      "delai_moyen_jours", "source"]
         )
     df = pd.read_csv(path, sep=";")
-    for col in ["delai_median_jours", "delai_moyen_jours"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in ["delai_median_jours", "delai_moyen_jours", "delai_d1_jours",
+                "delai_q1_jours", "delai_q3_jours", "delai_d9_jours"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 

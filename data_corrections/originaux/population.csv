@@ -1,0 +1,104 @@
+﻿Code région;Nom de la région;code_departement;Nom du département;Population municipale;Densité de population (en km²);"Part des moins 
+de 25 ans (en %)";"Part des 
+25 à 64 ans (en %)";"Part des 
+plus de 65 ans (en %)"
+84;Auvergne-Rhône-Alpes;01;Ain;663 202;115,1;30,1;51,6;18,4
+32;Hauts-de-France;02;Aisne;527 468;71,7;29,5;49,4;21,2
+84;Auvergne-Rhône-Alpes;03;Allier;334 872;45,6;24,7;47,1;28,2
+93;Provence-Alpes-Côte d'Azur;04;Alpes-de-Haute-Provence;166 077;24;24,5;48,8;26,7
+93;Provence-Alpes-Côte d'Azur;05;Hautes-Alpes;140 976;25,4;24,2;50,1;25,7
+93;Provence-Alpes-Côte d'Azur;06;Alpes-Maritimes;1 103 941;256,8;26;49,2;24,8
+84;Auvergne-Rhône-Alpes;07;Ardèche;331 415;59,9;25,5;48,9;25,6
+44;Grand Est;08;Ardennes;268 859;51,4;27,7;50,1;22,2
+76;Occitanie;09;Ariège;154 596;31,6;24,3;48,8;26,9
+44;Grand Est;10;Aube;311 329;51,9;29,8;48,2;22
+76;Occitanie;11;Aude;376 028;61,3;25,2;48;26,8
+76;Occitanie;12;Aveyron;279 649;32;24;48;28
+93;Provence-Alpes-Côte d'Azur;13;Bouches-du-Rhône;2 056 943;404,3;29,2;50;20,8
+28;Normandie;14;Calvados;700 633;126,6;29,4;48,3;22,4
+84;Auvergne-Rhône-Alpes;15;Cantal;144 226;25,2;22,5;48,6;28,9
+75;Nouvelle-Aquitaine;16;Charente;350 867;58,9;25;48,9;26,1
+75;Nouvelle-Aquitaine;17;Charente-Maritime;661 404;96,4;24,3;47,2;28,5
+24;Centre-Val de Loire;18;Cher;299 573;41,4;25,5;48,2;26,3
+75;Nouvelle-Aquitaine;19;Corrèze;239 784;40,9;24;47,9;28,1
+27;Bourgogne-Franche-Comté;21;Côte-d'Or;535 503;40,6;24,2;51,4;24,3
+53;Bretagne;22;Côtes-d'Armor;605 917;39,6;25,2;50,9;24
+75;Nouvelle-Aquitaine;23;Creuse;115 702;61,1;29,5;48,9;21,6
+75;Nouvelle-Aquitaine;24;Dordogne;413 730;88,1;26,1;47,3;26,7
+27;Bourgogne-Franche-Comté;25;Doubs;547 096;20,8;21,6;47,5;30,9
+84;Auvergne-Rhône-Alpes;26;Drôme;519 458;45,7;22,4;47,9;29,7
+28;Normandie;27;Eure;598 934;104,6;30,8;49,2;20
+24;Centre-Val de Loire;28;Eure-et-Loir;431 277;79,6;28,2;49,4;22,4
+53;Bretagne;29;Finistère;921 638;99,7;29,6;50,3;20
+94;Corse;2A;Corse-du-Sud;162 942;73,3;29,3;49,7;21
+94;Corse;2B;Haute-Corse;184 655;136,9;27,1;49;23,8
+76;Occitanie;30;Gard;756 543;129,3;27,5;48,7;23,8
+76;Occitanie;31;Haute-Garonne;1 434 367;227,3;31,5;51,6;16,9
+76;Occitanie;32;Gers;192 437;30,8;23,5;48,2;28,3
+75;Nouvelle-Aquitaine;33;Gironde;1 654 970;165,9;29,6;50,8;19,7
+76;Occitanie;34;Hérault;1 201 883;197;29,3;48,6;22,2
+53;Bretagne;35;Ille-et-Vilaine;1 098 325;162,1;31,9;49,7;18,3
+24;Centre-Val de Loire;36;Indre;217 228;32;23,7;47,5;28,8
+24;Centre-Val de Loire;37;Indre-et-Loire;612 160;99,9;29,2;48,6;22,2
+84;Auvergne-Rhône-Alpes;38;Isère;1 284 948;172,9;31,2;49,9;18,9
+27;Bourgogne-Franche-Comté;39;Jura;258 555;51,7;26,5;49,2;24,3
+75;Nouvelle-Aquitaine;40;Landes;422 976;45,8;24,4;49,7;25,9
+24;Centre-Val de Loire;41;Loir-et-Cher;328 504;51,8;26,2;48,1;25,7
+84;Auvergne-Rhône-Alpes;42;Loire;769 029;160,9;29,7;47,5;22,7
+84;Auvergne-Rhône-Alpes;43;Haute-Loire;227 284;45,7;26,1;48,8;25
+52;Pays de la Loire;44;Loire-Atlantique;1 457 806;212,1;31;50,3;18,7
+24;Centre-Val de Loire;45;Loiret;684 561;101;30,3;49,2;20,5
+76;Occitanie;46;Lot;174 942;33,5;21,7;47,6;30,8
+75;Nouvelle-Aquitaine;47;Lot-et-Garonne;331 229;61,8;25,3;47,5;27,1
+76;Occitanie;48;Lozère;76 519;14,8;24,9;48,7;26,3
+52;Pays de la Loire;49;Maine-et-Loire;824 743;116;31,5;48,1;20,4
+28;Normandie;50;Manche;495 508;83,3;25,7;48,7;25,6
+44;Grand Est;51;Marne;565 292;69,2;30,6;49,3;20,2
+44;Grand Est;52;Haute-Marne;171 042;27,5;25,6;48,9;25,6
+52;Pays de la Loire;53;Mayenne;305 933;59,1;29,3;48;22,7
+44;Grand Est;54;Meurthe-et-Moselle;732 486;139,6;30,4;49,7;19,9
+44;Grand Est;55;Meuse;181 919;29,3;26,6;49,5;23,9
+53;Bretagne;56;Morbihan;768 687;112,7;26,1;48,5;25,4
+44;Grand Est;57;Moselle;1 049 942;168,9;27,5;52,3;20,2
+27;Bourgogne-Franche-Comté;58;Nièvre;202 417;29,7;23,2;46,7;30,1
+32;Hauts-de-France;59;Nord;2 611 293;454,7;32,8;49,7;17,5
+32;Hauts-de-France;60;Oise;828 838;141,4;31,3;51,2;17,5
+28;Normandie;61;Orne;276 973;45,4;25,9;47,3;26,8
+32;Hauts-de-France;62;Pas-de-Calais;1 461 441;219,1;30,7;49,9;19,4
+84;Auvergne-Rhône-Alpes;63;Puy-de-Dôme;662 285;83,1;28,6;49,3;22,1
+75;Nouvelle-Aquitaine;64;Pyrénées-Atlantiques;693 027;90,7;25,5;49,8;24,7
+76;Occitanie;65;Hautes-Pyrénées;230 956;51,7;24,5;48,1;27,4
+76;Occitanie;66;Pyrénées-Orientales;487 307;118,4;26;47,4;26,6
+44;Grand Est;67;Bas-Rhin;1 152 662;242,4;29,4;51,7;18,9
+44;Grand Est;68;Haut-Rhin;767 083;217,6;27,8;51,7;20,4
+84;Auvergne-Rhône-Alpes;69;Rhône;1 893 692;582,8;32,9;49,8;17,2
+27;Bourgogne-Franche-Comté;70;Haute-Saône;234 296;43,7;26,7;49,6;23,7
+27;Bourgogne-Franche-Comté;71;Saône-et-Loire;549 288;64,1;25,4;48;26,6
+52;Pays de la Loire;72;Sarthe;566 058;91,2;29,3;48;22,6
+84;Auvergne-Rhône-Alpes;73;Savoie;442 468;73,4;27,9;51;21,1
+84;Auvergne-Rhône-Alpes;74;Haute-Savoie;841 482;191,8;29;53,7;17,3
+11;Île-de-France;75;Paris;2 133 111;20 238,20;27;55,7;17,3
+28;Normandie;76;Seine-Maritime;1 255 918;200,1;30,3;49,1;20,6
+11;Île-de-France;77;Seine-et-Marne;1 438 100;243,1;33,2;51,8;15,1
+11;Île-de-France;78;Yvelines;1 456 365;637,5;32,2;51,1;16,7
+75;Nouvelle-Aquitaine;79;Deux-Sèvres;374 587;62,4;26,8;49,2;24
+32;Hauts-de-France;80;Somme;566 252;91,8;30,3;49,1;20,6
+76;Occitanie;81;Tarn;393 572;68,4;26,1;48;25,8
+76;Occitanie;82;Tarn-et-Garonne;263 377;70,8;28,1;49,2;22,7
+93;Provence-Alpes-Côte d'Azur;83;Var;1 095 337;183,4;25;48,3;26,7
+93;Provence-Alpes-Côte d'Azur;84;Vaucluse;564 566;158,3;28;49,1;23
+52;Pays de la Loire;85;Vendée;699 459;104,1;26,6;48,1;25,2
+75;Nouvelle-Aquitaine;86;Vienne;439 385;62,9;29,9;47,6;22,5
+75;Nouvelle-Aquitaine;87;Haute-Vienne;371 691;67,3;26,9;47,6;25,5
+44;Grand Est;88;Vosges;360 673;61,4;25,9;49,2;24,9
+27;Bourgogne-Franche-Comté;89;Yonne;333 385;44,9;26,4;48,6;25
+27;Bourgogne-Franche-Comté;90;Territoire de Belfort;139 654;229,2;29,7;49,9;20,4
+11;Île-de-France;91;Essonne;1 313 768;728,1;33,3;51,3;15,4
+11;Île-de-France;92;Hauts-de-Seine;1 635 291;9 312,10;30,8;53,9;15,3
+11;Île-de-France;93;Seine-Saint-Denis;1 668 670;7 064,60;35,4;52,5;12,2
+11;Île-de-France;94;Val-de-Marne;1 415 367;5 776,30;32,2;52,7;15,1
+11;Île-de-France;95;Val-d'Oise;1 256 607;1 008,60;34,5;51,5;14
+01;Guadeloupe;971;Guadeloupe;384 315;236;28,9;50,6;20,5
+02;Martinique;972;Martinique;360 749;319,8;26,4;51,5;22,2
+03;Guyane;973;Guyane;286 618;3,4;48,6;45,4;6
+04;La Réunion;974;La Réunion;871 157;347,9;35,6;51,5;12,9
