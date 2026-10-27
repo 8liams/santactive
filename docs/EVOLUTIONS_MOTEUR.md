@@ -90,3 +90,50 @@ un indice d'offre. Étude des deux indices : `scripts/analyse/simulation_indices
 (DREES, APL, INSEE, FINESS, délais), intégrité, reproductibilité du score,
 régions DOM/Corse, PDF, modes de configuration (sous-processus), pages Streamlit
 (AppTest, contenu vérifié).
+
+## 8. Moteur de recommandations (catalogue `app/leviers.py`)
+
+- 20 leviers déterministes, chacun avec conditions requises / contributives,
+  exclusions, public, dispositifs nationaux existants, horizon, gabarit de
+  texte (constat, indicateurs, action, pourquoi ici, secteurs, mise en œuvre).
+- Profil territorial vectorisé (100 départements) : APL pondérée, part sous 2,5,
+  densités DREES par spécialité (8 postes + sages-femmes), prévalences brutes
+  et standardisées (si couverture ≥ 90 %), patients CNAM, démographie,
+  communes à plus de 15 min avec population, structures FINESS (CH, CHS, HAD,
+  centres de santé), typologie, outre-mer.
+- Sélection : toutes les conditions requises vérifiées → score de
+  correspondance (part des conditions contributives satisfaites × priorité) →
+  au plus 4 leviers, 2 par famille. « Maintien » seulement si rien ne se déclenche.
+- Région : agrégation des leviers déclenchés par département, portée observée
+  (part de la population régionale). Ancien moteur conservé (`_compute_leviers_action_legacy`).
+- Tests : `tests/test_leviers.py`.
+
+## 9. Accès routier IGN (pilote, `app/pages/acces_ign.py`)
+
+Pré-calcul (`scripts/donnees/calculer_acces_ign.py`) : itinéraires voiture
+(bdtopo-valhalla) commune → commune la plus proche avec offre de médecine
+générale, isochrones 10/15/20/30 min unis par seuil, population couverte,
+simulation d'implantation (isochrone à la demande, cache 24 h). Cher : 286
+itinéraires, 86 % de la population à moins de 15 min, corrélation 0,43 avec
+l'indicateur interne (écart médian +2,3 min). Limites : centres de communes,
+pas d'adresse de cabinet ; voiture ; présence ≠ capacité.
+
+## 10. Délais v2 (expérimental, `compute_delais_v2`)
+
+Médiane nationale DREES × facteur propre à chaque spécialité (densité DREES du
+département rapportée à la médiane ; APL pour le généraliste), borné [0,7 ; 3].
+Affiché en comparaison du modèle v1, non validé par des délais observés.
+
+## 11. Indices offre × besoins (prototype, `app/indices.py`, page Explorer)
+
+Indice offre (poids actuels renormalisés) et indice besoins (65+, prévalences
+standardisées si fiables), quadrants par rapport aux médianes, explication par
+département. Non intégré au score.
+
+## 12. Interface
+
+Navigation supérieure (panneau latéral replié, recherche et navigation
+complètes dans le panneau), actions de fiche compactes, scorecard en six
+tuiles avec détail dépliable, cartes de recommandation structurées,
+comparateur chiffré, justifications communales factuelles, fonds de carte
+configurables (CARTO avec clé via secrets, IGN Plan v2 par défaut).
