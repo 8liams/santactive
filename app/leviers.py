@@ -184,20 +184,21 @@ _MASCULINS = {"Ain", "Aveyron", "Bas-Rhin", "Calvados", "Cantal", "Cher", "Doubs
 _PLURIELS = {"Alpes-de-Haute-Provence", "Hautes-Alpes", "Alpes-Maritimes", "Ardennes", "Bouches-du-Rhône",
              "Côtes-d'Armor", "Deux-Sèvres", "Hauts-de-Seine", "Landes", "Pyrénées-Atlantiques", "Hautes-Pyrénées",
              "Pyrénées-Orientales", "Vosges", "Yvelines", "Ardennes"}
-_SANS_ARTICLE = {"Paris", "Corse-du-Sud", "Haute-Corse", "Mayotte", "La Réunion"}
+_SANS_ARTICLE = {"Paris", "Mayotte", "La Réunion"}
 
 
 def _formes_nom(nom: str) -> dict:
     """Formes « de X », « dans X », « X » sujet, selon le genre et le nombre du département."""
     if nom in _SANS_ARTICLE:
-        return {"nom_de": f"de {nom}", "nom_dans": f"à {nom}" if nom == "Paris" else f"en {nom}" if "Corse" in nom else f"à {nom}",
-                "nom_sujet": nom}
-    if nom in _PLURIELS:
-        return {"nom_de": f"des {nom}", "nom_dans": f"dans les {nom}", "nom_sujet": f"Les {nom}"}
+        return {"nom_de": f"de {nom}", "nom_dans": f"à {nom}", "nom_sujet": nom}
+    if nom in _PLURIELS:   # sujet au singulier pour l'accord des verbes
+        return {"nom_de": f"des {nom}", "nom_dans": f"dans les {nom}", "nom_sujet": f"Le département des {nom}"}
     if nom[0].lower() in "aeiouyéè":
         return {"nom_de": f"de l'{nom}", "nom_dans": f"dans l'{nom}", "nom_sujet": f"L'{nom}"}
     if nom in _MASCULINS:
         return {"nom_de": f"du {nom}", "nom_dans": f"dans le {nom}", "nom_sujet": f"Le {nom}"}
+    if "Corse" in nom:
+        return {"nom_de": f"de la {nom}", "nom_dans": f"en {nom}", "nom_sujet": f"La {nom}"}
     return {"nom_de": f"de la {nom}", "nom_dans": f"dans la {nom}", "nom_sujet": f"La {nom}"}
 
 
@@ -248,7 +249,16 @@ class Levier:
 
 
 def _f(v, spec=".1f", suffix=""):
-    return f"{v:{spec}}{suffix}".replace(",", " ") if pd.notna(v) else "N/D"
+    """Nombre au format français (virgule décimale, espace fine pour les milliers)."""
+    if pd.isna(v):
+        return "N/D"
+    txt = f"{v:{spec}}".replace(",", "\u202f").replace(".", ",")
+    return txt + suffix
+
+
+def _pc(v) -> str:
+    """Part en pourcentage, entier, espace fine avant le signe."""
+    return f"{v * 100:.0f}\u202f%" if pd.notna(v) else "N/D"
 
 
 def _n(v):
@@ -314,11 +324,11 @@ def _specialites_faibles(p, seuil=30) -> list[str]:
 
 def _t_msp(p):
     return {
-        "probleme": f"L'accès aux généralistes est insuffisant : {p['part_pop_apl_inf_2_5']:.0%} des "
+        "probleme": f"L'accès aux généralistes est insuffisant : {_pc(p['part_pop_apl_inf_2_5'])} des "
                     f"habitants {p['nom_de']} vivent dans une commune sous le repère APL de 2,5 "
                     f"(APL pondéré {_f(p['apl_dept'])}, médiane des départements {_f(p['med']['apl_dept'])}).",
         "indicateurs": [f"APL pondéré {_f(p['apl_dept'])} consult./an/hab.",
-                        f"{p['part_pop_apl_inf_2_5']:.0%} de la population sous 2,5",
+                        f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous 2,5",
                         f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k (médiane {_f(p['med']['med_gen_pour_100k'], '.0f')})",
                         f"{_f(p['centres_sante_100k'], '.1f')} centres de santé /100k"],
         "action": "Soutenir des maisons de santé pluriprofessionnelles (MSP) et l'exercice coordonné "
@@ -338,7 +348,7 @@ def _t_attractivite(p):
                     f"se situe dans le {p['pct_med_gen_pour_100k']:.0f}ᵉ percentile national.",
         "indicateurs": [f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k (DREES 2026)",
                         f"APL pondéré {_f(p['apl_dept'])}",
-                        f"{p['part_pop_apl_inf_2_5']:.0%} de la population sous 2,5"],
+                        f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous 2,5"],
         "action": "Mobiliser les aides à l'installation et au maintien (zonage ZIP/ZAC, contrat de "
                   "début d'exercice, guichet unique, accueil des internes et docteurs juniors).",
         "pourquoi": "Dans un département où l'offre est faible relativement à la population, le levier "
@@ -368,7 +378,7 @@ def _t_assistants(p):
 
 def _t_sas(p):
     return {
-        "probleme": f"{p[\'nom_sujet\']} cumule une population urbaine importante ({_n(p['population_num'])} hab.) "
+        "probleme": f"{p['nom_sujet']} cumule une population urbaine importante ({_n(p['population_num'])} hab.) "
                     f"et un APL pondéré de {_f(p['apl_dept'])} : les demandes de soins non programmés "
                     "se reportent sur les urgences.",
         "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k",
@@ -401,7 +411,7 @@ def _t_consult_avancees(p):
 def _t_equipes_mobiles(p):
     return {
         "probleme": f"{_n(p['pop_communes_critiques'])} habitants {p['nom_de']} vivent dans des communes "
-                    f"à plus de 15 minutes de l'offre de soins ({p['part_pop_communes_critiques']:.0%} de la population, "
+                    f"à plus de 15 minutes de l'offre de soins ({_pc(p['part_pop_communes_critiques'])} de la population, "
                     f"{int(p['nb_communes_critiques'])} communes).",
         "indicateurs": [f"{int(p['nb_communes_critiques'])} communes à plus de 15 min",
                         f"{_n(p['pop_communes_critiques'])} habitants concernés",
@@ -418,9 +428,9 @@ def _t_equipes_mobiles(p):
 
 def _t_teleconsultation(p):
     return {
-        "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {p['part_pop_apl_inf_2_5']:.0%} des habitants sont sous le repère APL "
+        "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {_pc(p['part_pop_apl_inf_2_5'])} des habitants sont sous le repère APL "
                     f"et le temps d'accès médian atteint {_f(p['temps_acces_median'], '.0f')} min.",
-        "indicateurs": [f"{p['part_pop_apl_inf_2_5']:.0%} de la population sous APL 2,5",
+        "indicateurs": [f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous APL 2,5",
                         f"temps d'accès médian {_f(p['temps_acces_median'], '.0f')} min",
                         f"{int(p['nb_communes_critiques'])} communes à plus de 15 min"],
         "action": "Installer des points de téléconsultation assistée (pharmacies, MSP, mairies) "
@@ -498,7 +508,7 @@ def _t_diabete(p):
 
 def _t_depistages(p):
     return {
-        "probleme": f"{p[\'nom_sujet\']} présente une prévalence de cancers de {_f(p['prevstd_cancers'], '.2f')} % "
+        "probleme": f"{p['nom_sujet']} présente une prévalence de cancers de {_f(p['prevstd_cancers'], '.2f')} % "
                     f"(standardisée, médiane {_f(p['med']['prevstd_cancers'], '.2f')} %) et "
                     f"{_f(p['pct_plus_65'])} % de 65 ans et plus.",
         "indicateurs": [f"{_n(p['patients_cancers'])} patients suivis pour cancer (CNAM 2023)",
@@ -514,7 +524,7 @@ def _t_depistages(p):
 
 def _t_perinatalite(p):
     return {
-        "probleme": f"{p[\'nom_sujet\']} compte {_f(p['pct_moins_25'])} % de moins de 25 ans (médiane "
+        "probleme": f"{p['nom_sujet']} compte {_f(p['pct_moins_25'])} % de moins de 25 ans (médiane "
                     f"{_f(p['med']['pct_moins_25'])} %) pour {_f(p['dens_sages_femmes'])} sages-femmes et "
                     f"{_f(p['dens_gynecologie'])} gynécologues /100k.",
         "indicateurs": [f"{_f(p['pct_moins_25'])} % de moins de 25 ans",
@@ -549,7 +559,7 @@ def _t_pediatrie(p):
 def _t_autonomie(p):
     seniors = p["population_num"] * p["pct_plus_65"] / 100
     return {
-        "probleme": f"{p[\'nom_sujet\']} compte {_n(seniors)} habitants de 65 ans et plus ({_f(p['pct_plus_65'])} %, "
+        "probleme": f"{p['nom_sujet']} compte {_n(seniors)} habitants de 65 ans et plus ({_f(p['pct_plus_65'])} %, "
                     f"médiane {_f(p['med']['pct_plus_65'])} %) avec un APL pondéré de {_f(p['apl_dept'])}.",
         "indicateurs": [f"{_f(p['pct_plus_65'])} % de 65 ans et plus",
                         f"{_n(seniors)} seniors (INSEE 2021)",
@@ -569,7 +579,7 @@ def _t_chroniques(p):
               if pd.notna(p.get(f"prevstd_{k}")) and p.get(f"prevstd_{k}") > p["med"].get(f"prevstd_{k}", 0) * 1.1]
     libs = ", ".join(l for _, l in pathos) or "pathologies chroniques"
     return {
-        "probleme": f"{p[\'nom_sujet\']} combine des prévalences élevées à âge comparable ({libs}) et un accès "
+        "probleme": f"{p['nom_sujet']} combine des prévalences élevées à âge comparable ({libs}) et un accès "
                     f"aux généralistes limité (APL pondéré {_f(p['apl_dept'])}).",
         "indicateurs": [f"{PATHO_LABELS[k]} : {_f(p.get(f'prevstd_{k}'), '.2f')} % standardisée"
                         for k in ("diabete", "cardio", "respi") if pd.notna(p.get(f"prevstd_{k}"))]
@@ -617,7 +627,7 @@ def _t_mediation(p):
 
 def _t_ville_hopital(p):
     return {
-        "probleme": f"{p[\'nom_sujet\']} dispose de {int(p['nb_hopitaux'])} sites hospitaliers (CH, CHR) pour une "
+        "probleme": f"{p['nom_sujet']} dispose de {int(p['nb_hopitaux'])} sites hospitaliers (CH, CHR) pour une "
                     f"patientèle chronique importante et un APL pondéré de {_f(p['apl_dept'])}.",
         "indicateurs": [f"{int(p['nb_hopitaux'])} sites CH/CHR", f"APL pondéré {_f(p['apl_dept'])}",
                         f"{_n(p['patients_cardio'])} patients cardio-neuro-vasculaires"],
@@ -632,12 +642,12 @@ def _t_ville_hopital(p):
 
 def _t_dom(p):
     couv = p.get("couverture_temps")
-    note = (f" La couverture du fichier de temps d'accès n'est que de {couv:.0%} des communes."
+    note = (f" La couverture du fichier de temps d'accès n'est que de {_pc(couv)} des communes."
             if pd.notna(couv) and couv < 0.9 else "")
     return {
-        "probleme": f"{p[\'nom_sujet\']} cumule un APL pondéré de {_f(p['apl_dept'])} ({p['part_pop_apl_inf_2_5']:.0%} de la "
+        "probleme": f"{p['nom_sujet']} cumule un APL pondéré de {_f(p['apl_dept'])} ({_pc(p['part_pop_apl_inf_2_5'])} de la "
                     f"population sous 2,5) et des contraintes géographiques ultramarines.{note}",
-        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"{p['part_pop_apl_inf_2_5']:.0%} sous APL 2,5",
+        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"{_pc(p['part_pop_apl_inf_2_5'])} sous APL 2,5",
                         f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k",
                         f"{_f(p['pct_moins_25'])} % de moins de 25 ans"],
         "action": "Adapter l'offre aux spécificités ultramarines : télémédecine avec les CHU de référence, "
@@ -653,7 +663,7 @@ def _t_dom(p):
 
 def _t_maintien(p):
     return {
-        "probleme": f"{p[\'nom_sujet\']} ne déclenche aucun signal d'alerte parmi les conditions suivies "
+        "probleme": f"{p['nom_sujet']} ne déclenche aucun signal d'alerte parmi les conditions suivies "
                     f"(APL pondéré {_f(p['apl_dept'])}, {_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k, "
                     "prévalences et démographie dans la norme).",
         "indicateurs": [f"score global {_f(p['score_global'])}/100", f"APL pondéré {_f(p['apl_dept'])}"],

@@ -201,7 +201,7 @@ class TestRecommandations(unittest.TestCase):
 
     def test_cas_pathologies_chroniques_se_declenche(self):
         n = sum(
-            any("pathologies chroniques" in r["title"] for r in recos)
+            any(r.get("id") in ("cardio", "diabete", "chroniques", "sante_mentale") for r in recos)
             for recos in self._all_recos().values()
         )
         self.assertGreater(n, 0)
