@@ -94,7 +94,7 @@ les zones prioritaires d'intervention.</p>
     st.html("""
 <div style="max-width:720px;font-size:14px;line-height:1.8;color:#2B2B2B;margin-bottom:32px;">
 <p>Chaque indicateur est normalisé en <strong>rang percentile</strong>
-sur les 100 départements analysés, méthode standard utilisée par la DREES
+sur les 100 départements analysés (rang percentile, méthode usuelle de normalisation)
 dans ses propres publications. Un score de 50 correspond exactement
 à la médiane nationale. Un score de 100 correspond au meilleur
 département sur cette dimension. Un score de 0 au pire.</p>
@@ -126,25 +126,25 @@ Un département avec moins de 3 dimensions disponibles ne reçoit pas de score g
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité physique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Temps de trajet</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Temps d'accès médian pondéré par population<br><span style="color:#9C9A92;">Calcul interne · FINESS mars 2026 + INSEE 2021</span></div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médiane simple des temps d'accès communaux (non pondérée)<br><span style="color:#9C9A92;">Calcul interne de l'équipe · méthode de production à documenter</span></div>
 <div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Densité médecins généralistes</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Offre professionnelle</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médecins généralistes actifs pour 100&#8239;000 hab.<br><span style="color:#9C9A92;">RPPS · DREES · janv. 2026</span></div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médecins généralistes pour 100&#8239;000 hab. (population INSEE 2021)<br><span style="color:#9C9A92;">Effectifs DREES/RPPS au 1<sup>er</sup> janv. 2026 si activés ; sinon fichier territorial de l'équipe (présences, non recommandé)</span></div>
 <div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Offre hospitalière</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Structures de soins</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">15 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Hôpitaux + cliniques FINESS pour 100&#8239;000 hab.<br><span style="color:#9C9A92;">FINESS · DREES · mars 2026</span></div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Centres hospitaliers (CH, CHR) + établissements privés SSR pour 100&#8239;000 hab. — sites, pas capacités ; cliniques MCO et hôpitaux locaux non comptés (définition à revoir)<br><span style="color:#9C9A92;">FINESS · mars 2026</span></div>
 <div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
 <div><div style="font-size:13px;font-weight:700;color:#0A1938;">Pression démographique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Vieillissement de la population</div></div>
 <div style="font-size:22px;font-weight:300;color:#1A3D8F;">10 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Part des 65 ans et plus<br>Les seniors consomment 4× plus de soins (DREES).<br><span style="color:#9C9A92;">INSEE · Recensement 2021</span></div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Part des 65 ans et plus<br>Les 75-79 ans consomment environ 1,6 fois la moyenne de soins de médecine générale, les 90 ans et plus 2,3 fois (pondérations APL DREES 2023).<br><span style="color:#9C9A92;">INSEE · Recensement 2021</span></div>
 <div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(fort vieillissement = forte demande)</span></div>
 </div>
 <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;background:#FAFAF8;gap:0;align-items:start;">
@@ -213,15 +213,24 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "L'APL dépasse les limites de la densité simple : un médecin à 45 minutes "
         "compte peu, même s'il est «\u202fdans le département\u202f». Un médecin à 5 minutes "
         "dans un territoire voisin compte beaucoup.",
-        "<strong>Seuil officiel DREES</strong> : un territoire dont l'APL est inférieur "
-        "à 2,5 consultations par an et par habitant est considéré en désert médical.",
+        "<strong>Repère 2,5</strong> : un APL inférieur à 2,5 consultations par an et par "
+        "habitant est le repère de sous-densité utilisé dans la méthodologie nationale de "
+        "zonage des médecins généralistes. Il s'applique à des communes ou territoires de "
+        "vie-santé, pas à un département entier\u202f; il n'existe pas de définition légale "
+        "du «\u202fdésert médical\u202f».",
         "Dans Sant'active, l'APL est affiché à deux niveaux : valeur médiane "
         "départementale (médiane des valeurs communales) et interquartiles P25\u202f/\u202fP75, "
         "qui montrent la dispersion interne du département. Un département avec une "
         "médiane correcte peut masquer des communes très sous-dotées.",
-        "Source\u202f: Observatoire des territoires (ANCT), données communes 2023. "
-        "Agrégation à la maille département par calcul de médiane sur les 34\u202f852 "
-        "communes disponibles. Médiane nationale\u202f: 2,9 consultations/an/habitant (ANCT 2023).",
+        "Source\u202f: DREES, APL aux médecins généralistes, millésime 2023 (diffusé aussi par "
+        "l'Observatoire des territoires, ANCT), 34\u202f954 communes hors Mayotte. "
+        "Agrégation à la maille département par médiane simple des valeurs communales "
+        "(chaque commune pèse autant, quelle que soit sa population). La «\u202fmédiane "
+        "nationale\u202f» (2,9) est la médiane de ces 100 médianes départementales. "
+        "La DREES recommande pour un APL départemental une moyenne pondérée par la "
+        "population standardisée (3,7 au niveau national en 2023)\u202f: cette valeur et la "
+        "part de population sous 2,5 sont affichées sur les fiches lorsque le fichier "
+        "communal est chargé, mais n'entrent pas encore dans le score.",
     )
 
     st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:40px 0;'>",
@@ -246,15 +255,15 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "<tbody>"
         "<tr>"
         "<td><strong>Médecins généralistes&nbsp;/ 100k hab.</strong></td>"
-        "<td>Densité de praticiens actifs libéraux et mixtes</td>"
-        "<td>RPPS, traitement DREES</td><td>Janvier 2026</td>"
-        "<td>Ne distingue pas temps plein et partiel</td>"
+        "<td>Effectif de généralistes actifs (tous modes d'exercice, personnes distinctes) / population INSEE 2021</td>"
+        "<td>DREES, RPPS (si activé)</td><td>1<sup>er</sup> janvier 2026</td>"
+        "<td>Têtes, pas ETP ; salariés inclus</td>"
         "</tr>"
         "<tr>"
         "<td><strong>Établissements FINESS&nbsp;/ 100k hab.</strong></td>"
-        "<td>Hôpitaux + cliniques agréés</td>"
-        "<td>FINESS, DREES</td><td>Mars 2026</td>"
-        "<td>Hors établissements médico-sociaux</td>"
+        "<td>Sites CH + CHR + établissements privés SSR</td>"
+        "<td>FINESS</td><td>Mars 2026</td>"
+        "<td>Nombre de sites, pas de capacité ; MCO privé, hôpitaux locaux et CHS non comptés</td>"
         "</tr>"
         "<tr>"
         "<td><strong>Prix médian&nbsp;/m²</strong></td>"
@@ -276,10 +285,10 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "</tr>"
         "<tr>"
         "<td><strong>Pathologies chroniques</strong></td>"
-        "<td>Taux de prévalence standardisé par pathologie (diabète, HTA, "
-        "insuffisance cardiaque…)</td>"
-        "<td>CNAM / Ameli open data</td><td>2023</td>"
-        "<td>Estimations indirectes issues de la consommation de soins</td>"
+        "<td>Prévalence brute par pathologie (patients pris en charge / population) ; "
+        "prévalence standardisée sur l'âge affichée en complément</td>"
+        "<td>CNAM, cartographie des pathologies</td><td>2023</td>"
+        "<td>Repérage par la consommation de soins ; secret statistique sur les petites cellules</td>"
         "</tr>"
         "<tr>"
         "<td><strong>Score environnemental</strong></td>"
@@ -289,10 +298,11 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "</tr>"
         "<tr>"
         "<td><strong>Temps d'accès médian</strong></td>"
-        "<td>Temps de trajet médian vers l'établissement de santé le plus proche, "
-        "pondéré par population communale</td>"
-        "<td>Calcul interne FINESS + INSEE</td><td>2026</td>"
-        "<td>Trajet routier, pas temps d'attente aux urgences</td>"
+        "<td>Temps communal (0 = offre présente dans la commune), médiane simple des "
+        "communes par département, non pondérée</td>"
+        "<td>Calcul interne de l'équipe</td><td>2026</td>"
+        "<td>Méthode de production à documenter ; les communes à 0 min correspondent à "
+        "99\u202f% à celles où un généraliste est recensé</td>"
         "</tr>"
         "</tbody></table>"
         "</div>",
@@ -631,10 +641,11 @@ mécaniquement le département au score le plus bas.
         (
             "05",
             "DOM-TOM partiellement couverts",
-            "Mayotte n'est pas couverte par l'APL ANCT 2023. La Guyane (APL\u202f=\u202f0,6) "
-            "et la Haute-Corse (APL\u202f=\u202f0,3) présentent des situations extrêmes pour "
-            "lesquelles le plafonnement du facteur de délai (×3) s'applique, limitant "
-            "la précision des estimations.",
+            "Mayotte est hors champ de l'APL DREES et exclue du score (100 départements "
+            "analysés). La médiane communale non pondérée pénalise les départements à "
+            "nombreux petits villages\u202f: Haute-Corse 0,3 et Corse-du-Sud 1,9 en médiane, "
+            "contre 3,7 et 3,9 en moyenne pondérée par la population (méthode DREES). "
+            "La Guyane (0,6 en médiane, 2,0 pondérée) reste la plus sous-dotée.",
         ),
         (
             "06",

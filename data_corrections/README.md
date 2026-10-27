@@ -1,22 +1,32 @@
-# Corrections de données préparées — NON APPLIQUÉES
+# Corrections et nouvelles sources de données
 
-Rien dans ce dossier n'est lu par l'application. Les fichiers de `static/data/`
-sont inchangés tant que les corrections ne sont pas validées.
+Tout est régénérable depuis la racine du dépôt. Les originaux remplacés sont
+conservés dans `originaux/` (empreintes SHA-256 dans les messages de commit).
 
-Chaque fichier est régénérable depuis la racine du dépôt :
+## Appliquées sur la branche (validées)
 
-| Script | Sorties | Objet |
+| Donnée | Script | État |
 |---|---|---|
-| `scripts/donnees/corriger_population.py` | `population_corrigee.csv`, `population_rapport.csv` | Densité et parts d'âge décalées de 2 lignes pour 11 départements (21 à 29, 2A, 2B). Permutation des valeurs existantes, validée contre l'INSEE (âges 2021) et les surfaces IGN. |
-| `scripts/donnees/corriger_finess.py` | `etablissements_corrige.csv.gz`, `finess_codes_rapport.csv` | 289 établissements mal codés : Guadeloupe → 2A, Martinique → 2B, Guyane 9C, Réunion 9D, Mayotte « 9,00 F », etc. Recodage d'après la colonne `Libdepartement` du même fichier. |
-| `scripts/donnees/diagnostic_professionnels.py` | `professionnels_diagnostic.csv` | Diagnostic seul (pas de correction) : enregistrements démultipliés par le nombre de communes du code postal ; ≈ 1 enregistrement par (code postal, ville, spécialité). |
-| `scripts/donnees/comparer_scores.py` | `impact_scores_*.csv` | Scores, rangs, zones et typologies avant / après une correction candidate. |
+| `static/data/population.csv` | `scripts/donnees/corriger_population.py` | Densité et parts d'âge réalignées pour 21–29, 2A, 2B (permutation des valeurs existantes, validée contre INSEE 2021 et surfaces IGN). Original : `originaux/population.csv`. |
+| `static/data/etablissements.csv.gz` | `scripts/donnees/corriger_finess.py` | 289 lignes recodées d'après `Libdepartement` (Guadeloupe 2A→971, Martinique 2B→972, Guyane 9C→973, Réunion 9D→974, Mayotte « 9,00 F »→976, 975, 986). Original : `originaux/etablissements.csv.gz`. |
+| `static/data/delais_rdv_nationaux.csv` | (transcription manuelle du tableau 1, DREES ER 1085) | Médianes rétablies (7 spécialités sur 9 portaient la moyenne) + D1/Q1/Q3/D9. Original : `originaux/delais_rdv_nationaux.csv`. |
 
-Références officielles mises en cache dans `references/` (source et empreinte
-SHA-256 dans les fichiers `.json` associés quand il s'agit d'un fichier
-téléchargé) : surfaces communales et codes postaux (geo.api.gouv.fr), parts
-d'âge 2021 (INSEE, estimations de population).
+## Préparées, NON appliquées (en attente de décision)
 
-Pour appliquer une correction validée : copier le fichier corrigé à la place
-de l'original dans `static/data/`, relancer les tests
-(`python3 -m unittest discover -s tests`) et committer avec le rapport.
+| Donnée | Script | Fichiers candidats |
+|---|---|---|
+| Effectifs DREES/RPPS 2026 (jeu A) | `scripts/donnees/telecharger_drees_rpps.py` | `references/drees/drees_medecins_dept_2026.csv`, `drees_autres_rpps_dept_2026.csv`, `drees_infirmieres_liberales_dept_2023.csv` → à copier dans `static/data/` pour activer. Provenance : `references/drees/provenance.json`. |
+| APL départemental pondéré + simulation ETP | `scripts/donnees/calculer_apl_departemental.py` | `references/drees/apl_mg_departemental_2023.csv` → à copier dans `static/data/` pour afficher la section « APL communal » des fiches (le score reste sur la médiane). |
+| Diagnostic du fichier professionnels (jeu B) | `scripts/donnees/diagnostic_professionnels.py` | `professionnels_diagnostic.csv` (aucune correction possible sans identifiant). |
+
+Fichiers bruts DREES (≈130 Mo) : `references/drees/raw/`, ignoré par Git.
+
+## Comparatifs avant / après
+
+`scripts/donnees/comparer_scores.py [--population …] [--etablissements …] [--drees DOSSIER]`
+→ `impact_scores_population.csv`, `impact_scores_finess.csv`,
+`impact_scores_population_finess.csv`, `impact_scores_drees.csv`.
+
+## Études
+
+`scripts/analyse/simulation_indices.py` → `simulation_indices.csv` (indices offre / besoins, non appliqués).

@@ -319,6 +319,14 @@ def _faisabilite_badge(label: str) -> str:
     )
 
 
+def _besoin_html(row: pd.Series) -> str:
+    """Niveau de besoin territorial (fragilité, rang national), distinct de la faisabilité."""
+    frag = str(row.get("fragilite", "N/D"))
+    cls = {"très forte": "crit", "forte": "crit", "modérée": "inter", "faible": "fav"}.get(frag, "inter")
+    return (f'<span class="fiche-zone-badge {cls}" style="font-size:10px;padding:3px 8px;">'
+            f'Fragilité {html.escape(frag)}</span>')
+
+
 def _impact_territoire_html(row: pd.Series) -> str:
     label = str(row.get("impact_label", "Impact moyen"))
     pop = row.get("impact_pop")
@@ -344,7 +352,10 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
         'Classement des départements de la région selon un score de priorité '
         'calculé sur des rangs nationaux (fragilité, volume de population, '
         'faisabilité, score global). Le score est comparable entre régions\u202f; '
-        'ses pondérations sont un choix méthodologique, pas une mesure.'
+        'ses pondérations sont un choix méthodologique, pas une mesure. Le badge de '
+        'fragilité donne le niveau de besoin territorial seul, indépendamment de la '
+        'faisabilité\u202f: un département très fragile reste très fragile même '
+        'lorsqu\u2019y intervenir est difficile.'
         '</p>',
         unsafe_allow_html=True,
     )
@@ -360,7 +371,8 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
             f'<div class="region-priority-dept">'
             f'{dept_link_html(dept_code, str(row["Nom du département"]), css_class="region-dept-name")}'
             f"</div>"
-            f'<div class="region-priority-score">{_score_priorite_html(score)}</div>'
+            f'<div class="region-priority-score">{_score_priorite_html(score)}'
+            f'<div style="margin-top:4px;">{_besoin_html(row)}</div></div>'
             f'<div class="region-priority-impact">{_impact_territoire_html(row)}</div>'
             f'<div class="region-priority-fais">'
             f'{_faisabilite_badge(str(row.get("faisabilite_label", "Moyenne")))}'
