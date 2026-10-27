@@ -12,11 +12,46 @@ from streamlit_folium import st_folium
 from ..config import APL_LABEL_COURT, PALETTE
 
 # ── Tuiles CartoDB Positron : fond gris-clair minimal institutionnel ──────────
-TILE_URL  = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-TILE_ATTR = (
-    "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> "
-    "© <a href='https://carto.com/'>CARTO</a>"
-)
+def _tile_config() -> tuple[str, str]:
+    """Fond de carte : clé CARTO via secrets/env, sinon fond libre.
+
+    Ordre : SANTACTIVE_TILE_URL (gabarit complet) → CARTO Positron si
+    CARTO_API_KEY est renseignée → IGN Plan v2 (Géoplateforme, libre, sans clé)
+    → OpenStreetMap. Jamais de clé dans le code ni dans les logs.
+    """
+    import os
+
+    def _secret(name: str):
+        val = os.environ.get(name)
+        if val:
+            return val
+        try:
+            return st.secrets.get(name)
+        except Exception:
+            return None
+
+    custom = _secret("SANTACTIVE_TILE_URL")
+    if custom:
+        return str(custom), _secret("SANTACTIVE_TILE_ATTR") or "© Fournisseur du fond de carte"
+    key = _secret("CARTO_API_KEY")
+    if key:
+        return (
+            f"https://basemaps.cartocdn.com/rastertiles/light_all/{{z}}/{{x}}/{{y}}{{r}}.png?api_key={key}",
+            "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> © <a href='https://carto.com/'>CARTO</a>",
+        )
+    fond = (_secret("SANTACTIVE_FOND_CARTE") or "ign").lower()
+    if fond == "osm":
+        return ("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>")
+    return (
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+        "&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM"
+        "&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "© <a href='https://www.ign.fr/'>IGN</a> · Géoplateforme (Plan IGN v2)",
+    )
+
+
+TILE_URL, TILE_ATTR = _tile_config()
 
 BORDER_COLOR = "#FFFFFF"
 BORDER_WIDTH = 0.8

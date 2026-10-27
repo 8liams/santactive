@@ -739,6 +739,37 @@ def compute_leviers_action(
     patho: pd.DataFrame | None,
     delais_region: pd.DataFrame | None,
     reference: pd.DataFrame | None = None,
+    data: dict | None = None,
+) -> list[dict]:
+    """Leviers régionaux = agrégation des leviers du catalogue (app/leviers.py)
+    déclenchés dans chaque département de la région, avec portée observée.
+    Sans `data`, repli sur l'ancien moteur (comparaison)."""
+    if data is not None:
+        from .leviers import leviers_region
+
+        levers = leviers_region(region_depts["dept"].astype(str).str.zfill(2).tolist(), data)
+        pop_by_name = {str(r["Nom du département"]): _num(r.get("population_num"), 0.0)
+                       for _, r in region_depts.iterrows()}
+        pop_region = float(sum(pop_by_name.values())) or float("nan")
+        for lev in levers:
+            lev["population_ciblee"] = int(sum(pop_by_name.get(d, 0.0) for d in lev["depts"]))
+            part = lev["population_ciblee"] / pop_region if pop_region > 0 else float("nan")
+            lev["portee_pct"] = part
+            lev["pertinence"] = (
+                "portée régionale" if part >= 0.5 else
+                "portée pluri-départementale" if part >= 0.25 else "portée ciblée"
+            ) if pd.notna(part) else NIVEAU_ND
+        levers.sort(key=lambda x: (x["score_moyen"] * (0.5 + 0.5 * (x["portee_pct"] if pd.notna(x["portee_pct"]) else 0))), reverse=True)
+        return levers
+    return _compute_leviers_action_legacy(region_depts, priorities, patho, delais_region, reference)
+
+
+def _compute_leviers_action_legacy(
+    region_depts: pd.DataFrame,
+    priorities: pd.DataFrame,
+    patho: pd.DataFrame | None,
+    delais_region: pd.DataFrame | None,
+    reference: pd.DataFrame | None = None,
 ) -> list[dict]:
     """Moteur simple de leviers d'action régionaux.
 

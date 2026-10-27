@@ -2945,3 +2945,13 @@ img[alt="ESData, ESD Paris"] {
 }
 .sa-tip:focus-within .sa-tip-box, .sa-tip:focus .sa-tip-box { visibility: visible; opacity: 1; }
 .sa-tip:focus-visible { outline: 2px solid #1A3D8F; outline-offset: 2px; border-radius: 2px; }
+
+/* ─── Cartes de recommandation structurées ─────────────────────────────── */
+.reco-famille { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#1A3D8F; margin-bottom:6px; }
+.reco-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px; }
+.reco-chip { font-size:11px; background:#F3F2EC; border:1px solid #E8E6DD; border-radius:3px; padding:3px 8px; color:#2B2B2B; }
+.reco-pourquoi { color:#4B4B48; }
+.reco-details { margin-top:10px; font-size:12px; color:#4B4B48; }
+.reco-details summary { cursor:pointer; color:#1A3D8F; font-weight:600; font-size:12px; }
+.reco-conds { margin:8px 0; padding-left:18px; line-height:1.6; }
+.reco-score { font-size:11px; color:#9C9A92; margin-top:6px; }

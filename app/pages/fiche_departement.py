@@ -754,8 +754,9 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
         '<div class="section-header">'
         '<div class="section-eyebrow">PLAN D\'ACTION</div>'
         '<h2 class="section-title">Leviers d\'action <em>recommandés</em>.</h2>'
-        '<p class="section-lead">Pistes générées à partir du croisement des '
-        'indicateurs territoriaux. Chiffrées et localisées.</p>'
+        '<p class="section-lead">Leviers sélectionnés par un catalogue de règles explicites '
+        '(conditions vérifiées sur les indicateurs observés du département, au plus deux par famille). '
+        'Pistes d\'action argumentées, pas des prescriptions.</p>'
         '</div>'
     )
 
@@ -791,371 +792,48 @@ def _generate_recommendations(
     master: pd.DataFrame,
     data: dict,
 ) -> list[dict]:
-    """Génère des recommandations basées sur les indicateurs réels.
+    """Leviers d'action du département : catalogue déterministe (app/leviers.py).
 
-    Couvre 12 cas distincts :
-    1.  Désert médical rural → Maison de santé
-    2.  Désert médical urbain → Télémédecine + consultations avancées
-    3.  Déficit généralistes → Recrutement ciblé
-    4.  Population vieillissante + accès dégradé → Télémédecine seniors
-    5.  Établissements insuffisants → Antennes hospitalières
-    6.  Temps d'accès élevé → Transport sanitaire / navettes santé
-    7.  Fort taux pathologies chroniques → Prévention + dépistage
-    8.  Jeunesse élevée + pédiatres insuffisants → Renforcer pédiatrie
-    9.  Foncier accessible + désert → Attirer médecins via logement
-    10. Déficit spécialistes RPPS → Consultations avancées IPA
-    11. Situation intermédiaire → Plan de vigilance structuré
-    12. Situation favorable → Maintien + veille
+    Chaque levier déclare ses conditions (requises / contributives), ses
+    exclusions, son public et un gabarit de texte alimenté par les indicateurs
+    observés ; la sélection garde les 4 leviers les mieux appariés, au plus 2
+    par famille. `master` n'est plus utilisé directement (profils calculés
+    une fois pour les 100 départements).
     """
-    recos: list[dict] = []
+    from ..leviers import profil, selectionner
 
-    # ── Extraction des indicateurs ────────────────────────────────────────
-    # Valeur absente → NaN : toute comparaison avec NaN est fausse, donc un
-    # indicateur manquant ne déclenche aucun cas (aucune valeur par défaut).
-    score_acces    = to_num(r.get("score_acces"))
-    score_pros     = to_num(r.get("score_pros"))
-    score_etabs    = to_num(r.get("score_etabs"))
-    score_global   = to_num(r.get("score_global"))
-    apl            = to_num(r.get("apl_dept"))
-    pct_65         = to_num(r.get("pct_plus_65"))
-    pct_moins_25   = to_num(r.get("pct_moins_25"))
-    prix_m2        = to_num(r.get("prix_m2_moyen"))
-    temps          = to_num(r.get("temps_acces_median"))
-    med_100k       = to_num(r.get("med_gen_pour_100k"))
-    etabs_100k     = to_num(r.get("structures_pour_100k"))
-    population     = to_num(r.get("population_num"))
-    dept_nom       = str(r.get("Nom du département", "Ce département"))
-    dept_nom_court = dept_nom.replace("Le ", "").replace("La ", "").replace("Les ", "")
-
-    # ── Médianes nationales (calculées sur les départements analysés) ─────
-    med_med_nat    = float(master["med_gen_pour_100k"].median())
-    etabs_med_nat  = float(master["structures_pour_100k"].median())
-    temps_med_nat  = float(master["temps_acces_median"].median())
-    pct65_med_nat  = float(master["pct_plus_65"].median())
-    pct25_med_nat  = float(master["pct_moins_25"].median())
-
-    # ── Flags ─────────────────────────────────────────────────────────────
-    # Typologie unique : celle de scoring.py (seuils INSEE de densité),
-    # identique à l'en-tête de la fiche.
-    typo = str(r.get("typologie", "inconnu"))
-
-    is_rural           = typo in ("rural", "peri_urbain")
-    is_urbain          = typo in ("urbain", "urbain_dense")
-
-    is_desert          = apl < APL_SEUIL_DESERT
-    is_tres_desert     = apl < 1.5
-    acces_critique     = score_acces < 33
-    acces_degrade      = score_acces < 45
-    pros_critique      = score_pros < 33
-    pros_degrade       = score_pros < 45
-    etabs_critique     = score_etabs < 33
-    etabs_degrade      = score_etabs < 45
-    temps_eleve        = temps > temps_med_nat * 1.4
-    pop_vieillissante  = pct_65 > 22
-    pop_tres_vieille   = pct_65 > 27
-    pop_jeune          = pct_moins_25 > 32
-    foncier_accessible = prix_m2 < 1500
-    foncier_moyen      = prix_m2 < 2500
-    deficit_med        = med_100k < med_med_nat * 0.85
-
-    # Pathologies : prévalences brutes CNAM (non standardisées sur l'âge),
-    # comparées à la médiane des départements analysés.
-    prev = dept_prevalences(data.get("patho"), master["dept"])
-    dept_code_z = str(r.get("dept", "")).zfill(2)
-    taux_diabete = taux_cardio = float("nan")
-    diab_nat = cardio_nat = float("nan")
-    if not prev.empty:
-        if PATHO_DIABETE in prev.columns:
-            diab_nat = float(prev[PATHO_DIABETE].median())
-            taux_diabete = to_num(prev[PATHO_DIABETE].get(dept_code_z))
-        if PATHO_CARDIO in prev.columns:
-            cardio_nat = float(prev[PATHO_CARDIO].median())
-            taux_cardio = to_num(prev[PATHO_CARDIO].get(dept_code_z))
-
-    diab_eleve   = taux_diabete > diab_nat * PREV_SEUIL_RELATIF
-    cardio_eleve = taux_cardio > cardio_nat * PREV_SEUIL_RELATIF
-    prev_elevee  = diab_eleve or cardio_eleve
-
-    def _f(v, spec=".1f", suffix=""):
-        return f"{v:{spec}}{suffix}" if pd.notna(v) else "N/D"
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 1 — APL sous le repère 2,5 en territoire rural → Maison de santé
-    # ════════════════════════════════════════════════════════════════════
-    if is_desert and is_rural:
-        _nb_crit = to_num(r.get("nb_communes_critiques"))
-        nb_communes_eloignees = int(_nb_crit) if pd.notna(_nb_crit) else 0
-        recos.append({
-            "title": "Implanter une maison de santé pluridisciplinaire dans les zones isolées.",
-            "prose": (
-                f"L'{APL_LABEL_COURT} de {dept_nom} ({apl:.1f} consult./an/hab.) "
-                f"est sous le repère de {APL_SEUIL_DESERT} utilisé pour identifier "
-                "les zones sous-denses en médecine générale. "
-                + (f"{nb_communes_eloignees} communes ont un temps d'accès "
-                   "supérieur à 15 min. "
-                   if nb_communes_eloignees > 0 else "")
-                + (f"Le foncier médian à {prix_m2:.0f} €/m² "
-                   "permet une installation à coût maîtrisé. "
-                   if foncier_moyen else "")
-                + "Une MSP regroupe généralistes, infirmiers et autres "
-                  "professionnels autour d'un projet de santé commun."
-            ),
-            "stats": [
-                (f"{apl:.1f}", APL_LABEL),
-                (f"{APL_SEUIL_DESERT}", "Repère sous-densité"),
-                (_f(prix_m2, ".0f", " €"), "Prix médian /m²"),
-            ],
-            "priority": 1,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 2 — APL sous le repère en territoire urbain → Télémédecine
-    # ════════════════════════════════════════════════════════════════════
-    if is_desert and is_urbain:
-        recos.append({
-            "title": "Renforcer l'accès aux soins par télémédecine et consultations avancées.",
-            "prose": (
-                f"Malgré une densité urbaine, l'{APL_LABEL_COURT} de {apl:.1f} "
-                "signale une offre de médecine générale insuffisante "
-                "au regard de la population. "
-                "Le déploiement de téléconsultations, de "
-                "créneaux IPA (Infirmiers en Pratique Avancée) et de "
-                "centres de santé permettrait d'élargir l'offre de premier recours."
-            ),
-            "stats": [
-                (f"{apl:.1f}", APL_LABEL),
-                (_f(score_acces, ".0f", "/100"), "Score accès"),
-                (_f(temps, ".0f", " min"), "Temps d'accès médian"),
-            ],
-            "priority": 1,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 3 — Densité de généralistes faible → Attractivité
-    # (aucun objectif chiffré d'installations : hypothèse non validée)
-    # ════════════════════════════════════════════════════════════════════
-    if pros_critique or (deficit_med and is_desert):
-        recos.append({
-            "title": "Lancer un programme d'attractivité ciblé sur les médecins généralistes.",
-            "prose": (
-                f"Avec {med_100k:.0f} généralistes recensés pour 100 000 habitants "
-                f"contre {med_med_nat:.0f} en médiane des départements, "
-                f"{dept_nom} se situe dans le bas de la distribution nationale. "
-                "Contrats de praticien territorial, aides à l'installation, "
-                "partenariat avec les facultés régionales."
-            ),
-            "stats": [
-                (f"{med_100k:.0f}", "Généralistes /100k"),
-                (f"{med_med_nat:.0f}", "Médiane des départements"),
-            ],
-            "priority": 1 if pros_critique else 2,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 4 — Population vieillissante + accès dégradé → Seniors
-    # ════════════════════════════════════════════════════════════════════
-    if pop_vieillissante and (acces_degrade or is_desert):
-        nb_seniors = population * pct_65 / 100 if pd.notna(population) else float("nan")
-        recos.append({
-            "title": "Déployer un programme de santé numérique pour les seniors isolés.",
-            "prose": (
-                f"Avec {pct_65:.1f} % de 65 ans et plus "
-                f"({'très au-dessus' if pop_tres_vieille else 'au-dessus'} "
-                f"de la médiane des départements, {pct65_med_nat:.1f} %), "
-                f"{dept_nom} cumule vieillissement démographique et accès aux "
-                "soins dégradé. "
-                "Infirmiers itinérants équipés, téléconsultations "
-                "gériatriques et accompagnement au numérique "
-                "réduiraient les renoncements aux soins."
-            ),
-            "stats": [
-                (f"{pct_65:.1f} %", "Part des 65+"),
-                (f"{pct65_med_nat:.1f} %", "Médiane des départements"),
-                (_fmt_int(nb_seniors), "Habitants de 65 ans et plus (INSEE)"),
-            ],
-            "priority": 2,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 5 — Établissements insuffisants → Antennes hospitalières
-    # ════════════════════════════════════════════════════════════════════
-    if etabs_critique:
-        recos.append({
-            "title": "Créer des antennes de consultations externes dans les zones sous-dotées.",
-            "prose": (
-                f"Avec {etabs_100k:.1f} établissements recensés pour 100 000 habitants "
-                f"contre {etabs_med_nat:.1f} en médiane des départements, "
-                "la couverture en établissements est faible. "
-                "Des antennes légères de consultations externes, "
-                "adossées aux hôpitaux de référence, rapprocheraient l'offre "
-                "des habitants sans infrastructure lourde."
-            ),
-            "stats": [
-                (f"{etabs_100k:.1f}", "Étabs /100k actuels"),
-                (f"{etabs_med_nat:.1f}", "Médiane des départements"),
-                (_f(temps, ".0f", " min"), "Temps d'accès médian"),
-            ],
-            "priority": 2,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 6 — Temps d'accès élevé → Transport sanitaire
-    # ════════════════════════════════════════════════════════════════════
-    if temps_eleve and is_rural and not etabs_critique:
-        recos.append({
-            "title": "Organiser des navettes santé vers les lieux de soins de référence.",
-            "prose": (
-                f"Avec un temps d'accès médian de {temps:.0f} minutes "
-                f"(médiane des départements : {temps_med_nat:.0f} min), "
-                "l'éloignement est un frein pour les personnes sans véhicule. "
-                "Un service de navettes santé mutualisées entre communes, "
-                "cofinancé par le Département et l'ARS, "
-                "ciblerait les publics peu mobiles (seniors, personnes "
-                "en situation de précarité)."
-            ),
-            "stats": [
-                (f"{temps:.0f} min", "Temps d'accès actuel"),
-                (f"{temps_med_nat:.0f} min", "Médiane des départements"),
-            ],
-            "priority": 2,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 7 — Prévalence brute élevée + accès dégradé → Prévention
-    # ════════════════════════════════════════════════════════════════════
-    if prev_elevee and (acces_degrade or is_desert):
-        if cardio_eleve and (not diab_eleve or taux_cardio / cardio_nat >= taux_diabete / diab_nat):
-            pathologie_principale, taux_principal, taux_nat = (
-                "maladies cardioneurovasculaires", taux_cardio, cardio_nat)
-        else:
-            pathologie_principale, taux_principal, taux_nat = (
-                "diabète", taux_diabete, diab_nat)
-        recos.append({
-            "title": "Renforcer la prévention et le dépistage des pathologies chroniques.",
-            "prose": (
-                f"{dept_nom} présente une prévalence brute ({pathologie_principale}) "
-                f"de {taux_principal:.1f} %, contre {taux_nat:.1f} % en médiane "
-                "des départements (CNAM 2023, prévalence non standardisée sur l'âge). "
-                "Combinée à un accès aux soins dégradé, cette situation justifie "
-                "des actions de dépistage (journées de prévention, équipes mobiles) "
-                "et un suivi renforcé des patients chroniques."
-            ),
-            "stats": [
-                (f"{taux_principal:.1f} %", f"Prévalence brute {pathologie_principale}"),
-                (f"{taux_nat:.1f} %", "Médiane des départements"),
-                (_f(score_acces, ".0f", "/100"), "Score accès"),
-            ],
-            "priority": 2,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 8 — Population jeune élevée → Renforcer pédiatrie et PMI
-    # ════════════════════════════════════════════════════════════════════
-    if pop_jeune and (acces_degrade or pros_degrade):
-        recos.append({
-            "title": "Renforcer l'offre pédiatrique et les services de PMI.",
-            "prose": (
-                f"Avec {pct_moins_25:.1f} % de moins de 25 ans "
-                f"(médiane des départements : {pct25_med_nat:.1f} %), {dept_nom} "
-                "a une population significativement jeune. "
-                "L'accès aux pédiatres, médecins scolaires et services "
-                "de Protection Maternelle et Infantile (PMI) est un enjeu "
-                "de prévention à long terme."
-            ),
-            "stats": [
-                (f"{pct_moins_25:.1f} %", "Part des moins de 25 ans"),
-                (f"{pct25_med_nat:.1f} %", "Médiane des départements"),
-            ],
-            "priority": 3,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 9 — Foncier très accessible + APL faible → Attirer via logement
-    # ════════════════════════════════════════════════════════════════════
-    if foncier_accessible and is_desert and not any(
-        "attractivité" in rec.get("title", "") for rec in recos
-    ):
-        recos.append({
-            "title": "Mobiliser l'avantage foncier pour attirer des professionnels de santé.",
-            "prose": (
-                f"Le prix médian à {prix_m2:.0f} €/m² représente un levier "
-                "d'attractivité concret pour les professionnels de santé. "
-                "Un programme de mise à disposition de locaux professionnels "
-                "à tarif préférentiel, couplé à des aides au logement, "
-                "complète les aides conventionnelles à l'installation."
-            ),
-            "stats": [
-                (f"{prix_m2:.0f} €", "Prix médian /m²"),
-                (f"{apl:.1f}", APL_LABEL),
-            ],
-            "priority": 3,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 10 — Score intermédiaire global → Plan de vigilance
-    # ════════════════════════════════════════════════════════════════════
-    if not recos and 33 <= score_global <= 55:
-        recos.append({
-            "title": "Mettre en place un plan de vigilance sur les indicateurs fragiles.",
-            "prose": (
-                f"{dept_nom} présente une situation intermédiaire "
-                f"(score {score_global:.0f}/100) sans déclencher les signaux "
-                "d'alerte suivis par l'outil. "
-                "Un suivi régulier de l'APL, de l'offre de médecins et "
-                "du temps d'accès permettrait de détecter précocement "
-                "une dégradation."
-            ),
-            "stats": [
-                (f"{score_global:.0f}/100", "Score global actuel"),
-                (_f(apl, ".1f"), APL_LABEL),
-            ],
-            "priority": 3,
-        })
-
-    # ════════════════════════════════════════════════════════════════════
-    # CAS 11 — Aucun signal d'alerte → Maintien et veille
-    # ════════════════════════════════════════════════════════════════════
-    if not recos:
-        recos.append({
-            "title": "Maintenir les acquis et partager les bonnes pratiques.",
-            "prose": (
-                f"{dept_nom} ne déclenche aucun des signaux d'alerte suivis "
-                "par l'outil (APL, offre de médecins et d'établissements, "
-                "temps d'accès, vieillissement, pathologies). "
-                "La priorité est de maintenir cette situation et de suivre "
-                "l'évolution des effectifs médicaux."
-            ),
-            "stats": [
-                (_f(score_global, ".0f", "/100"), "Score global"),
-                (_f(apl, ".1f"), APL_LABEL),
-            ],
-            "priority": 3,
-        })
-
-    # Trie par priorité et limite à 4
-    recos.sort(key=lambda x: x.get("priority", 3))
-    return recos[:4]
+    p = profil(str(r.get("dept", "")).zfill(2), data)
+    return selectionner(p, n=4)
 
 
 def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
-    """Affiche une carte de recommandation (style uniforme, sans hiérarchie)."""
+    """Carte structurée : problème → indicateurs → action → pourquoi → public / secteurs / conditions."""
     impact = project_levier_impact(reco, r, data)
-
-    stats_html = "".join(
-        f'<div class="reco-stat">'
-        f'<span class="val">{v}</span>'
-        f'<span class="lbl">{l}</span>'
-        f'</div>'
-        for v, l in reco.get("stats", [])
+    esc = html.escape
+    chips = "".join(f'<span class="reco-chip">{esc(str(v))}</span>' for v in reco.get("indicateurs", [])[:4])
+    conds = reco.get("conditions") or []
+    conds_html = "".join(
+        f'<li>{"✓" if ok else "–"} {esc(lab)}</li>' for lab, ok in conds
     )
-    stats_block = f'<div class="reco-stats">{stats_html}</div>' if stats_html else ""
-
+    disp = ", ".join(reco.get("dispositifs", []))
+    secteurs = reco.get("secteurs") or ""
     st.html(
         '<div class="reco-card reco-card-neutral">'
-        f'<div class="reco-title">{reco["title"]}</div>'
-        f'<div class="reco-prose">{reco["prose"]}</div>'
-        f'{stats_block}'
-        f'{render_impact_html(impact)}'
+        f'<div class="reco-famille">{esc(reco.get("famille", ""))} · {esc(reco.get("horizon", ""))}</div>'
+        f'<div class="reco-title">{esc(reco["title"])}</div>'
+        f'<div class="reco-prose"><strong>Constat.</strong> {esc(reco.get("probleme", ""))}</div>'
+        f'<div class="reco-chips">{chips}</div>'
+        f'<div class="reco-prose"><strong>Action.</strong> {esc(reco.get("action", ""))}</div>'
+        f'<div class="reco-prose reco-pourquoi"><strong>Pourquoi ici.</strong> {esc(reco.get("pourquoi", ""))}</div>'
+        + (f'<div class="reco-prose"><strong>Secteurs.</strong> {esc(secteurs)}</div>' if secteurs else "")
+        + render_impact_html(impact)
+        + '<details class="reco-details"><summary>Conditions, dispositifs et mise en œuvre</summary>'
+        f'<ul class="reco-conds">{conds_html}</ul>'
+        + (f'<div class="reco-prose"><strong>Dispositifs.</strong> {esc(disp)}</div>' if disp else "")
+        + (f'<div class="reco-prose"><strong>Mise en œuvre.</strong> {esc(reco.get("mise_en_oeuvre", ""))}</div>'
+           if reco.get("mise_en_oeuvre") else "")
+        + f'<div class="reco-score">Score de correspondance {reco.get("score", 0):.2f}</div>'
+        '</details>'
         '</div>'
     )
 

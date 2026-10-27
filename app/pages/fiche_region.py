@@ -71,7 +71,7 @@ def render(data: dict) -> None:
     leviers = enrich_leviers_decision(
         compute_leviers_action(
             region_depts, priorities_raw, data.get("patho"), delais_region,
-            reference=master,
+            reference=master, data=data,
         ),
         region_depts,
         priorities,

@@ -199,7 +199,7 @@ def project_levier_impact(
     """
     data = data or {}
     patho = data.get("patho")
-    kind = _classify_levier(reco.get("title", ""))
+    kind = reco.get("kind") or _classify_levier(reco.get("title", ""))
 
     if kind == "msp":
         return LevierImpactProjection(
