@@ -95,6 +95,8 @@ def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
     items: list[tuple[View, str]] = [
         ("home", "Accueil"),
         ("comparer", "Comparaison"),
+        ("exploration", "Explorer"),
+        ("acces", "Accès routier"),
         ("enjeux", "À quoi ça sert ?"),
         ("methodologie", "Méthodologie"),
         ("about", "À propos"),
