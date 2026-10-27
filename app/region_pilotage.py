@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .config import APL_LABEL, NA_DISPLAY, PATHOS_EXCLUDED
-from .pathologies import dept_prevalences
+from .pathologies import dept_prevalences, patho_agg
 
 APL_SEUIL_DESERT = 2.5
 
@@ -99,13 +99,11 @@ def _patho_metrics(patho: pd.DataFrame | None, dept_codes: list[str]) -> dict[st
     if patho is None or patho.empty or "_error" in patho.columns:
         return out
 
-    dp = patho.copy()
-    dp["dept"] = dp["dept"].astype(str).str.zfill(2)
-    dp = dp[~dp["patho_niv1"].isin(PATHOS_EXCLUDED)]
-    dp = dp[dp["dept"].isin({str(c).zfill(2) for c in dept_codes})]
-    if dp.empty:
+    g = patho_agg(patho).reset_index()
+    dg = g[(~g["patho_niv1"].isin(PATHOS_EXCLUDED))
+           & g["dept"].isin({str(c).zfill(2) for c in dept_codes})].copy()
+    if dg.empty:
         return out
-    dg = dp.groupby(["dept", "patho_niv1"])[["Ntop", "Npop"]].sum(min_count=1).reset_index()
     dg["prev"] = dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100
     dg = dg.dropna(subset=["prev"])
     for code, d in dg.groupby("dept"):
@@ -602,24 +600,21 @@ def _patho_fragment_stats(
     if patho is None or patho.empty or "_error" in patho.columns:
         return []
 
-    dp = patho.copy()
-    dp["dept"] = dp["dept"].astype(str).str.zfill(2)
-    dp = dp[~dp["patho_niv1"].isin(PATHOS_EXCLUDED)]
-    dp = dp[dp["patho_niv1"].str.contains(fragment, case=False, na=False, regex=False)]
-    dp = dp[dp["dept"].isin([str(c).zfill(2) for c in dept_codes])]
+    g = patho_agg(patho).reset_index()
+    dp = g[(~g["patho_niv1"].isin(PATHOS_EXCLUDED))
+           & g["patho_niv1"].str.contains(fragment, case=False, na=False, regex=False)
+           & g["dept"].isin([str(c).zfill(2) for c in dept_codes])]
     if dp.empty:
         return []
-
+    agg = dp.groupby("dept")[["Ntop", "Npop"]].sum()
     rows: list[dict] = []
     for code in dept_codes:
         c = str(code).zfill(2)
-        d = dp[dp["dept"] == c]
-        if d.empty:
+        if c not in agg.index:
             continue
-        ntop = float(d["Ntop"].sum())
-        npop = float(d["Npop"].sum())
-        prev = (ntop / npop * 100) if npop > 0 else float("nan")
-        rows.append({"dept": c, "ntop": ntop, "npop": npop, "prev": prev})
+        ntop, npop = float(agg.loc[c, "Ntop"]), float(agg.loc[c, "Npop"])
+        rows.append({"dept": c, "ntop": ntop, "npop": npop,
+                     "prev": (ntop / npop * 100) if npop > 0 else float("nan")})
     return rows
 
 

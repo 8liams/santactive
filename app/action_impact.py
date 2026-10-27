@@ -60,17 +60,15 @@ def _dept_patho_ntop(
     """Somme Ntop CNAM pour un fragment patho_niv1 sur un département."""
     if patho is None or patho.empty or "_error" in patho.columns:
         return None
+    from .pathologies import patho_agg
+
     code = str(dept).zfill(2)
-    dp = patho.copy()
-    dp["dept"] = dp["dept"].astype(str).str.zfill(2)
-    dp = dp[
-        (dp["dept"] == code)
-        & (~dp["patho_niv1"].isin(PATHOS_EXCLUDED))
-        & dp["patho_niv1"].str.contains(fragment, case=False, na=False, regex=False)
-    ]
-    if dp.empty:
+    g = patho_agg(patho)
+    if code not in g.index.get_level_values("dept"):
         return None
-    total = int(pd.to_numeric(dp["Ntop"], errors="coerce").fillna(0).sum())
+    d = g.loc[code]
+    mask = d.index.str.contains(fragment, case=False, regex=False) & ~d.index.isin(PATHOS_EXCLUDED)
+    total = int(pd.to_numeric(d.loc[mask, "Ntop"], errors="coerce").fillna(0).sum())
     return total if total > 0 else None
 
 

@@ -70,6 +70,12 @@ def _zd(s) -> str:
     return str(s).strip().zfill(2)
 
 
+def _zd_series(s: pd.Series) -> pd.Series:
+    """Version vectorisée de _zd (map sur les valeurs distinctes)."""
+    uniq = {v: _zd(v) for v in s.dropna().unique()}
+    return s.map(uniq)
+
+
 @st.cache_data(show_spinner="Chargement des données…")
 def load_all_data():
     """Charge tous les datasets et construit le master dataframe départemental.
@@ -80,7 +86,7 @@ def load_all_data():
     # ── Population ────────────────────────────────────────────────────────────
     pop = read_dataset(POP_PATH, POP_FILE_ID, sep=";")
     pop.columns = [c.replace("\r\n", " ").strip() for c in pop.columns]
-    pop["dept"] = pop["code_departement"].apply(_zd)
+    pop["dept"] = pop["code_departement"].pipe(_zd_series)
     for c in pop.columns:
         for kw, alias in [
             ("25 ans",    "pct_moins_25"),
@@ -100,8 +106,10 @@ def load_all_data():
             )
 
     # ── Professionnels de santé ───────────────────────────────────────────────
-    _pros_raw = read_dataset(PROS_PATH, PROS_FILE_ID, sep=";", low_memory=False)
-    _pros_raw["dept"] = _pros_raw["code_departement"].apply(_zd)
+    _pros_raw = read_dataset(PROS_PATH, PROS_FILE_ID, sep=";", low_memory=False,
+                             usecols=["specialite_libelle", "coordonnees_ville", "code_departement"],
+                             dtype={"specialite_libelle": "category", "coordonnees_ville": "category"})
+    _pros_raw["dept"] = _pros_raw["code_departement"].pipe(_zd_series)
     pros_dept = _pros_raw.groupby("dept").agg(
         nb_pros        =("specialite_libelle", "count"),
         nb_med_gen     =("specialite_libelle", lambda x: (x == "Médecin généraliste").sum()),
@@ -143,7 +151,7 @@ def load_all_data():
 
     # ── Établissements ────────────────────────────────────────────────────────
     _etabs_raw = read_dataset(ETABS_PATH, ETABS_FILE_ID, sep=";")
-    _etabs_raw["dept"] = _etabs_raw["code_departement"].apply(_zd)
+    _etabs_raw["dept"] = _etabs_raw["code_departement"].pipe(_zd_series)
     _cats = ETABS_CATEGORIES
     etabs_dept = _etabs_raw.groupby("dept").agg(
         nb_etabs     =("categetab", "size"),   # toutes les lignes (Rslongue parfois vide)
@@ -167,7 +175,7 @@ def load_all_data():
 
     # ── Temps d'accès (médiane + p90, robuste aux outliers) ──────────────────
     _temps_raw = read_dataset(TEMPS_PATH, TEMPS_FILE_ID, sep=";")
-    _temps_raw["dept"] = _temps_raw["code_departement"].apply(_zd)
+    _temps_raw["dept"] = _temps_raw["code_departement"].pipe(_zd_series)
     temps_dept = _temps_raw.groupby("dept").agg(
         temps_acces_median    =("temps_acces", "median"),
         temps_acces_p90       =("temps_acces", lambda x: x.quantile(0.90)),
@@ -185,8 +193,9 @@ def load_all_data():
     del _temps_raw
 
     # ── Immobilier — médiane ──────────────────────────────────────────────────
-    _immo_raw = read_dataset(IMMO_PATH, IMMO_FILE_ID, sep=";", low_memory=False)
-    _immo_raw["dept"] = _immo_raw["code_departement"].apply(_zd)
+    _immo_raw = read_dataset(IMMO_PATH, IMMO_FILE_ID, sep=";", low_memory=False,
+                             usecols=["code_departement", "commune", "prix_m2", "valeur_fonciere", "surface_m2"])
+    _immo_raw["dept"] = _immo_raw["code_departement"].pipe(_zd_series)
     immo_dept = _immo_raw.groupby("dept").agg(
         prix_m2_moyen   =("prix_m2",        "median"),
         nb_transactions =("valeur_fonciere","count"),
@@ -218,10 +227,9 @@ def load_all_data():
         # un patient relève de plusieurs codes). Sans cela, Npop était compté
         # 3 fois et la prévalence divisée par 3.
         if {"cla_age_5", "Ntop", "Npop"} <= set(_patho_raw.columns):
-            patho = (
-                _patho_raw.groupby(["dept", "patho_niv1", "cla_age_5"], as_index=False)
-                .agg(Ntop=("Ntop", lambda s: s.sum(min_count=1)), Npop=("Npop", "max"))
-            )
+            _patho_raw["dept"] = _patho_raw["dept"].astype(str).str.zfill(2)
+            _g = _patho_raw.groupby(["dept", "patho_niv1", "cla_age_5"])
+            patho = pd.concat([_g["Ntop"].sum(min_count=1), _g["Npop"].max()], axis=1).reset_index()
         else:
             _patho_cols = ["dept", "patho_niv1", "Ntop", "Npop"]
             patho = _patho_raw[[c for c in _patho_cols if c in _patho_raw.columns]].copy()

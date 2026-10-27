@@ -17,6 +17,27 @@ PATHO_CARDIO = "Maladies cardioneurovasculaires"
 PREV_SEUIL_RELATIF = 1.10
 
 
+_AGG_CACHE: dict[int, pd.DataFrame] = {}
+
+
+def patho_agg(patho: pd.DataFrame | None) -> pd.DataFrame:
+    """Σ Ntop / Npop par (dept, patho_niv1), calculé une fois par DataFrame.
+
+    Évite les ~30 copies du fichier CNAM par rendu de fiche région. La clé est
+    l'identité de l'objet renvoyé par le cache Streamlit (stable par session).
+    """
+    if patho is None or patho.empty or not {"dept", "patho_niv1", "Ntop", "Npop"} <= set(patho.columns):
+        return pd.DataFrame(columns=["Ntop", "Npop"])
+    key = id(patho)
+    if key not in _AGG_CACHE:
+        d = patho[["dept", "patho_niv1", "Ntop", "Npop"]]
+        if not (d["dept"].astype(str).str.len() >= 2).all():
+            d = d.assign(dept=d["dept"].astype(str).str.zfill(2))
+        _AGG_CACHE.clear()
+        _AGG_CACHE[key] = d.groupby(["dept", "patho_niv1"])[["Ntop", "Npop"]].sum(min_count=1)
+    return _AGG_CACHE[key]
+
+
 def dept_prevalences(patho: pd.DataFrame | None, depts=None) -> pd.DataFrame:
     """Tableau dept × patho_niv1 des prévalences brutes (en %).
 
@@ -25,11 +46,10 @@ def dept_prevalences(patho: pd.DataFrame | None, depts=None) -> pd.DataFrame:
     """
     if patho is None or patho.empty or not {"dept", "patho_niv1", "Ntop", "Npop"} <= set(patho.columns):
         return pd.DataFrame()
-    d = patho.copy()
-    d["dept"] = d["dept"].astype(str).str.zfill(2)
+    g = patho_agg(patho)
     if depts is not None:
-        d = d[d["dept"].isin({str(x).zfill(2) for x in depts})]
-    g = d.groupby(["dept", "patho_niv1"])[["Ntop", "Npop"]].sum(min_count=1)
+        keep = {str(x).zfill(2) for x in depts}
+        g = g[g.index.get_level_values("dept").isin(keep)]
     prev = (g["Ntop"] / g["Npop"].where(g["Npop"] > 0) * 100).astype(float)
     return prev.unstack("patho_niv1")
 

@@ -136,14 +136,17 @@ def render_national_choropleth(
     )
     m.fit_bounds([[41.3, -5.2], [51.1, 9.6]], padding=(8, 8))
 
-    # Enrichit les propriétés GeoJSON — valeur principale + contexte
-    import copy
-    geojson_enriched = copy.deepcopy(geojson)
+    # Enrichit les propriétés GeoJSON — valeur principale + contexte.
+    # Copie superficielle (géométries partagées) : le deepcopy coûtait 0,02-0,4 s.
+    rows_by_code = master.set_index("dept").to_dict("index")
+    geojson_enriched = {
+        **geojson,
+        "features": [{**f, "properties": dict(f["properties"])} for f in geojson["features"]],
+    }
     for feat in geojson_enriched["features"]:
         code = feat["properties"]["code"]
-        row = master[master["dept"] == code]
-        if not row.empty:
-            rv = row.iloc[0]
+        rv = rows_by_code.get(code)
+        if rv is not None:
             feat["properties"]["dept_name"]  = str(rv.get("Nom du département", "N/D"))
             feat["properties"]["region_name"] = str(rv.get("Nom de la région", "N/D"))
             feat["properties"]["zone"]        = str(rv.get("zone_short", "N/D"))
@@ -310,8 +313,9 @@ def render_dom_cartouches(
                     unsafe_allow_html=True,
                 )
 
-                # Contours communaux pour ce DOM (mis en cache)
-                geojson = _fetch_communes_geojson(code_dom)
+                # Contour du département (1 polygone, ~10× plus léger que les
+                # communes : la couleur est uniforme) ; repli sur les communes
+                geojson = _fetch_dept_outline(code_dom) or _fetch_communes_geojson(code_dom)
                 if geojson is None or not geojson.get("features"):
                     st.markdown(
                         f'<div style="height:{height}px;background:#F3F2EC;'
@@ -459,6 +463,23 @@ def fetch_communes_population(dept_code: str) -> dict[str, float]:
     return pop_map
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_dept_outline(dept_code: str) -> dict | None:
+    """Contour d'un département (geo.api.gouv.fr), en FeatureCollection."""
+    url = f"https://geo.api.gouv.fr/departements/{dept_code}?geometry=contour&format=geojson"
+    try:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        feat = resp.json()
+    except Exception:
+        return None
+    if feat.get("type") == "FeatureCollection":
+        return feat
+    if feat.get("type") == "Feature":
+        return {"type": "FeatureCollection", "features": [feat]}
+    return None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_communes_geojson(dept_code: str) -> dict | None:
     """Récupère le GeoJSON communal depuis geo.api.gouv.fr."""
@@ -575,9 +596,11 @@ def render_commune_choropleth(
                 except Exception:
                     code_to_color[code] = "#E8E6DD"
 
-    # Enrichit props pour le tooltip
-    import copy
-    geojson_enriched = copy.deepcopy(geojson)
+    # Enrichit props pour le tooltip (copie superficielle, géométries partagées)
+    geojson_enriched = {
+        **geojson,
+        "features": [{**f, "properties": dict(f["properties"])} for f in geojson["features"]],
+    }
     for feat in geojson_enriched["features"]:
         code = feat["properties"]["code"]
         val = val_map.get(code)
