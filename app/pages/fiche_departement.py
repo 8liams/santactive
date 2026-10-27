@@ -446,7 +446,10 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
                 score_acces, val_acces, "/hab.", tooltip_key="apl")
     _render_bar("Accessibilité APL", "Consultations disponibles / hab.",
                 score_apl, val_apl, "/hab.", indent=True)
-    _render_bar("Accessibilité physique", "Temps trajet établissement",
+    _couv_t = to_num(r.get("couverture_temps"))
+    _render_bar("Accessibilité physique",
+                "Temps d'accès communal (médiane simple) · 0 = offre dans la commune"
+                + (f" · ⚠ {_couv_t:.0%} des communes couvertes" if pd.notna(_couv_t) and _couv_t < 0.9 else ""),
                 score_temps, val_temps, "min", indent=True)
 
     _render_bar(
@@ -686,7 +689,7 @@ def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
             f'<td class="cell-rank" data-label="Rang">{i + 1}</td>'
             f'<td class="metric-label">{commune_name}</td>'
             f'<td data-label="Population concernée">{pop_str}</td>'
-            f'<td data-label="Impact potentiel">{impact_str}</td>'
+            f'<td data-label="Population INSEE">{impact_str}</td>'
             f'<td data-label="Niveau de priorité">{niveau}</td>'
             f'<td data-label="Facteurs principaux" '
             f'style="font-size:13px;color:#4A4A4A;line-height:1.45;">'
@@ -702,7 +705,7 @@ def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
         '<th class="metric-col">Rang</th>'
         '<th class="metric-col">Commune</th>'
         '<th class="metric-col">Population concernée</th>'
-        '<th class="metric-col">Impact potentiel</th>'
+        '<th class="metric-col">Population (INSEE)</th>'
         '<th class="metric-col">Niveau de priorité</th>'
         '<th class="metric-col">Facteurs principaux</th>'
         '</tr>'
@@ -1247,6 +1250,8 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
     # Prévalence standardisée sur l'âge (structure de référence : départements analysés)
     std = dept_prevalences_standardisees(patho)
     std_row = std.loc[dept_code] if not std.empty and dept_code in std.index else None
+    couv = std.attrs.get("couverture")
+    couv_row = couv.loc[dept_code] if couv is not None and dept_code in couv.index else None
 
     colors = ["#1A3D8F", "#3A5DA3", "#5A7DB7", "#7B9DCB", "#9BBDDF"]
     html = '<div class="patho-list">'
@@ -1259,6 +1264,8 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
             f'<div class="patho-name">{str(row["patho_niv1"])[:55]}</div>'
             f'<div class="patho-val">{row["prev"]:.2f}\u202f% brute'
             + (f' · {std_row[row["patho_niv1"]]:.2f}\u202f% stand. âge'
+               + ("" if couv_row is None or couv_row.get(row["patho_niv1"], 1) >= 0.9
+                  else f' <span style="color:#A51C30;">(couverture {couv_row.get(row["patho_niv1"], 0):.0%}, non comparable)</span>')
                if std_row is not None and pd.notna(std_row.get(row["patho_niv1"])) else "")
             + f'\u2002·\u2002{ntop_str}\u202fpat.</div>'
             '<div class="patho-bar">'
@@ -1272,7 +1279,8 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
         'Brute = patients pris en charge / population CNAM du département (2023). '
         'Standardisée = taux par classe d\u2019âge appliqués à la structure par âge '
         'de l\u2019ensemble des départements du fichier CNAM\u202f: elle neutralise l\u2019effet du vieillissement '
-        '(cellules sous secret statistique comptées à 0).'
+        'Cellules sous secret statistique comptées à 0\u202f; si moins de 90\u202f% des poids '
+        'd\u2019âge sont couverts, la valeur est signalée comme non comparable.'
         '</div>'
     )
     st.markdown(html, unsafe_allow_html=True)

@@ -1,0 +1,9 @@
+{
+  "url": "https://geo.api.gouv.fr/communes",
+  "producteur": "API Géo (Etalab/DINUM) — population municipale INSEE, surface IGN",
+  "licence": "Licence Ouverte 2.0",
+  "date_recuperation": "2026-10-27",
+  "communes": 34969,
+  "population_totale": 68952941,
+  "sha256": "7a10505cb1dfb4cd35fdf8fc1aa9bd3fdd532a6c7a88fdf06f154753385a693a"
+}

@@ -29,12 +29,7 @@ _IMPACT_DISPLAY: dict[str, str] = {
     "limité": "Impact limité",
 }
 
-_IMPACT_POP_MULT: dict[str, float] = {
-    "majeur": 0.80,
-    "élevé": 0.60,
-    "moyen": 0.42,
-    "limité": 0.25,
-}
+# (anciens multiplicateurs de « population concernée » supprimés : volumes observés)
 
 def _num(val, default=float("nan")) -> float:
     try:
@@ -58,32 +53,27 @@ def impact_display(internal: str) -> str:
     return _IMPACT_DISPLAY.get(str(internal), "Impact moyen")
 
 
-_PRIO_WEIGHTS = {"_frag_score": 0.32, "_impact_score": 0.28, "_fais_score": 0.22, "_sg": 0.18}
-
-
 def _compute_score_priorite(df: pd.DataFrame) -> pd.Series:
-    """Score décisionnel 0–100 à partir des signaux (rangs nationaux).
+    """Score de priorité 0-100 = besoin territorial pondéré par le volume.
 
-    La composante « score global » utilise le score national (100 − score),
-    et non un rang intra-régional : dans une région à un seul département,
-    ce rang valait toujours 1 et donnait 0 au pire département de France.
-    Une composante absente est exclue et les poids sont renormalisés
-    (aucune valeur neutre 0,5 inventée).
+    - besoin  : moyenne à poids égaux de la fragilité (rangs nationaux) et du
+      complément du score global (1 − score/100) ;
+    - volume  : rang national de la population et des publics concernés
+      (_impact_score) ;
+    - score   : moyenne à poids égaux de besoin et volume.
+    La FAISABILITÉ n'entre pas dans le score : elle est affichée à part. Un
+    département très fragile n'est pas rétrogradé parce qu'il est difficile
+    d'y intervenir. Aucun bonus de zone (le score global est déjà présent).
+    Poids égaux = choix explicite, faute de référence validée pour d'autres.
     """
-    comp = pd.DataFrame({
-        "_frag_score": pd.to_numeric(df["_frag_score"], errors="coerce"),
-        "_impact_score": pd.to_numeric(df["_impact_score"], errors="coerce"),
-        "_fais_score": pd.to_numeric(df["_fais_score"], errors="coerce"),
-        "_sg": 1 - pd.to_numeric(df["score_global"], errors="coerce") / 100,
-    }, index=df.index)
-    w = pd.Series(_PRIO_WEIGHTS)
-    num = comp.mul(w).sum(axis=1, skipna=True)
-    den = comp.notna().mul(w).sum(axis=1)
-    zone_bonus = df["zone_short"].map(
-        {"Critique": 0.07, "Intermédiaire": 0.03, "Favorable": 0.0}
-    ).fillna(0)
-    raw = (num / den.where(den > 0)) + zone_bonus
-    return (raw.clip(0, 1) * 100).round(0).astype("Int64")
+    frag = pd.to_numeric(df["_frag_score"], errors="coerce")
+    sg = 1 - pd.to_numeric(df["score_global"], errors="coerce") / 100
+    besoin = pd.concat([frag, sg], axis=1).mean(axis=1, skipna=True)
+    volume = pd.to_numeric(df["_impact_score"], errors="coerce")
+    score = pd.concat([besoin, volume], axis=1).mean(axis=1, skipna=True)
+    df["score_besoin"] = (besoin.clip(0, 1) * 100).round(0).astype("Int64")
+    df["score_volume"] = (volume.clip(0, 1) * 100).round(0).astype("Int64")
+    return (score.clip(0, 1) * 100).round(0).astype("Int64")
 
 
 def _estimate_pop_concernee(row: pd.Series, patho_info: dict | None) -> int | None:
@@ -352,14 +342,13 @@ def enrich_leviers_decision(
             if pop_n else "n.d."
         )
 
-        if pop_n and pop_n >= 250_000:
-            item["impact_niveau"] = "Impact très élevé"
-        elif pop_n and pop_n >= 120_000:
-            item["impact_niveau"] = "Impact élevé"
-        elif pop_n and pop_n >= 50_000:
-            item["impact_niveau"] = "Impact moyen"
-        else:
-            item["impact_niveau"] = "Impact limité"
+        # Portée observée : part de la population régionale des départements ciblés
+        pop_reg = float(pd.to_numeric(region_depts["population_num"], errors="coerce").sum())
+        part = (pop_n / pop_reg) if pop_n and pop_reg > 0 else None
+        item["portee_pct"] = part
+        item["impact_niveau"] = (
+            f"Portée : {part:.0%} de la population régionale" if part is not None else "Portée n.d."
+        )
 
         fais_labels: list[str] = []
         for dname in item.get("depts") or []:

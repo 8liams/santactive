@@ -951,18 +951,22 @@ def compute_leviers_action(
         str(r["Nom du département"]): _num(r.get("population_num"), 0.0)
         for _, r in region_depts.iterrows()
     }
+    pop_region = float(sum(pop_by_name.values())) or float("nan")
     for lev in levers:
         lev["population_ciblee"] = int(sum(pop_by_name.get(d, 0.0) for d in lev["depts"]))
+        # Portée OBSERVÉE (part de la population régionale des départements
+        # ciblés) à la place des scores de pertinence fixés à la main (0,60-0,80)
+        part = lev["population_ciblee"] / pop_region if pop_region > 0 else float("nan")
+        lev["portee_pct"] = part
+        lev["pertinence"] = (
+            "portée régionale" if part >= 0.5 else
+            "portée pluri-départementale" if part >= 0.25 else "portée ciblée"
+        ) if pd.notna(part) else NIVEAU_ND
     seen: set[str] = set()
     unique: list[dict] = []
-    pert_order = {p: i for i, p in enumerate(PERTINENCE_LABELS)}
-    for lev in sorted(
-        levers,
-        key=lambda x: (pert_order.get(x["pertinence"], 0), x["population_ciblee"]),
-        reverse=True,
-    ):
+    for lev in sorted(levers, key=lambda x: x["population_ciblee"], reverse=True):
         if lev["intitule"] in seen or not lev["depts"]:
             continue
         seen.add(lev["intitule"])
         unique.append(lev)
-    return unique[:8]
+    return unique

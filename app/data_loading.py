@@ -12,6 +12,7 @@ import streamlit as st
 
 from .config import (
     APL_DEPT_DREES_PATH,
+    DATA_DIR,
     APL_METHODE,
     AUTRES_PS_DREES_PATH,
     ETABS_CATEGORIES,
@@ -174,6 +175,10 @@ def load_all_data():
         nb_communes           =("commune",     "count"),
         nb_communes_critiques =("temps_acces", lambda x: (x > 15).sum()),
     ).reset_index()
+    # Population OBSERVÉE des communes à plus de 15 min (référentiel geo.api /
+    # INSEE, rapproché par libellé normalisé dans le département) : remplace
+    # l'ancien forfait « part des communes × population × 0,7 ».
+    temps_dept = temps_dept.merge(_pop_communes_critiques(_temps_raw), on="dept", how="left")
     # Trim : ne garder que les colonnes utiles pour la carte commune + fiche commune
     _temps_cols = ["code_departement", "commune", "temps_acces"]
     temps = _temps_raw[[c for c in _temps_cols if c in _temps_raw.columns]].copy()
@@ -288,6 +293,8 @@ def load_all_data():
     master["apl_methode"] = APL_METHODE
 
     # ── Indicateurs dérivés ───────────────────────────────────────────────────
+    # Couverture du fichier temps d'accès : communes présentes / référentiel geo.api
+    master["couverture_temps"] = master["nb_communes"] / master["nb_communes_ref"].replace(0, pd.NA)
     master["population_num"] = pd.to_numeric(
         master["population"].astype(str).str.replace(" ", "").str.replace(",", "."),
         errors="coerce",
@@ -308,6 +315,45 @@ def load_all_data():
     delais_df = load_delais_rdv()
     # medic supprimé : non utilisé nulle part (économie ~50–100 Mo)
     return master, pros, immo, etabs, temps, env, patho, delais_df, presence
+
+
+def _pop_communes_critiques(temps_raw: pd.DataFrame) -> pd.DataFrame:
+    """Population des communes à temps d'accès > 15 min, par département.
+
+    Retourne pop_communes_critiques (habitants, INSEE via geo.api),
+    part_pop_communes_critiques (sur la population des communes rapprochées)
+    et couverture_pop_communes (part des communes du fichier temps rapprochées
+    au référentiel : les non rapprochées ne sont pas comptées).
+    """
+    from .commune_opportunity import norm_commune_name
+
+    cols = ["dept", "nb_communes_ref", "pop_communes_critiques",
+            "part_pop_communes_critiques", "couverture_pop_communes"]
+    path = DATA_DIR / "communes_population_geoapi.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=cols)
+    ref = pd.read_csv(path, dtype={"code_insee": str, "dept": str})
+    ref["dept"] = ref["dept"].astype(str).str.zfill(2)
+    ref["key"] = ref["nom"].map(norm_commune_name)
+    nb_ref = ref.groupby("dept").size()
+    ref = ref.drop_duplicates(["dept", "key"], keep=False)[["dept", "key", "population"]]
+    t = temps_raw[["dept", "commune", "temps_acces"]].copy()
+    t["key"] = t["commune"].map(norm_commune_name)
+    m = t.merge(ref, on=["dept", "key"], how="left")
+    m["population"] = pd.to_numeric(m["population"], errors="coerce")
+    rows = []
+    for dept, d in m.groupby("dept"):
+        tot = d["population"].sum()
+        crit = d.loc[d["temps_acces"] > 15, "population"]
+        rows.append({
+            "dept": dept,
+            "nb_communes_ref": int(nb_ref.get(dept, 0)),
+            "pop_communes_critiques": crit.sum(min_count=1),
+            "part_pop_communes_critiques": crit.sum() / tot if tot > 0 else float("nan"),
+            "couverture_pop_communes": float(d["population"].notna().mean()),
+        })
+    g = pd.DataFrame(rows, columns=cols)
+    return g
 
 
 @st.cache_data(show_spinner=False)

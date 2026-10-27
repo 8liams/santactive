@@ -135,26 +135,14 @@ def _dept_medians(df: pd.DataFrame) -> dict[str, float]:
     }
 
 
-def estimate_impact_population(
-    population: float | None,
-    temps_acces: float | None,
-) -> int | None:
-    """Estimation prudente de la population potentiellement concernée."""
-    if population is None or pd.isna(population) or float(population) <= 0:
-        return None
-    pop = float(population)
-    exposure = 0.30
-    if temps_acces is not None and pd.notna(temps_acces):
-        t = float(temps_acces)
-        if t > 15:
-            exposure = 0.75
-        elif t > 12:
-            exposure = 0.60
-        elif t > 10:
-            exposure = 0.50
-        elif t > 8:
-            exposure = 0.35
-    return int(pop * exposure)
+def estimate_impact_population(population, temps_acces) -> float | None:
+    """Population observée de la commune (INSEE, via geo.api).
+
+    L'ancienne « exposition » (0,30 à 0,75 selon le temps d'accès) n'avait pas
+    de source : on affiche la population telle quelle.
+    """
+    pop = float(population) if pd.notna(population) else None
+    return pop if pop is not None and pop > 0 else None
 
 
 def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> str:

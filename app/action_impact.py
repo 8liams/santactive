@@ -1,7 +1,9 @@
-"""Projection indicative d'impact pour les leviers d'action territoriaux.
+"""Publics et volumes OBSERVÉS associés aux leviers d'action territoriaux.
 
-Estimations prudentes à partir des données déjà chargées (INSEE, CNAM, APL, etc.).
-Sans prédiction médicale — réutilisable fiche département et, ultérieurement, région.
+Aucun coefficient forfaitaire : chaque volume est une quantité mesurée dans
+les données chargées (population INSEE des communes à plus de 15 min, part de
+population sous le repère APL 2,5 selon la DREES, seniors et jeunes INSEE,
+patients CNAM). Ce n'est pas une prédiction d'effet de l'action.
 """
 
 from __future__ import annotations
@@ -89,42 +91,30 @@ def _pop_jeunes(r: pd.Series) -> int | None:
 
 
 def _pop_communes_eloignees(r: pd.Series) -> int | None:
-    """Estimation prudente : part des communes > 15 min × population × 0,7."""
-    pop = _num(r.get("population_num"))
-    nb_crit = int(_num(r.get("nb_communes_critiques")))
-    nb_total = int(_num(r.get("nb_communes")))
-    if pop <= 0 or nb_crit <= 0 or nb_total <= 0:
-        return None
-    ratio = min(nb_crit / nb_total, 1.0)
-    return max(1, int(pop * ratio * 0.7))
+    """Habitants des communes à plus de 15 min (population INSEE observée).
+
+    Calculé dans data_loading (rapprochement geo.api) ; None si non disponible.
+    """
+    v = _num(r.get("pop_communes_critiques"), default=float("nan"))
+    return int(v) if pd.notna(v) and v > 0 else None
 
 
 def _pop_acces_ville_contraint(r: pd.Series) -> int | None:
-    """Population potentiellement pénalisée par un APL bas ou un accès dégradé."""
+    """Habitants des communes dont l'APL est sous le repère de 2,5 (DREES, observé)."""
     pop = _num(r.get("population_num"))
-    if pop <= 0:
+    part = _num(r.get("part_pop_apl_inf_2_5"), default=float("nan"))
+    if pop <= 0 or pd.isna(part) or part <= 0:
         return None
-    apl = _num(r.get("apl_dept"), default=2.9)
-    score_acces = _num(r.get("score_acces"), default=50.0)
-    if apl >= 2.9 and score_acces >= 45:
-        return None
-    if apl < 2.9:
-        share = min(max(0.0, (2.9 - apl) / 2.9), 0.95)
-        return max(1, int(pop * share * 0.75))
-    return max(1, int(pop * 0.12))
+    return int(pop * part)
 
 
 def _pop_mobilite_limitee(r: pd.Series) -> int | None:
-    """Navettes : seniors + part des communes isolées (double comptage évité — max)."""
-    seniors = _pop_seniors(r)
-    iso = _pop_communes_eloignees(r)
-    if seniors is None and iso is None:
-        return None
-    if seniors is None:
-        return iso
-    if iso is None:
-        return max(1, int(seniors * 0.35))
-    return max(1, int(max(seniors * 0.35, iso * 0.5)))
+    """Navettes : habitants des communes à plus de 15 min (observé).
+
+    Les publics « sans mobilité » ne sont pas mesurables avec les données
+    chargées : aucun coefficient n'est appliqué.
+    """
+    return _pop_communes_eloignees(r)
 
 
 def _classify_levier(title: str) -> str:
@@ -215,24 +205,22 @@ def project_levier_impact(
 
     if kind == "msp":
         return LevierImpactProjection(
-            public="Habitants des communes éloignées des établissements",
-            population=_fmt_pop(_pop_communes_eloignees(r) or _pop_acces_ville_contraint(r)),
+            public="Habitants des communes sous le repère APL 2,5",
+            population=_fmt_pop(_pop_acces_ville_contraint(r)),
             horizon=HORIZON_LONG,
         )
 
     if kind == "telemedecine":
         return LevierImpactProjection(
-            public="Habitants éloignés des spécialistes",
+            public="Habitants des communes sous le repère APL 2,5",
             population=_fmt_pop(_pop_acces_ville_contraint(r)),
             horizon=HORIZON_COURT,
         )
 
     if kind == "attractivite_mg":
         pop_est = _pop_acces_ville_contraint(r)
-        if pop_est is None and _num(r.get("score_pros"), 50) < 45:
-            pop_est = max(1, int(_num(r.get("population_num")) * 0.08))
         return LevierImpactProjection(
-            public="Population avec accès aux soins de ville contraint",
+            public="Habitants des communes sous le repère APL 2,5",
             population=_fmt_pop(pop_est),
             horizon=HORIZON_LONG,
         )
@@ -246,14 +234,14 @@ def project_levier_impact(
 
     if kind == "antennes":
         return LevierImpactProjection(
-            public="Habitants éloignés des établissements",
+            public="Habitants des communes à plus de 15 min",
             population=_fmt_pop(_pop_communes_eloignees(r)),
             horizon=HORIZON_MOYEN,
         )
 
     if kind == "navettes":
         return LevierImpactProjection(
-            public="Personnes sans mobilité vers les soins",
+            public="Habitants des communes à plus de 15 min",
             population=_fmt_pop(_pop_mobilite_limitee(r)),
             horizon=HORIZON_COURT,
         )
@@ -305,14 +293,14 @@ def render_impact_html(projection: LevierImpactProjection) -> str:
     """HTML léger pour l'encart « Impact potentiel » (styles ``reco-impact``)."""
     return (
         '<div class="reco-impact">'
-        '<div class="reco-impact-title">Impact potentiel</div>'
+        '<div class="reco-impact-title">Public et volume observés</div>'
         '<div class="reco-impact-grid">'
         '<div class="reco-impact-item">'
         '<span class="reco-impact-lbl">Public concerné</span>'
         f'<span class="reco-impact-val">{projection.public}</span>'
         '</div>'
         '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Population potentiellement concernée</span>'
+        '<span class="reco-impact-lbl">Population observée (INSEE / CNAM / DREES)</span>'
         f'<span class="reco-impact-val">{projection.population}</span>'
         '</div>'
         '<div class="reco-impact-item">'
@@ -468,24 +456,16 @@ def _population_region(
     if kind in ("prevention_seniors", "telesuivi_seniors", "parcours_geriatrique"):
         return _fmt_amplitude(_sum_across_rows(rows, _pop_seniors), "seniors")
     if kind in ("teleexpertise", "teleconsultation"):
-        pop = _sum_across_rows(rows, _pop_acces_ville_contraint)
-        if pop is None:
-            pop = max(1, int(rows["population_num"].apply(_num).sum() * 0.12))
-        return _fmt_amplitude(pop, "habitants")
-    if kind == "navettes":
-        return _fmt_amplitude(_sum_across_rows(rows, _pop_mobilite_limitee), "personnes")
-    if kind == "consultations_avancees":
-        return _fmt_amplitude(
-            _sum_across_rows(rows, _pop_communes_eloignees),
-            "habitants",
-        )
+        return _fmt_amplitude(_sum_across_rows(rows, _pop_acces_ville_contraint),
+                              "habitants de communes sous APL 2,5")
+    if kind in ("navettes", "consultations_avancees"):
+        return _fmt_amplitude(_sum_across_rows(rows, _pop_communes_eloignees),
+                              "habitants de communes à plus de 15 min")
     if kind in ("telesuivi_chroniques", "parcours_chroniques", "parcours_ville_hopital"):
-        pop = _sum_across_rows(rows, _pop_acces_ville_contraint)
-        if pop is None:
-            pop = int(rows["population_num"].apply(_num).sum() * 0.15)
-        return _fmt_amplitude(pop, "personnes")
-    pop = int(rows["population_num"].apply(_num).sum() * 0.10)
-    return _fmt_amplitude(pop if pop > 0 else None, "habitants")
+        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "cardio"),
+                              "patients cardio-neuro-vasculaires (CNAM)")
+    pop = int(rows["population_num"].apply(_num).sum())
+    return _fmt_amplitude(pop if pop > 0 else None, "habitants (départements ciblés)")
 
 
 def project_levier_amplitude_region(
@@ -546,7 +526,7 @@ def render_amplitude_region_html(amplitude: LevierAmplitudeRegion) -> str:
         f'<span class="reco-impact-val">{amplitude.public}</span>'
         '</div>'
         '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Population potentiellement concernée</span>'
+        '<span class="reco-impact-lbl">Population observée</span>'
         f'<span class="reco-impact-val">{amplitude.population}</span>'
         '</div>'
         '<div class="reco-impact-item">'

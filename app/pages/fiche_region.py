@@ -54,7 +54,10 @@ def render(data: dict) -> None:
     priorities_raw = compute_dept_priorities(
         region_depts, data.get("patho"), reference=master
     )
-    delais_region = compute_specialites_tension(data.get("delais"), region_code_val)
+    # Délais régionaux : la provenance du fichier n'a pas pu être établie (l'enquête
+    # DREES 2016-2017 n'est pas déclinée par région) → valeurs retirées de la
+    # démonstration ; le fichier static/data/delais_rdv_drees.csv est conservé.
+    delais_region = pd.DataFrame()
     publics = compute_publics_prioritaires(
         region_depts, data.get("patho"), priorities_raw, reference=master
     )
@@ -323,8 +326,11 @@ def _besoin_html(row: pd.Series) -> str:
     """Niveau de besoin territorial (fragilité, rang national), distinct de la faisabilité."""
     frag = str(row.get("fragilite", "N/D"))
     cls = {"très forte": "crit", "forte": "crit", "modérée": "inter", "faible": "fav"}.get(frag, "inter")
+    b = row.get("score_besoin"); v = row.get("score_volume")
+    detail = (f'<div style="font-size:10px;color:#6B6B68;margin-top:3px;">besoin {int(b)} · volume {int(v)}</div>'
+              if pd.notna(b) and pd.notna(v) else "")
     return (f'<span class="fiche-zone-badge {cls}" style="font-size:10px;padding:3px 8px;">'
-            f'Fragilité {html.escape(frag)}</span>')
+            f'Fragilité {html.escape(frag)}</span>{detail}')
 
 
 def _impact_territoire_html(row: pd.Series) -> str:
@@ -349,13 +355,12 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
         '</div>'
         '<p class="diagnostic-prose" style="font-size:14px;max-width:900px;'
         'margin:-8px 0 24px;line-height:1.6;">'
-        'Classement des départements de la région selon un score de priorité '
-        'calculé sur des rangs nationaux (fragilité, volume de population, '
-        'faisabilité, score global). Le score est comparable entre régions\u202f; '
-        'ses pondérations sont un choix méthodologique, pas une mesure. Le badge de '
-        'fragilité donne le niveau de besoin territorial seul, indépendamment de la '
-        'faisabilité\u202f: un département très fragile reste très fragile même '
-        'lorsqu\u2019y intervenir est difficile.'
+        'Score de priorité = moyenne à poids égaux du <strong>besoin</strong> '
+        '(fragilité et score global, rangs nationaux) et du <strong>volume</strong> '
+        '(population et publics concernés, rangs nationaux). La '
+        '<strong>faisabilité</strong> est affichée à part et n\u2019entre pas dans le '
+        'score\u202f: un département très fragile reste prioritaire même lorsqu\u2019y '
+        'intervenir est difficile. Comparable entre régions.'
         '</p>',
         unsafe_allow_html=True,
     )
@@ -764,55 +769,46 @@ def render_ranking_depts(region_depts: pd.DataFrame) -> None:
 
 
 def render_delais_detail(delais_region: pd.DataFrame, region_name: str) -> None:
+    """Délais d'attente : seules les médianes nationales DREES (source tracée) sont affichées."""
+    from ..components.delais import load_delais_nationaux
+
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">PARCOURS DE SOINS</div>'
-        '<h2 class="section-title">Délais <em>spécialistes</em> régionaux.</h2>'
+        '<h2 class="section-title">Délais d\u2019attente <em>de référence</em> (DREES).</h2>'
         '</div>',
         unsafe_allow_html=True,
+    )
+    nat = load_delais_nationaux()
+    if nat.empty:
+        st.info("Données de délais indisponibles.")
+        return
+    rows = "".join(
+        f'<div style="display:grid;grid-template-columns:1.4fr 80px 80px 80px;gap:0 12px;'
+        f'padding:8px 16px;border-bottom:1px solid #E8E6DD;font-size:13px;">'
+        f'<span>{html.escape(str(r["specialite"]))}</span>'
+        f'<span style="text-align:right;">{int(r["delai_median_jours"])}\u202fj</span>'
+        f'<span style="text-align:right;color:#6B6B68;">{int(r["delai_q3_jours"]) if pd.notna(r.get("delai_q3_jours")) else "–"}\u202fj</span>'
+        f'<span style="text-align:right;color:#6B6B68;">{int(r["delai_moyen_jours"])}\u202fj</span>'
+        f'</div>'
+        for _, r in nat.sort_values("delai_median_jours").iterrows()
     )
     st.markdown(
-        '<div style="background:#FCF4DB;border:1px solid #F4C430;border-radius:4px;'
-        'padding:10px 14px;margin:0 0 16px;font-size:12px;color:#7D4A00;">'
-        '<strong>Source à confirmer.</strong> Ces délais régionaux ne sont pas '
-        'cohérents avec la médiane nationale de l\u2019enquête DREES 2016-2017 '
-        '(toutes les régions la dépassent). Ils sont présentés à titre '
-        'indicatif et ne doivent pas être comparés aux estimations '
-        'départementales, calculées par une autre méthode.'
+        '<div class="sa-tbl-scroll"><div style="min-width:480px;">'
+        '<div style="display:grid;grid-template-columns:1.4fr 80px 80px 80px;gap:0 12px;'
+        'padding:8px 16px;background:#F3F2EC;font-size:10px;font-weight:700;letter-spacing:0.08em;'
+        'color:#6B6B68;text-transform:uppercase;"><span>Spécialité</span>'
+        '<span style="text-align:right;">Médian</span><span style="text-align:right;">Q3</span>'
+        '<span style="text-align:right;">Moyen</span></div>'
+        + rows + '</div></div>'
+        '<div style="font-size:11px;color:#9C9A92;margin-top:8px;line-height:1.5;">'
+        'Source\u202f: DREES, Études et Résultats n°\u202f1085 (octobre 2018), enquête sur les délais '
+        'd\u2019attente 2016-2017, France métropolitaine, tableau 1. Aucune déclinaison régionale '
+        'n\u2019est publiée\u202f: les valeurs régionales précédemment affichées pour '
+        f'{html.escape(region_name)} n\u2019avaient pas de source identifiable et ont été retirées.'
         '</div>',
         unsafe_allow_html=True,
     )
-
-    if delais_region.empty:
-        st.info("Données régionales de délais indisponibles.")
-        return
-
-    cols = "1.4fr 80px 80px 1fr"
-    html = (
-        f'<div class="sa-tbl-scroll"><div style="min-width:480px;">'
-        f'<div style="display:grid;grid-template-columns:{cols};gap:0 12px;'
-        f'padding:8px 16px;background:#F3F2EC;font-size:10px;font-weight:700;'
-        f'letter-spacing:0.08em;color:#6B6B68;text-transform:uppercase;">'
-        f'<span>Spécialité</span>'
-        f'<span style="text-align:right;">Médian</span>'
-        f'<span style="text-align:right;">P75</span>'
-        f'<span>Levier</span></div>'
-    )
-    for _, srow in delais_region.iterrows():
-        p75 = srow.get("delai_jours_p75")
-        p75_str = f"{int(p75)}\u202fj" if pd.notna(p75) else "n.d."
-        html += (
-            f'<div style="display:grid;grid-template-columns:{cols};gap:0 12px;'
-            f'padding:10px 16px;border-bottom:1px solid #F0EDE5;font-size:13px;">'
-            f'<span>{srow["specialite"]}</span>'
-            f'<span style="text-align:right;font-weight:600;">'
-            f'{int(srow["delai_jours_median"])}\u202fj</span>'
-            f'<span style="text-align:right;color:#6B6B68;">{p75_str}</span>'
-            f'<span>{srow.get("levier", "N/D")}</span>'
-            f'</div>'
-        )
-    html += "</div></div>"
-    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_priorisation_technique(priorities: pd.DataFrame) -> None:
