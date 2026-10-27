@@ -146,7 +146,7 @@ def load_all_data():
     _etabs_raw["dept"] = _etabs_raw["code_departement"].apply(_zd)
     _cats = ETABS_CATEGORIES
     etabs_dept = _etabs_raw.groupby("dept").agg(
-        nb_etabs     =("Rslongue", "count"),
+        nb_etabs     =("categetab", "size"),   # toutes les lignes (Rslongue parfois vide)
         nb_hopitaux  =("categetab", lambda x: x.isin(
             ["Centre Hospitalier (C.H.)", "Centre Hospitalier Régional (C.H.R.)"]).sum()),
         # Historique : « cliniques » = établissements privés autorisés en SSR uniquement

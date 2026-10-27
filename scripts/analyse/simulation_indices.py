@@ -26,10 +26,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(); ap.add_argument("--drees", type=Path); args = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--drees", type=Path)
+    ap.add_argument("--standardise", action="store_true", help="prévalences standardisées sur l'âge")
+    args = ap.parse_args()
     os.chdir(ROOT); sys.path.insert(0, str(ROOT))
     import app.data_loading as dl
-    from app.pathologies import dept_prevalences
+    from app.pathologies import dept_prevalences, dept_prevalences_standardisees
     from app.scoring import compute_scores, percentile_rank
 
     if args.drees:
@@ -46,7 +48,9 @@ def main() -> None:
     comp = m[list(offre_w)]
     m["indice_offre"] = (comp.mul(w).sum(axis=1) / comp.notna().mul(w).sum(axis=1)).round(1)
 
-    prev = dept_prevalences(patho, m.index)
+    prev = (dept_prevalences_standardisees(patho, m.index) if args.standardise
+            else dept_prevalences(patho, m.index))
+    print("Prévalences :", "standardisées sur l'âge" if args.standardise else "brutes")
     cols = {"Maladies cardioneurovasculaires": "cardio", "Diabète": "diabete", "Maladies psychiatriques": "psy"}
     bes = pd.DataFrame(index=m.index)
     bes["seniors"] = percentile_rank(m["pct_plus_65"], higher_is_better=True)
@@ -71,7 +75,7 @@ def main() -> None:
     print("\nOffre faible · besoins forts (priorité « double peine ») :")
     q = m[m.quadrant == "offre faible · besoins forts"].sort_values("indice_offre")
     print(q[["Nom du département", "score_global", "zone_short", "indice_offre", "indice_besoins"]].to_string())
-    out = ROOT / "data_corrections" / "simulation_indices.csv"
+    out = ROOT / "data_corrections" / ("simulation_indices_std.csv" if args.standardise else "simulation_indices.csv")
     m[["Nom du département", "score_global", "zone_short", "indice_offre", "indice_besoins", "quadrant"]].to_csv(out)
     print("Écrit :", out)
 

@@ -356,3 +356,113 @@ class TestSimulationCapacite(unittest.TestCase):
             self.assertIsNone(sc.simuler("23"))
         finally:
             sc.APL_DEPT_PATH = orig; sc.load_apl_departemental.clear()
+
+
+class TestValeursDeReference(unittest.TestCase):
+    """Valeurs de référence vérifiables et intégrité des données actives."""
+
+    def test_effectifs_drees_reference(self):
+        m = DATA["master"].set_index("dept")
+        self.assertEqual(m["source_effectifs"].iloc[0], "DREES RPPS 2026")
+        for dept, eff in {"75": 5040, "93": 1682, "23": 214, "973": 308, "974": 1620, "2A": 278, "2B": 298, "18": 296}.items():
+            self.assertEqual(int(m.loc[dept, "nb_med_gen"]), eff, dept)
+        self.assertEqual(int(m["nb_med_gen"].sum()), 100970 - 144)   # France entière DREES moins Mayotte
+        self.assertAlmostEqual(float(m["med_gen_densite_drees"].median()), 146.8, delta=0.3)
+
+    def test_apl_ponderee_reference(self):
+        m = DATA["master"].set_index("dept")
+        self.assertEqual(m["apl_methode"].iloc[0], "ponderee")
+        self.assertAlmostEqual(float(m.loc["2B", "apl_dept"]), 3.70, delta=0.02)
+        self.assertAlmostEqual(float(m.loc["2B", "apl_median_dept"]), 0.30, delta=0.01)
+        self.assertAlmostEqual(float(m.loc["973", "part_pop_apl_inf_2_5"]), 0.68, delta=0.01)
+        self.assertEqual(int((m["apl_dept"] < 2.5).sum()), 5)
+
+    def test_insee_et_finess_corriges(self):
+        m = DATA["master"].set_index("dept")
+        self.assertAlmostEqual(float(m.loc["23", "pct_plus_65"]), 30.9, delta=0.05)   # Creuse (était 21,6)
+        self.assertAlmostEqual(float(m.loc["25", "pct_plus_65"]), 20.0, delta=0.05)   # Doubs (était 30,9)
+        self.assertEqual(int(m.loc["971", "nb_etabs"]), 85); self.assertEqual(int(m.loc["972", "nb_etabs"]), 80)
+        self.assertEqual(int(m.loc["2A", "nb_etabs"]), 27); self.assertEqual(int(m.loc["2B", "nb_etabs"]), 24)
+        self.assertEqual(int(m["nb_dimensions_ok"].min()), 5)   # 57/67/68 sans DVF ; DOM désormais à 6
+        self.assertEqual(int((m["nb_dimensions_ok"] == 6).sum()), 97)
+
+    def test_integrite_master(self):
+        m = DATA["master"]
+        self.assertEqual(m["dept"].nunique(), 100)
+        self.assertFalse(m["dept"].duplicated().any())
+        ages = m[["pct_moins_25", "pct_25_64", "pct_plus_65"]].astype(float).sum(axis=1)
+        self.assertTrue(((ages - 100).abs() < 0.3).all())
+        self.assertTrue((m["population_num"] > 70_000).all())
+        zones = m["zone_short"].value_counts()
+        self.assertEqual(int(zones.sum()), 100)
+        self.assertTrue(all(33 <= int(zones[z]) <= 34 for z in ("Critique", "Intermédiaire", "Favorable")))
+        self.assertEqual(sorted(m["rang_national"].astype(int).unique())[:2], [1, 2])
+        for c in ["med_gen_pour_100k", "structures_pour_100k", "temps_acces_median", "apl_dept"]:
+            self.assertFalse(m[c].isna().any(), c)
+
+    def test_scores_reproductibles(self):
+        """Le score global est une fonction déterministe des 6 colonnes (recalcul indépendant)."""
+        from app.scoring import DIMENSIONS
+
+        m = DATA["master"].set_index("dept")
+        w = pd.Series({k: v["weight"] for k, v in DIMENSIONS.items()})
+        S = pd.DataFrame(index=m.index)
+        for k, v in DIMENSIONS.items():
+            r = pd.to_numeric(m[v["col"]], errors="coerce").rank(pct=True) * 100
+            S[k] = r if v["hib"] else 100 - r
+        g = ((S * w).sum(axis=1, skipna=True) / S.notna().mul(w).sum(axis=1)).round(1)
+        self.assertTrue((g - m["score_global"]).abs().max() < 0.051)
+
+    def test_delais_nationaux_drees(self):
+        from app.components.delais import load_delais_nationaux
+
+        d = load_delais_nationaux().set_index("specialite")
+        self.assertEqual(int(d.loc["Pédiatre", "delai_median_jours"]), 8)
+        self.assertEqual(int(d.loc["Cardiologue", "delai_median_jours"]), 37)
+        self.assertEqual(int(d.loc["Ophtalmologue", "delai_moyen_jours"]), 80)
+
+    def test_comparer_agregats_regionaux(self):
+        from app.pages.comparer import build_regions_comparison_df
+
+        reg = build_regions_comparison_df(DATA["master"])
+        self.assertEqual(len(reg), 17)
+        m = DATA["master"]; idf = m[m["Code région"].astype(str) == "11"]
+        mask = reg.astype(str).apply(lambda c: c.str.contains("Île-de-France")).any(axis=1)
+        row = reg[mask].iloc[0]
+        attendu = (idf["score_global"] * idf["population_num"]).sum() / idf["population_num"].sum()
+        self.assertAlmostEqual(float(row["score_global"]), float(attendu), places=1)
+
+
+class TestModesConfiguration(unittest.TestCase):
+    """Les modes alternatifs se chargent et diffèrent de façon attendue (sous-processus)."""
+
+    def _run(self, env_kv: str, expr: str) -> str:
+        import os, subprocess, sys
+
+        env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=str(ROOT))
+        k, v = env_kv.split("=", 1); env[k] = v
+        code = ("import warnings,logging; warnings.filterwarnings('ignore')\n"
+                "from app.data_loading import load_all_data\nfrom app.scoring import compute_scores\n"
+                "m=compute_scores(load_all_data()[0]).set_index('dept')\n" f"print({expr})")
+        r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr[-800:])
+        return r.stdout.strip().splitlines()[-1]
+
+    def test_mode_equipe_historique(self):
+        out = self._run("SANTACTIVE_SOURCE_EFFECTIFS=equipe", "int(m.loc['75','nb_med_gen']), m['source_effectifs'].iloc[0]")
+        self.assertIn("41", out); self.assertIn("historique", out)
+
+    def test_mode_apl_mediane(self):
+        out = self._run("SANTACTIVE_APL_METHODE=mediane", "round(float(m.loc['2B','apl_dept']),2)")
+        self.assertEqual(out, "0.3")
+
+    def test_mode_etabs_court_sejour(self):
+        out = self._run("SANTACTIVE_ETABS_DEFINITION=court_sejour", "int(m.loc['75','nb_structures']), m['structures_definition'].iloc[0]")
+        self.assertIn("court_sejour", out)
+
+    def test_valeur_inconnue_refusee(self):
+        import os, subprocess, sys
+
+        env = dict(os.environ, PYTHONPATH=str(ROOT), SANTACTIVE_APL_METHODE="moyenne")
+        r = subprocess.run([sys.executable, "-c", "import app.config"], cwd=ROOT, env=env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0); self.assertIn("valeurs admises", r.stderr)
