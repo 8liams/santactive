@@ -18,7 +18,14 @@ from ..components.nav import NavCrumb, internal_href, render_breadcrumb
 from ..pdf_export import generate_department_pdf
 from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate, navigate_compare
-from ..scoring import fmt_classement_national
+from ..scoring import fmt_classement_national, to_num
+from ..components.delais import APL_SEUIL_DESERT
+from ..pathologies import (
+    PATHO_CARDIO,
+    PATHO_DIABETE,
+    PREV_SEUIL_RELATIF,
+    dept_prevalences,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -103,15 +110,10 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     score = r.get("score_global")
     zone = str(r.get("zone_short", "N/D"))
 
-    # Rang national
-    ranked = (
-        master.dropna(subset=["score_global"])
-        .sort_values("score_global")
-        .reset_index(drop=True)
-    )
-    rang_idx = ranked.index[ranked["dept"] == r["dept"]].tolist()
-    rang_num = rang_idx[0] + 1 if rang_idx else "N/D"
-    nb_total = len(ranked)
+    # Rang national — source unique : rang_national / nb_classes (scoring.py),
+    # identique au PDF, au partage et à l'audio.
+    rang_num = to_num(r.get("rang_national"))
+    nb_total = int(master["score_global"].notna().sum())
 
     pop = r.get("population_num", 0)
     pop_str = f"{int(pop):,}\u202fhab.".replace(",", "\u202f") if pd.notna(pop) and pop else "N/D"
@@ -129,7 +131,7 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
     classement_str = (
         fmt_classement_national(rang_num, nb_total)
-        if isinstance(rang_num, (int, float)) and pd.notna(rang_num)
+        if pd.notna(rang_num)
         else "N/D"
     )
 
@@ -168,91 +170,65 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _get_situation_label(r: pd.Series) -> tuple[str, str]:
-    """Retourne (label_css, label_texte) selon les indicateurs réels.
+    """Retourne (label_css, label_texte) aligné sur le badge de zone.
 
-    Priorité :
-    1. APL < 1.5 → critique quelle que soit la zone
-    2. APL < 2.5 → préoccupante quelle que soit la zone
-    3. Zone calculée si APL disponible et >= 2.5
-    4. Score global si APL indisponible
-    5. Fallback neutre si rien de disponible
+    La zone (terciles du score global) est la seule qualification de la
+    situation d'ensemble : la phrase ne doit pas contredire le badge.
     """
-    apl   = r.get("apl_median_dept")
-    zone  = str(r.get("zone_short", "")).strip()
-    score = r.get("score_global")
-
-    if pd.notna(apl):
-        apl_val = float(apl)
-        if apl_val < 1.5:
-            return ("crit", "critique")
-        elif apl_val < 2.5:
-            return ("crit", "préoccupante")
-        elif apl_val < 3.5:
-            return ("inter", "intermédiaire")
-        else:
-            return ("fav", "favorable")
-
+    zone = str(r.get("zone_short", "")).strip()
     if zone == "Critique":
-        return ("crit", "préoccupante")
-    elif zone == "Favorable":
-        return ("fav", "favorable")
-    elif zone == "Intermédiaire":
-        return ("inter", "intermédiaire")
-
-    if pd.notna(score):
-        score_val = float(score)
-        if score_val < 33:
-            return ("crit", "préoccupante")
-        elif score_val < 67:
-            return ("inter", "intermédiaire")
-        else:
-            return ("fav", "favorable")
-
-    return ("inter", "indéterminée")
+        return ("crit", "défavorable (tiers inférieur national)")
+    if zone == "Intermédiaire":
+        return ("inter", "intermédiaire (tiers médian national)")
+    if zone == "Favorable":
+        return ("fav", "favorable (tiers supérieur national)")
+    return ("inter", "non qualifiable (données insuffisantes)")
 
 
-def _get_sous_effectif(r: pd.Series) -> str | None:
-    """Retourne la phrase sur le sous-effectif ou None."""
-    apl     = r.get("apl_median_dept")
-    apl_nat = 2.9
-
-    if pd.notna(apl):
-        delta_pct = (float(apl) - apl_nat) / apl_nat * 100
-        if delta_pct < -5:
-            return f"un sous-effectif médical de {abs(delta_pct):.0f}\u202f% sous la médiane nationale"
-        elif delta_pct > 5:
-            return f"un sur-effectif médical de {delta_pct:.0f}\u202f% au-dessus de la médiane nationale"
-
+def _get_ecart_apl(r: pd.Series, apl_nat: float) -> str | None:
+    """Phrase d'écart de l'APL à la médiane des départements, ou None."""
+    apl = to_num(r.get("apl_median_dept"))
+    if pd.isna(apl) or pd.isna(apl_nat) or apl_nat <= 0:
+        return None
+    delta_pct = (apl - apl_nat) / apl_nat * 100
+    if delta_pct < -5:
+        return (f"une accessibilité aux généralistes (APL) inférieure de "
+                f"{abs(delta_pct):.0f}\u202f% à la médiane des départements")
+    if delta_pct > 5:
+        return (f"une accessibilité aux généralistes (APL) supérieure de "
+                f"{delta_pct:.0f}\u202f% à la médiane des départements")
     return None
 
 
 def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
-    """Phrase éditoriale + APL en chiffre géant (vraies données DREES)."""
+    """Phrase éditoriale + APL en chiffre géant (données ANCT)."""
     dept_nom = str(r.get("Nom du département", "Ce département"))
     css_class, label_texte = _get_situation_label(r)
-    sous_effectif = _get_sous_effectif(r)
-    nb_communes_critiques = int(r.get("nb_communes_critiques", 0) or 0)
+    apl_nat = (
+        float(master["apl_median_dept"].median())
+        if "apl_median_dept" in master.columns
+        else float("nan")
+    )
+    ecart_apl = _get_ecart_apl(r, apl_nat)
+    _nb_crit = to_num(r.get("nb_communes_critiques"))
+    nb_communes_critiques = int(_nb_crit) if pd.notna(_nb_crit) else 0
 
-    if sous_effectif:
-        complement = f"<em class='{css_class}'>{label_texte}</em> et {sous_effectif}"
+    if ecart_apl:
+        complement = f"<em class='{css_class}'>{label_texte}</em>, avec {ecart_apl}"
     else:
         complement = f"<em class='{css_class}'>{label_texte}</em>"
 
     if nb_communes_critiques > 0:
         commune_label = "commune" if nb_communes_critiques == 1 else "communes"
-        complement += f" et {nb_communes_critiques} {commune_label} en zone blanche"
+        complement += (f", et {nb_communes_critiques} {commune_label} "
+                       "avec un temps d'accès supérieur à 15\u202fmin")
 
     complement += "."
 
     phrase = f"{dept_nom} présente une situation {complement}"
 
-    # APL DREES (réel si disponible, sinon absent)
-    apl = r.get("apl_median_dept")
-    apl_nat = (
-        master["apl_median_dept"].median()
-        if "apl_median_dept" in master.columns
-        else None
-    )
+    # APL ANCT (réel si disponible, sinon absent)
+    apl = to_num(r.get("apl_median_dept"))
 
     col1, col2 = st.columns([1.4, 1], gap="large")
     with col1:
@@ -261,23 +237,22 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
             unsafe_allow_html=True,
         )
     with col2:
-        if pd.notna(apl) and apl_nat is not None and pd.notna(apl_nat):
-            from ..components.delais import APL_SEUIL_DESERT
+        if pd.notna(apl) and pd.notna(apl_nat):
             delta_apl = (apl - apl_nat) / apl_nat * 100
             delta_str = f"{delta_apl:+.0f} %"
 
-            if apl < 2.5:
+            if apl < APL_SEUIL_DESERT:
                 color = "crit"
-                verdict = "désert médical"
-                verdict_detail = f"en dessous du seuil officiel DREES ({APL_SEUIL_DESERT})"
+                verdict = f"sous le repère de sous-densité ({APL_SEUIL_DESERT})"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
             elif apl < apl_nat * 0.9:
                 color = "inter"
-                verdict = "sous la médiane nationale"
-                verdict_detail = f"médiane nationale\u202f: {apl_nat:.1f}"
+                verdict = "sous la médiane des départements"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
             else:
                 color = "fav"
-                verdict = "au-dessus de la médiane nationale"
-                verdict_detail = f"médiane nationale\u202f: {apl_nat:.1f}"
+                verdict = "au niveau ou au-dessus de la médiane des départements"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
 
             st.markdown(
                 f'<div class="diagnostic-kpi">'
@@ -299,7 +274,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
                 f'letter-spacing:0.08em;text-transform:uppercase;">'
                 f'Source ANCT · Observatoire des territoires · 2023'
                 f'&nbsp;·&nbsp;'
-                f'Seuil désert médical DREES : &lt; 2.5'
+                f'APL médian des communes (non pondéré) · repère sous-densité &lt; 2,5'
                 f'</div>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -346,33 +321,29 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
     )
 
     # ── Scores ────────────────────────────────────────────────────────────
-    def _s(key: str, default: float = 50.0) -> float:
-        v = r.get(key)
-        try:
-            fv = float(v)
-            return fv if pd.notna(fv) else default
-        except (TypeError, ValueError):
-            return default
+    # Score ou valeur absente → NaN, affiché « N/D » (jamais 50 ni 0 inventés)
+    score_acces  = to_num(r.get("score_acces"))
+    score_pros   = to_num(r.get("score_pros"))
+    score_etabs  = to_num(r.get("score_etabs"))
+    score_apl    = to_num(r.get("score_apl"))
+    score_temps  = to_num(r.get("score_temps"))
+    score_med    = to_num(r.get("score_medecins"))
+    score_senior = to_num(r.get("score_seniors"))
+    score_fonc   = to_num(r.get("score_foncier"))
 
-    score_acces  = _s("score_acces")
-    score_pros   = _s("score_pros")
-    score_etabs  = _s("score_etabs")
-    score_apl    = _s("score_apl")
-    score_temps  = _s("score_temps")
-    score_med    = _s("score_medecins")
-    score_senior = _s("score_seniors")
-    score_fonc   = _s("score_foncier")
-
-    val_acces  = float(r.get("apl_median_dept",      0) or 0)
-    val_pros   = float(r.get("med_gen_pour_100k",    0) or 0)
-    val_etabs  = float(r.get("structures_pour_100k", 0) or 0)
-    val_apl    = float(r.get("apl_median_dept",      0) or 0)
-    val_temps  = float(r.get("temps_acces_median",   0) or 0)
-    val_65     = float(r.get("pct_plus_65",          0) or 0)
-    val_prix   = float(r.get("prix_m2_moyen",        0) or 0)
+    val_acces  = to_num(r.get("apl_median_dept"))
+    val_pros   = to_num(r.get("med_gen_pour_100k"))
+    val_etabs  = to_num(r.get("structures_pour_100k"))
+    val_apl    = to_num(r.get("apl_median_dept"))
+    val_temps  = to_num(r.get("temps_acces_median"))
+    val_65     = to_num(r.get("pct_plus_65"))
+    val_prix   = to_num(r.get("prix_m2_moyen"))
 
     def _render_bar(label, sublabel, score, raw_val, unit,
                     tooltip_key=None, indent=False):
+        if pd.isna(score):
+            _render_bar_nd(label, sublabel, tooltip_key, indent)
+            return
         tip = info_tooltip(tooltip_key) if tooltip_key else ""
         indent_css = (
             "padding-left:28px;border-left:2px solid #E8E6DD;margin-left:8px;"
@@ -403,7 +374,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         val_str = (
             f'<span style="color:#6B6B68;margin-left:6px;">·</span>'
             f' <span style="color:#6B6B68;">{raw_val:.1f}\u202f{unit}</span>'
-            if raw_val else ""
+            if pd.notna(raw_val) else ""
         )
 
         st.markdown(
@@ -441,8 +412,32 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
             unsafe_allow_html=True,
         )
 
+    def _render_bar_nd(label, sublabel, tooltip_key=None, indent=False):
+        tip = info_tooltip(tooltip_key) if tooltip_key else ""
+        indent_css = (
+            "padding-left:28px;border-left:2px solid #E8E6DD;margin-left:8px;"
+            if indent else ""
+        )
+        mb = "14px" if indent else "24px"
+        st.markdown(
+            f'<div style="margin-bottom:{mb};{indent_css}">'
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:baseline;margin-bottom:6px;">'
+            f'<div><span style="font-size:15px;font-weight:600;color:#0A1938;">'
+            f'{label}</span>{tip}'
+            f'<div style="font-size:11px;color:#9C9A92;margin-top:2px;">{sublabel}</div>'
+            f'</div>'
+            f'<div style="text-align:right;font-size:20px;color:#9C9A92;">N/D</div>'
+            f'</div>'
+            f'<div style="font-size:11px;color:#9C9A92;">'
+            f'Donnée non disponible · dimension exclue du score global '
+            f'(poids redistribué)</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
     # ── 3 barres principales + sous-dimensions ────────────────────────────
-    _render_bar("Accès aux soins", "APL + temps de trajet médian",
+    _render_bar("Accès aux soins", "APL (60 %) + temps d'accès (40 %) · valeur affichée : APL",
                 score_acces, val_acces, "/hab.", tooltip_key="apl")
     _render_bar("Accessibilité APL", "Consultations disponibles / hab.",
                 score_apl, val_apl, "/hab.", indent=True)
@@ -451,8 +446,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
 
     _render_bar(
         "Professionnels de santé",
-        (f"RPPS toutes spéc. · {val_pros:.0f}\u202f/100k"
-         + (f" · APL libéraux\u202f: {val_apl:.1f}/hab." if val_apl else "")),
+        "Médecins généralistes pour 100\u202f000 hab.",
         score_pros, val_pros, "/100k", tooltip_key="med_100k",
     )
 
@@ -779,6 +773,11 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
     )
 
 
+def _fmt_int(v) -> str:
+    """Entier avec séparateur fin, « N/D » si absent."""
+    return f"{int(round(v)):,}".replace(",", "\u202f") if pd.notna(v) else "N/D"
+
+
 def _generate_recommendations(
     r: pd.Series,
     master: pd.DataFrame,
@@ -803,42 +802,39 @@ def _generate_recommendations(
     recos: list[dict] = []
 
     # ── Extraction des indicateurs ────────────────────────────────────────
-    score_acces    = float(r.get("score_acces", 50) or 50)
-    score_pros     = float(r.get("score_pros", 50) or 50)
-    score_etabs    = float(r.get("score_etabs", 50) or 50)
-    score_global   = float(r.get("score_global", 50) or 50)
-    apl            = float(r.get("apl_median_dept", 3.0) or 3.0)
-    pct_65         = float(r.get("pct_plus_65", 20) or 20)
-    pct_moins_25   = float(r.get("pct_moins_25", 28) or 28)
-    prix_m2        = float(r.get("prix_m2_moyen", 2000) or 2000)
-    temps          = float(r.get("temps_acces_median", 10) or 10)
-    densite        = float(r.get("densite", 50) or 50)
-    med_100k       = float(r.get("med_gen_pour_100k", 100) or 100)
-    etabs_100k     = float(r.get("structures_pour_100k", 5) or 5)
-    population     = float(r.get("population_num", 300000) or 300000)
+    # Valeur absente → NaN : toute comparaison avec NaN est fausse, donc un
+    # indicateur manquant ne déclenche aucun cas (aucune valeur par défaut).
+    score_acces    = to_num(r.get("score_acces"))
+    score_pros     = to_num(r.get("score_pros"))
+    score_etabs    = to_num(r.get("score_etabs"))
+    score_global   = to_num(r.get("score_global"))
+    apl            = to_num(r.get("apl_median_dept"))
+    pct_65         = to_num(r.get("pct_plus_65"))
+    pct_moins_25   = to_num(r.get("pct_moins_25"))
+    prix_m2        = to_num(r.get("prix_m2_moyen"))
+    temps          = to_num(r.get("temps_acces_median"))
+    med_100k       = to_num(r.get("med_gen_pour_100k"))
+    etabs_100k     = to_num(r.get("structures_pour_100k"))
+    population     = to_num(r.get("population_num"))
     dept_nom       = str(r.get("Nom du département", "Ce département"))
     dept_nom_court = dept_nom.replace("Le ", "").replace("La ", "").replace("Les ", "")
 
-    # ── Médianes nationales ───────────────────────────────────────────────
+    # ── Médianes nationales (calculées sur les départements analysés) ─────
     med_med_nat    = float(master["med_gen_pour_100k"].median())
     etabs_med_nat  = float(master["structures_pour_100k"].median())
     temps_med_nat  = float(master["temps_acces_median"].median())
-    apl_nationale  = 2.9
+    pct65_med_nat  = float(master["pct_plus_65"].median())
+    pct25_med_nat  = float(master["pct_moins_25"].median())
 
     # ── Flags ─────────────────────────────────────────────────────────────
-    if densite > 500:
-        typo = "urbain_dense"
-    elif densite > 150:
-        typo = "urbain"
-    elif densite > 40:
-        typo = "peri_urbain"
-    else:
-        typo = "rural"
+    # Typologie unique : celle de scoring.py (seuils INSEE de densité),
+    # identique à l'en-tête de la fiche.
+    typo = str(r.get("typologie", "inconnu"))
 
     is_rural           = typo in ("rural", "peri_urbain")
     is_urbain          = typo in ("urbain", "urbain_dense")
 
-    is_desert          = apl < 2.5
+    is_desert          = apl < APL_SEUIL_DESERT
     is_tres_desert     = apl < 1.5
     acces_critique     = score_acces < 33
     acces_degrade      = score_acces < 45
@@ -854,98 +850,95 @@ def _generate_recommendations(
     foncier_moyen      = prix_m2 < 2500
     deficit_med        = med_100k < med_med_nat * 0.85
 
-    # Pathologies (si disponibles)
-    patho_data = data.get("patho")
-    taux_diabete    = 0.0
-    taux_cardio     = 0.0
-    if patho_data is not None and not patho_data.empty:
-        dept_patho = patho_data[
-            patho_data["dept"].astype(str).str.zfill(2) ==
-            str(r.get("dept", "")).zfill(2)
-        ]
-        if not dept_patho.empty:
-            row_p = dept_patho.iloc[0]
-            taux_diabete = float(row_p.get("prev_diabete", 0) or 0)
-            taux_cardio  = float(row_p.get("prev_cardio", 0) or 0)
+    # Pathologies : prévalences brutes CNAM (non standardisées sur l'âge),
+    # comparées à la médiane des départements analysés.
+    prev = dept_prevalences(data.get("patho"), master["dept"])
+    dept_code_z = str(r.get("dept", "")).zfill(2)
+    taux_diabete = taux_cardio = float("nan")
+    diab_nat = cardio_nat = float("nan")
+    if not prev.empty:
+        if PATHO_DIABETE in prev.columns:
+            diab_nat = float(prev[PATHO_DIABETE].median())
+            taux_diabete = to_num(prev[PATHO_DIABETE].get(dept_code_z))
+        if PATHO_CARDIO in prev.columns:
+            cardio_nat = float(prev[PATHO_CARDIO].median())
+            taux_cardio = to_num(prev[PATHO_CARDIO].get(dept_code_z))
 
-    prev_elevee = taux_diabete > 8.0 or taux_cardio > 10.0
+    diab_eleve   = taux_diabete > diab_nat * PREV_SEUIL_RELATIF
+    cardio_eleve = taux_cardio > cardio_nat * PREV_SEUIL_RELATIF
+    prev_elevee  = diab_eleve or cardio_eleve
 
-    # ── Calculs pour les recos ────────────────────────────────────────────
-    deficit_nb = max(0.0, med_med_nat - med_100k)
-    besoin_installations = min(int(deficit_nb * population / 100_000), 30)
+    def _f(v, spec=".1f", suffix=""):
+        return f"{v:{spec}}{suffix}" if pd.notna(v) else "N/D"
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 1 — Désert médical rural → Maison de santé pluridisciplinaire
+    # CAS 1 — APL sous le repère 2,5 en territoire rural → Maison de santé
     # ════════════════════════════════════════════════════════════════════
     if is_desert and is_rural:
-        nb_communes_eloignees = int(r.get("nb_communes_critiques", 0) or 0)
+        _nb_crit = to_num(r.get("nb_communes_critiques"))
+        nb_communes_eloignees = int(_nb_crit) if pd.notna(_nb_crit) else 0
         recos.append({
             "title": "Implanter une maison de santé pluridisciplinaire dans les zones isolées.",
             "prose": (
-                f"L'APL de {apl:.1f}\u202f/hab. place {dept_nom} en désert "
-                f"médical officiel (seuil DREES\u202f: 2,5). "
-                + (f"{nb_communes_eloignees}\u202fcommunes sont à plus de 15\u202fmin "
-                   "d'un établissement. "
+                f"L'APL médian des communes de {dept_nom} ({apl:.1f} consult./an/hab.) "
+                f"est sous le repère de {APL_SEUIL_DESERT} utilisé pour identifier "
+                "les zones sous-denses en médecine générale. "
+                + (f"{nb_communes_eloignees} communes ont un temps d'accès "
+                   "supérieur à 15 min. "
                    if nb_communes_eloignees > 0 else "")
-                + (f"Le foncier médian à {prix_m2:.0f}\u202f€/m² "
+                + (f"Le foncier médian à {prix_m2:.0f} €/m² "
                    "permet une installation à coût maîtrisé. "
                    if foncier_moyen else "")
-                + "Une MSP regroupant généraliste, infirmier et pharmacien "
-                  "couvre un bassin de 8\u202f000 à 15\u202f000 habitants."
+                + "Une MSP regroupe généralistes, infirmiers et autres "
+                  "professionnels autour d'un projet de santé commun."
             ),
             "stats": [
-                (f"{apl:.1f}", "APL actuel /hab."),
-                ("2.5", "Seuil désert médical"),
-                (f"{prix_m2:.0f}\u202f€", "Prix médian /m²"),
+                (f"{apl:.1f}", "APL médian communal"),
+                (f"{APL_SEUIL_DESERT}", "Repère sous-densité"),
+                (_f(prix_m2, ".0f", " €"), "Prix médian /m²"),
             ],
             "priority": 1,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 2 — Désert médical urbain → Télémédecine + consultations avancées
+    # CAS 2 — APL sous le repère en territoire urbain → Télémédecine
     # ════════════════════════════════════════════════════════════════════
     if is_desert and is_urbain:
         recos.append({
-            "title": "Réduire les délais spécialistes par télémédecine et consultations avancées.",
+            "title": "Renforcer l'accès aux soins par télémédecine et consultations avancées.",
             "prose": (
-                f"Malgré une densité urbaine, l'APL de {apl:.1f} traduit "
-                "une saturation des médecins de ville. "
-                "Les délais estimés pour les spécialistes dépassent "
-                "largement la médiane nationale. "
-                "Le déploiement de téléconsultations spécialisées, de "
+                f"Malgré une densité urbaine, l'APL médian de {apl:.1f} "
+                "signale une offre de médecine générale insuffisante "
+                "au regard de la population. "
+                "Le déploiement de téléconsultations, de "
                 "créneaux IPA (Infirmiers en Pratique Avancée) et de "
-                "centres de santé communautaires permettrait "
-                "de désengorger les files d'attente."
+                "centres de santé permettrait d'élargir l'offre de premier recours."
             ),
             "stats": [
-                (f"{apl:.1f}", "APL actuel /hab."),
-                (f"{score_acces:.0f}/100", "Score accès"),
-                (f"{int(temps)}\u202fmin", "Temps d'accès médian"),
+                (f"{apl:.1f}", "APL médian communal"),
+                (_f(score_acces, ".0f", "/100"), "Score accès"),
+                (_f(temps, ".0f", " min"), "Temps d'accès médian"),
             ],
             "priority": 1,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 3 — Déficit de généralistes → Recrutement ciblé
+    # CAS 3 — Densité de généralistes faible → Attractivité
+    # (aucun objectif chiffré d'installations : hypothèse non validée)
     # ════════════════════════════════════════════════════════════════════
     if pros_critique or (deficit_med and is_desert):
         recos.append({
             "title": "Lancer un programme d'attractivité ciblé sur les médecins généralistes.",
             "prose": (
-                f"Avec {med_100k:.0f} généralistes pour 100\u202f000 habitants "
-                f"contre {med_med_nat:.0f} en médiane nationale, "
-                f"{dept_nom} accuse un déficit structurel de "
-                f"{med_med_nat - med_100k:.0f} médecins /100k. "
-                + (f"Un objectif de {besoin_installations} installations "
-                   f"supplémentaires sur 3\u202fans est réaliste. "
-                   if besoin_installations > 0 else "")
-                + "Contrats de praticien territorial, aides à l'installation, "
-                  "partenariat avec les facultés régionales."
+                f"Avec {med_100k:.0f} généralistes recensés pour 100 000 habitants "
+                f"contre {med_med_nat:.0f} en médiane des départements, "
+                f"{dept_nom} se situe dans le bas de la distribution nationale. "
+                "Contrats de praticien territorial, aides à l'installation, "
+                "partenariat avec les facultés régionales."
             ),
             "stats": [
-                (f"{med_100k:.0f}", "Médecins /100k actuels"),
-                (f"{med_med_nat:.0f}", "Médiane nationale"),
-                (f"+{besoin_installations}", "Installations visées / 3 ans"),
+                (f"{med_100k:.0f}", "Généralistes /100k"),
+                (f"{med_med_nat:.0f}", "Médiane des départements"),
             ],
             "priority": 1 if pros_critique else 2,
         })
@@ -954,24 +947,23 @@ def _generate_recommendations(
     # CAS 4 — Population vieillissante + accès dégradé → Seniors
     # ════════════════════════════════════════════════════════════════════
     if pop_vieillissante and (acces_degrade or is_desert):
-        nb_tablettes = max(10, int(population * pct_65 / 100 / 500))
+        nb_seniors = population * pct_65 / 100 if pd.notna(population) else float("nan")
         recos.append({
             "title": "Déployer un programme de santé numérique pour les seniors isolés.",
             "prose": (
-                f"Avec {pct_65:.1f}\u202f% de 65\u202fans et plus "
+                f"Avec {pct_65:.1f} % de 65 ans et plus "
                 f"({'très au-dessus' if pop_tres_vieille else 'au-dessus'} "
-                f"de la médiane nationale de ~20\u202f%), {dept_nom} cumule "
-                "vieillissement démographique et accès aux soins dégradé. "
-                "Les seniors consomment 4× plus de soins que les adultes "
-                "de 30\u202fans (DREES). "
-                "Tablettes connectées en EHPAD, infirmières itinérantes "
-                "équipées et téléconsultations spécialisées gériatriques "
+                f"de la médiane des départements, {pct65_med_nat:.1f} %), "
+                f"{dept_nom} cumule vieillissement démographique et accès aux "
+                "soins dégradé. "
+                "Infirmiers itinérants équipés, téléconsultations "
+                "gériatriques et accompagnement au numérique "
                 "réduiraient les renoncements aux soins."
             ),
             "stats": [
-                (f"{pct_65:.1f}\u202f%", "Part des 65+"),
-                ("~20\u202f%", "Médiane nationale"),
-                (f"~{nb_tablettes}", "Structures EHPAD concernées"),
+                (f"{pct_65:.1f} %", "Part des 65+"),
+                (f"{pct65_med_nat:.1f} %", "Médiane des départements"),
+                (_fmt_int(nb_seniors), "Habitants de 65 ans et plus (INSEE)"),
             ],
             "priority": 2,
         })
@@ -983,68 +975,67 @@ def _generate_recommendations(
         recos.append({
             "title": "Créer des antennes de consultations externes dans les zones sous-dotées.",
             "prose": (
-                f"Avec {etabs_100k:.1f} établissements pour 100\u202f000 habitants "
-                f"contre {etabs_med_nat:.1f} en médiane nationale, "
-                "la couverture hospitalière est insuffisante. "
+                f"Avec {etabs_100k:.1f} établissements recensés pour 100 000 habitants "
+                f"contre {etabs_med_nat:.1f} en médiane des départements, "
+                "la couverture en établissements est faible. "
                 "Des antennes légères de consultations externes, "
-                "adossées aux hôpitaux de référence, permettraient "
-                "de réduire les temps de trajet sans infrastructure lourde. "
-                "Format idéal\u202f: consultations 2\u202fjours/semaine en zone rurale."
+                "adossées aux hôpitaux de référence, rapprocheraient l'offre "
+                "des habitants sans infrastructure lourde."
             ),
             "stats": [
                 (f"{etabs_100k:.1f}", "Étabs /100k actuels"),
-                (f"{etabs_med_nat:.1f}", "Médiane nationale"),
-                (f"{int(temps)}\u202fmin", "Temps d'accès médian"),
+                (f"{etabs_med_nat:.1f}", "Médiane des départements"),
+                (_f(temps, ".0f", " min"), "Temps d'accès médian"),
             ],
             "priority": 2,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 6 — Temps d'accès très élevé → Transport sanitaire
+    # CAS 6 — Temps d'accès élevé → Transport sanitaire
     # ════════════════════════════════════════════════════════════════════
     if temps_eleve and is_rural and not etabs_critique:
         recos.append({
-            "title": "Organiser des navettes santé vers les établissements de référence.",
+            "title": "Organiser des navettes santé vers les lieux de soins de référence.",
             "prose": (
-                f"Avec un temps d'accès médian de {temps:.0f}\u202fminutes "
-                f"(médiane nationale\u202f: {temps_med_nat:.0f}\u202fmin), "
-                "de nombreux habitants renoncent aux soins faute de mobilité. "
+                f"Avec un temps d'accès médian de {temps:.0f} minutes "
+                f"(médiane des départements : {temps_med_nat:.0f} min), "
+                "l'éloignement est un frein pour les personnes sans véhicule. "
                 "Un service de navettes santé mutualisées entre communes, "
                 "cofinancé par le Département et l'ARS, "
-                "réduirait le renoncement aux soins des personnes sans véhicule "
-                "(seniors, personnes en situation de précarité)."
+                "ciblerait les publics peu mobiles (seniors, personnes "
+                "en situation de précarité)."
             ),
             "stats": [
-                (f"{temps:.0f}\u202fmin", "Temps d'accès actuel"),
-                (f"{temps_med_nat:.0f}\u202fmin", "Médiane nationale"),
+                (f"{temps:.0f} min", "Temps d'accès actuel"),
+                (f"{temps_med_nat:.0f} min", "Médiane des départements"),
             ],
             "priority": 2,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 7 — Forte prévalence pathologies chroniques → Prévention
+    # CAS 7 — Prévalence brute élevée + accès dégradé → Prévention
     # ════════════════════════════════════════════════════════════════════
     if prev_elevee and (acces_degrade or is_desert):
-        pathologie_principale = (
-            "cardiovasculaires" if taux_cardio > taux_diabete else "diabète"
-        )
-        taux_principal = max(taux_cardio, taux_diabete)
+        if cardio_eleve and (not diab_eleve or taux_cardio / cardio_nat >= taux_diabete / diab_nat):
+            pathologie_principale, taux_principal, taux_nat = (
+                "maladies cardioneurovasculaires", taux_cardio, cardio_nat)
+        else:
+            pathologie_principale, taux_principal, taux_nat = (
+                "diabète", taux_diabete, diab_nat)
         recos.append({
             "title": "Renforcer la prévention et le dépistage des pathologies chroniques.",
             "prose": (
-                f"{dept_nom} présente un taux de prévalence "
-                f"{pathologie_principale} de {taux_principal:.1f}\u202f%, "
-                "supérieur à la médiane nationale. "
-                "Combiné à un accès aux soins dégradé, ce cumul augmente "
-                "le risque de complications graves non prises en charge. "
-                "Des programmes de dépistage actif (camions médicaux, "
-                "journées de prévention en mairie) et des protocoles "
-                "de suivi renforcé pour les patients chroniques "
-                "permettraient de réduire la morbi-mortalité évitable."
+                f"{dept_nom} présente une prévalence brute ({pathologie_principale}) "
+                f"de {taux_principal:.1f} %, contre {taux_nat:.1f} % en médiane "
+                "des départements (CNAM 2023, prévalence non standardisée sur l'âge). "
+                "Combinée à un accès aux soins dégradé, cette situation justifie "
+                "des actions de dépistage (journées de prévention, équipes mobiles) "
+                "et un suivi renforcé des patients chroniques."
             ),
             "stats": [
-                (f"{taux_principal:.1f}\u202f%", f"Prévalence {pathologie_principale}"),
-                (f"{score_acces:.0f}/100", "Score accès"),
+                (f"{taux_principal:.1f} %", f"Prévalence brute {pathologie_principale}"),
+                (f"{taux_nat:.1f} %", "Médiane des départements"),
+                (_f(score_acces, ".0f", "/100"), "Score accès"),
             ],
             "priority": 2,
         })
@@ -1056,25 +1047,22 @@ def _generate_recommendations(
         recos.append({
             "title": "Renforcer l'offre pédiatrique et les services de PMI.",
             "prose": (
-                f"Avec {pct_moins_25:.1f}\u202f% de moins de 25\u202fans "
-                f"(médiane nationale\u202f: ~28\u202f%), {dept_nom} a une population "
-                "significativement jeune. "
+                f"Avec {pct_moins_25:.1f} % de moins de 25 ans "
+                f"(médiane des départements : {pct25_med_nat:.1f} %), {dept_nom} "
+                "a une population significativement jeune. "
                 "L'accès aux pédiatres, médecins scolaires et services "
                 "de Protection Maternelle et Infantile (PMI) est un enjeu "
-                "de prévention à long terme. "
-                "Renforcer les consultations pédiatriques avancées "
-                "en centres de santé municipaux permettrait de "
-                "décharger les généralistes."
+                "de prévention à long terme."
             ),
             "stats": [
-                (f"{pct_moins_25:.1f}\u202f%", "Part des moins de 25 ans"),
-                ("~28\u202f%", "Médiane nationale"),
+                (f"{pct_moins_25:.1f} %", "Part des moins de 25 ans"),
+                (f"{pct25_med_nat:.1f} %", "Médiane des départements"),
             ],
             "priority": 3,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 9 — Foncier très accessible + désert → Attirer via logement
+    # CAS 9 — Foncier très accessible + APL faible → Attirer via logement
     # ════════════════════════════════════════════════════════════════════
     if foncier_accessible and is_desert and not any(
         "attractivité" in rec.get("title", "") for rec in recos
@@ -1082,17 +1070,15 @@ def _generate_recommendations(
         recos.append({
             "title": "Mobiliser l'avantage foncier pour attirer des professionnels de santé.",
             "prose": (
-                f"Le prix médian à {prix_m2:.0f}\u202f€/m² représente un levier "
+                f"Le prix médian à {prix_m2:.0f} €/m² représente un levier "
                 "d'attractivité concret pour les professionnels de santé. "
                 "Un programme de mise à disposition de locaux professionnels "
-                "à tarif préférentiel ou en bail emphytéotique, couplé "
-                "à des aides au logement pour les médecins s'installant "
-                "dans les zones sous-denses, constitue une réponse "
-                "complémentaire aux aides conventionnelles."
+                "à tarif préférentiel, couplé à des aides au logement, "
+                "complète les aides conventionnelles à l'installation."
             ),
             "stats": [
-                (f"{prix_m2:.0f}\u202f€", "Prix médian /m²"),
-                (f"{apl:.1f}", "APL actuel /hab."),
+                (f"{prix_m2:.0f} €", "Prix médian /m²"),
+                (f"{apl:.1f}", "APL médian communal"),
             ],
             "priority": 3,
         })
@@ -1105,37 +1091,35 @@ def _generate_recommendations(
             "title": "Mettre en place un plan de vigilance sur les indicateurs fragiles.",
             "prose": (
                 f"{dept_nom} présente une situation intermédiaire "
-                f"(score {score_global:.0f}/100) avec des signaux de fragilité "
-                "sur certains indicateurs. "
-                "Un suivi trimestriel de l'APL, des effectifs RPPS et "
+                f"(score {score_global:.0f}/100) sans déclencher les signaux "
+                "d'alerte suivis par l'outil. "
+                "Un suivi régulier de l'APL, de l'offre de médecins et "
                 "du temps d'accès permettrait de détecter précocement "
-                "toute dégradation avant qu'elle ne devienne critique. "
-                "Les zones péri-urbaines sont particulièrement à surveiller."
+                "une dégradation."
             ),
             "stats": [
                 (f"{score_global:.0f}/100", "Score global actuel"),
-                (f"{apl:.1f}", "APL actuel /hab."),
+                (_f(apl, ".1f"), "APL médian communal"),
             ],
             "priority": 3,
         })
 
     # ════════════════════════════════════════════════════════════════════
-    # CAS 11 — Situation favorable → Maintien et benchmarking
+    # CAS 11 — Aucun signal d'alerte → Maintien et veille
     # ════════════════════════════════════════════════════════════════════
     if not recos:
         recos.append({
             "title": "Maintenir les acquis et partager les bonnes pratiques.",
             "prose": (
-                f"{dept_nom} présente des indicateurs supérieurs ou proches "
-                "de la médiane nationale sur l'ensemble des dimensions. "
-                "La priorité est de maintenir cette situation face au "
-                "vieillissement démographique des médecins en exercice. "
-                "Ce territoire peut servir de référence pour les "
-                "départements voisins en difficulté."
+                f"{dept_nom} ne déclenche aucun des signaux d'alerte suivis "
+                "par l'outil (APL, offre de médecins et d'établissements, "
+                "temps d'accès, vieillissement, pathologies). "
+                "La priorité est de maintenir cette situation et de suivre "
+                "l'évolution des effectifs médicaux."
             ),
             "stats": [
-                (f"{score_global:.0f}/100", "Score global"),
-                (f"{apl:.1f}", "APL actuel /hab."),
+                (_f(score_global, ".0f", "/100"), "Score global"),
+                (_f(apl, ".1f"), "APL médian communal"),
             ],
             "priority": 3,
         })
@@ -1198,8 +1182,10 @@ def _render_demographie(r: pd.Series, master: pd.DataFrame) -> None:
 
     bars_html = '<div class="age-bars">'
     for col, _ in age_cols:
-        dept_val = float(r.get(col, 0) or 0)
+        dept_val = to_num(r.get(col))
         nat_val = float(master[col].median())
+        if pd.isna(dept_val):
+            continue
         # Normalise sur 60 % (valeur max théorique de pct_25_64)
         d_h = max(dept_val / 60 * 100, 4)
         n_h = max(nat_val / 60 * 100, 4)
@@ -1212,11 +1198,9 @@ def _render_demographie(r: pd.Series, master: pd.DataFrame) -> None:
     bars_html += '</div>'
 
     labels_html = '<div class="age-labels">'
-    pop = float(r.get("population_num", 0) or 0)
+    pop = to_num(r.get("population_num"))
     for col, lbl in age_cols:
-        pct = float(r.get(col, 0) or 0)
-        hab = int(pct / 100 * pop)
-        hab_str = f"{hab:,}".replace(",", "\u202f")
+        hab_str = _fmt_int(to_num(r.get(col)) / 100 * pop)
         labels_html += (
             f'<div>{lbl}'
             f'<span class="val">{hab_str}\u202fhab.</span>'
@@ -1251,9 +1235,9 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
         st.info("Aucune pathologie recensée pour ce département.")
         return
 
-    dg = dp.groupby("patho_niv1")[["Ntop", "Npop"]].sum().reset_index()
-    dg["prev"] = (dg["Ntop"] / dg["Npop"] * 100).round(2)
-    top5 = dg.sort_values("prev", ascending=False).head(5)
+    dg = dp.groupby("patho_niv1")[["Ntop", "Npop"]].sum(min_count=1).reset_index()
+    dg["prev"] = (dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100).round(2)
+    top5 = dg.dropna(subset=["prev"]).sort_values("prev", ascending=False).head(5)
     max_prev = float(top5["prev"].max())
 
     colors = ["#1A3D8F", "#3A5DA3", "#5A7DB7", "#7B9DCB", "#9BBDDF"]
@@ -1403,12 +1387,14 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     )
 
     dept_code  = str(r.get("dept", "")).zfill(2)
-    population = float(r.get("population_num", 300_000) or 300_000)
-    apl_val    = float(r.get("apl_median_dept", 3.0) or 3.0)
+    population = to_num(r.get("population_num"))
     pros       = data.get("pros")
 
     if pros is None or pros.empty:
         st.info("Données professionnels non disponibles.")
+        return
+    if pd.isna(population) or population <= 0:
+        st.info("Population non disponible : densités non calculables.")
         return
 
     # ── Agrégation RPPS pour ce département ──────────────────────────────
@@ -1421,22 +1407,20 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     )
     agg["pour_100k"] = (agg["nb"] / population * 100_000).round(1)
 
-    # Médiane nationale par spécialité (densité médiane sur tous les depts)
-    nat_by_dept = (
-        pros.groupby(["dept", "specialite_libelle"])
-        .size().reset_index(name="nb_dept")
+    # Médiane nationale par spécialité : sur les départements analysés
+    # (master, Mayotte exclue), en comptant 0 là où la spécialité est absente.
+    master_pop = data["master"].set_index("dept")["population_num"].astype(float)
+    counts = (
+        pros[pros["dept"].astype(str).isin(master_pop.index)]
+        .groupby(["specialite_libelle", "dept"]).size()
+        .unstack("dept").reindex(columns=master_pop.index).fillna(0)
+    )
+    densites = counts.div(master_pop, axis=1) * 100_000
+    nat_medians = (
+        densites.median(axis=1).rename("mediane_nat").reset_index()
         .rename(columns={"specialite_libelle": "specialite"})
     )
-    pop_map = data["master"].set_index("dept")["population_num"].to_dict()
-    nat_by_dept["pop"] = nat_by_dept["dept"].map(
-        lambda x: float(pop_map.get(str(x), 300_000) or 300_000)
-    )
-    nat_by_dept["densite"] = nat_by_dept["nb_dept"] / nat_by_dept["pop"] * 100_000
-    nat_medians = (
-        nat_by_dept.groupby("specialite")["densite"]
-        .median().reset_index()
-        .rename(columns={"densite": "mediane_nat"})
-    )
+    nat_med_map = nat_medians.set_index("specialite")["mediane_nat"].to_dict()
     agg = agg.merge(nat_medians, on="specialite", how="left")
     agg["mediane_nat"] = agg["mediane_nat"].fillna(0)
     agg["ecart_pct"]   = (
@@ -1488,46 +1472,20 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
                         candidates.append((label, prev, _find_rpps(kws)))
             top5_pathos = sorted(candidates, key=lambda x: x[1], reverse=True)[:5]
 
-    # ── Calcul du besoin réel (APL-aware pour les généralistes) ──────────
-    def besoin_reel(dept_val, nat_val, patho_key=None, spec_nom=""):
-        is_generaliste = "g\u00e9n\u00e9raliste" in spec_nom.lower()
-        apl_nat        = 2.9
-
-        # Paradoxe RPPS/APL : RPPS ok mais désert médical → base APL
-        if is_generaliste and apl_val < 2.5:
-            deficit_apl = max(0.0, apl_nat - apl_val)
-            result      = int(deficit_apl * population / 290)
-            return min(result, 60) if result > 0 else None
-
-        # Cas standard
-        if nat_val <= 0 or dept_val >= nat_val:
-            return None
-        result = min(int(round((nat_val - dept_val) * population / 100_000)), 60)
-        return result if result > 0 else None
-
     # ── Fonction render d'une ligne ───────────────────────────────────────
     def render_row(spec_nom, nb, pour_100k, med_nat,
                    patho_label, patho_key, idx, is_absent=False):
-        ecart = (
-            ((pour_100k - med_nat) / med_nat * 100)
-            if med_nat > 0 else -100
-        )
-        ecart_color = (
-            "#1B5E3F" if ecart >= 10
-            else "#A51C30" if ecart <= -10
-            else "#6B6B68"
-        )
-        ecart_str = f"+{int(ecart)} %" if ecart >= 0 else f"{int(ecart)} %"
-
-        # Signal paradoxe : généraliste RPPS > médiane mais désert APL
-        if ("g\u00e9n\u00e9raliste" in spec_nom.lower()
-                and apl_val < 2.5 and pour_100k >= med_nat):
-            ecart_str   = f"+{int(ecart)} % \u26a0"
-            ecart_color = "#E8A838"
-
-        br       = besoin_reel(pour_100k, med_nat, patho_key, spec_nom)
-        br_str   = f"+{br}" if br else "N/D"
-        br_color = "#A51C30" if br else "#9C9A92"
+        if med_nat > 0:
+            ecart = (pour_100k - med_nat) / med_nat * 100
+            ecart_color = (
+                "#1B5E3F" if ecart >= 10
+                else "#A51C30" if ecart <= -10
+                else "#6B6B68"
+            )
+            ecart_str = f"+{int(ecart)} %" if ecart >= 0 else f"{int(ecart)} %"
+        else:
+            # Médiane nationale nulle : écart relatif non défini
+            ecart, ecart_color, ecart_str = 0.0, "#9C9A92", "n.s."
 
         badge = ""
         if patho_label:
@@ -1548,7 +1506,7 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
 
         return (
             f'<div style="display:grid;'
-            f'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr 0.9fr;'
+            f'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr;'
             f'padding:12px 16px;background:{bg};'
             f'border-bottom:1px solid #E8E6DD;gap:0;align-items:center;">'
             f'<div style="font-size:13px;color:#0A1938;font-weight:500;'
@@ -1559,15 +1517,13 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             f'<div style="font-size:13px;color:#9C9A92;text-align:right;">{med_nat:.1f}</div>'
             f'<div style="font-size:13px;font-weight:600;color:{ecart_color};text-align:right;">'
             f'{ecart_str}</div>'
-            f'<div style="font-size:13px;font-weight:700;color:{br_color};text-align:right;">'
-            f'{br_str}</div>'
             f'</div>'
         )
 
     # ── En-tête tableau ───────────────────────────────────────────────────
     header = (
         '<div style="display:grid;'
-        'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr 0.9fr;'
+        'grid-template-columns:3fr 0.6fr 0.8fr 0.8fr 0.7fr;'
         'padding:10px 16px;background:#0A1938;border-radius:6px 6px 0 0;gap:0;">'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);">SP\u00c9CIALIT\u00c9</div>'
@@ -1579,8 +1535,6 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">M\u00c9D.NAT.</div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
         'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">\u00c9CART</div>'
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.5);text-align:right;">BESOIN R\u00c9EL*</div>'
         '</div>'
     )
 
@@ -1622,7 +1576,8 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             )
         else:
             table_html += render_row(
-                spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
+                spec_nom=spec_exact, nb=0, pour_100k=0.0,
+                med_nat=float(nat_med_map.get(spec_exact, 0.0)),
                 patho_label=None, patho_key=None, idx=i, is_absent=True,
             )
 
@@ -1660,7 +1615,8 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
             )
         else:
             table_html += render_row(
-                spec_nom=spec_exact, nb=0, pour_100k=0.0, med_nat=0.0,
+                spec_nom=spec_exact, nb=0, pour_100k=0.0,
+                med_nat=float(nat_med_map.get(spec_exact, 0.0)),
                 patho_label=patho_label, patho_key=None,
                 idx=spec_count, is_absent=True,
             )
@@ -1669,41 +1625,19 @@ def render_offre_medicale(r: pd.Series, data: dict) -> None:
     table_html += "</div></div>"  # ferme inner div + sa-tbl-scroll
     st.markdown(table_html, unsafe_allow_html=True)
 
-    # ── Bandeau paradoxe RPPS/APL ─────────────────────────────────────────
-    gen_match = agg[
-        agg["specialite"].str.lower().str.contains("g\u00e9n\u00e9raliste",
-                                                    na=False, regex=False)
-    ]
-    if not gen_match.empty and apl_val < 2.5:
-        gen_row = gen_match.iloc[0]
-        if float(gen_row["pour_100k"]) >= float(gen_row["mediane_nat"]):
-            st.markdown(
-                f'<div style="margin-top:10px;padding:12px 16px;'
-                f'background:#FCF4DB;border:1px solid #F4C430;'
-                f'border-radius:4px;font-size:12px;color:#7D4A00;line-height:1.6;">'
-                f'<strong>\u26a0\ufe0f Paradoxe RPPS\u202f/\u202fAPL</strong><br>'
-                f'Le RPPS indique un nombre de g\u00e9n\u00e9ralistes sup\u00e9rieur '
-                f'\u00e0 la m\u00e9diane nationale, mais l\u2019APL de {apl_val:.1f} '
-                f'r\u00e9v\u00e8le un acc\u00e8s insuffisant aux soins de ville. '
-                f'Les m\u00e9decins compt\u00e9s dans le RPPS exercent majoritairement '
-                f'en milieu hospitalier et ne contribuent pas \u00e0 l\u2019offre '
-                f'lib\u00e9rale de proximit\u00e9. Le besoin r\u00e9el est calcul\u00e9 '
-                f'sur la base de l\u2019APL.'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
     # Note méthodologique
     st.markdown(
         '<div style="margin-top:10px;padding:12px 16px;background:#F3F2EC;'
         'border-radius:4px;font-size:12px;color:#6B6B68;line-height:1.6;">'
-        '<strong style="color:#2B2B2B;">* Besoin r\u00e9el</strong> = '
-        '(m\u00e9diane nationale \u2212 densit\u00e9 locale) \u00d7 population\u202f/\u202f100\u202f000, '
-        'amplifi\u00e9 par la pr\u00e9valence locale de la pathologie associ\u00e9e '
-        '(facteur max \u00d72.5, plafon 60). Pour les g\u00e9n\u00e9ralistes en d\u00e9sert m\u00e9dical, '
-        'le besoin est calcul\u00e9 sur l\u2019\u00e9cart APL vs m\u00e9diane nationale (2.9). '
-        'Le RPPS inclut tous les modes d\u2019exercice\u202f; l\u2019APL reste '
-        'l\u2019indicateur de r\u00e9f\u00e9rence pour l\u2019acc\u00e8s r\u00e9el.'
+        '<strong style="color:#2B2B2B;">Lecture.</strong> Comptages issus du fichier '
+        'des professionnels de sant\u00e9 retrait\u00e9 par l\u2019\u00e9quipe '
+        '(lignes = lieux d\u2019exercice recens\u00e9s\u202f; un praticien peut '
+        'appara\u00eetre plusieurs fois). M\u00e9diane nationale = m\u00e9diane des '
+        'densit\u00e9s des d\u00e9partements analys\u00e9s, z\u00e9ros inclus. '
+        'Aucun besoin chiffr\u00e9 n\u2019est affich\u00e9\u202f: l\u2019\u00e9cart '
+        '\u00e0 la m\u00e9diane n\u2019est pas un nombre de m\u00e9decins manquants. '
+        'L\u2019APL reste l\u2019indicateur de r\u00e9f\u00e9rence pour l\u2019acc\u00e8s '
+        'aux g\u00e9n\u00e9ralistes.'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1742,10 +1676,9 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
             f'<div style="background:#FEE9E9;border:1px solid #A51C30;'
             f'border-radius:4px;padding:14px 18px;margin:0 0 24px;'
             f'font-size:14px;color:#5E0000;">'
-            f'<strong>Zone en désert médical.</strong> APL de {apl:.1f}\u202f/hab., '
-            f'en dessous du seuil DREES de {APL_SEUIL_DESERT} '
-            f'consultations/an/habitant. '
-            f'Les délais estimés ci-dessous sont probablement sous-évalués.'
+            f'<strong>APL sous le repère de sous-densité.</strong> APL médian des '
+            f'communes de {apl:.1f}\u202f/hab., inférieur à {APL_SEUIL_DESERT} '
+            f'consultations/an/habitant.'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1846,7 +1779,7 @@ def find_similar_depts(
     """Suggère des départements proches, en priorité en zone favorable (contraste)."""
     dept_code = str(r.get("dept", "")).zfill(2)
     zone = str(r.get("zone_short", ""))
-    score = float(r.get("score_global", 50) or 50)
+    score = to_num(r.get("score_global"))
     region = str(r.get("Code région", ""))
     is_dom = dept_code in {"971", "972", "973", "974", "976"}
     dom_codes = {"971", "972", "973", "974", "976"}
@@ -1874,13 +1807,16 @@ def find_similar_depts(
         dist_km = _dept_distance_km(dept_code, other)
         dist_score = min(dist_km / 400.0, 1.0)
         row_zone = str(row.get("zone_short", ""))
-        row_score = float(row.get("score_global", 50) or 50)
+        row_score = to_num(row.get("score_global"))
         zone_bonus = 0.0
         if row_zone == "Favorable":
             zone_bonus = -0.35
         elif zone != row_zone:
             zone_bonus = -0.12
-        contrast = min(abs(row_score - score) / 60.0, 1.0)
+        contrast = (
+            min(abs(row_score - score) / 60.0, 1.0)
+            if pd.notna(row_score) and pd.notna(score) else 0.0
+        )
         region_bonus = -0.18 if str(row.get("Code région", "")) == region else 0.0
         return 0.55 * dist_score + zone_bonus + region_bonus - 0.18 * contrast
 
@@ -1892,14 +1828,15 @@ def find_similar_depts(
     for _, row in top.iterrows():
         same_region = str(row.get("Code région", "")) == region
         row_zone = str(row.get("zone_short", ""))
-        if row_zone == "Favorable" and same_region:
-            raison = "Zone favorable · Même région"
-        elif row_zone == "Favorable":
-            raison = "Zone favorable · Proche géographiquement"
-        elif same_region:
-            raison = "Même région · Profil contrasté"
+        # « Proche » seulement si la distance le justifie (≤ 250 km entre centres)
+        is_near = _dept_distance_km(dept_code, str(row.get("dept", "")).zfill(2)) <= 250
+        lieu = "Même région" if same_region else (
+            "Proche géographiquement" if is_near else "Autre région"
+        )
+        if row_zone == "Favorable":
+            raison = f"Zone favorable · {lieu}"
         else:
-            raison = "Territoire proche · Profil contrasté"
+            raison = f"{lieu} · Profil contrasté"
         results.append({
             "dept": row["dept"],
             "nom": row.get("Nom du département", ""),

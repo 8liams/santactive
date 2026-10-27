@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from ..commune_opportunity import norm_commune_name
 from ..components import render_kpi_card
 from ..components.nav import NavCrumb, render_breadcrumb
 from ..router import navigate
@@ -68,25 +69,25 @@ def render(data: dict) -> None:
     )
 
     # ── Agrégation des données communes ───────────────────────────────────────
-    name_upper = commune_name.upper()
+    # Rapprochement par libellé normalisé (accents, tirets, « Saint »/« St »)
+    # dans le département : les sources n'ont pas de code INSEE commun.
+    name_key = norm_commune_name(commune_name)
 
-    immo_c = immo[
-        (immo["commune"].str.upper() == name_upper)
-        & (immo["code_departement"].astype(str).str.zfill(2) == dept_code)
-    ] if not immo.empty and "commune" in immo.columns else pd.DataFrame()
+    def _match(df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty or "commune" not in df.columns:
+            return pd.DataFrame()
+        d = df[df["code_departement"].astype(str).str.zfill(2) == dept_code]
+        return d[d["commune"].map(norm_commune_name) == name_key]
 
-    temps_c = temps[
-        (temps["commune"].str.upper() == name_upper)
-        & (temps["code_departement"].astype(str).str.zfill(2) == dept_code)
-    ] if not temps.empty and "commune" in temps.columns else pd.DataFrame()
+    immo_c  = _match(immo)
+    temps_c = _match(temps)
+    etabs_c = _match(etabs)
+    etabs_ok = not etabs.empty and "commune" in etabs.columns and (
+        etabs["code_departement"].astype(str).str.zfill(2) == dept_code
+    ).any()
 
-    etabs_c = etabs[
-        (etabs["commune"].str.upper() == name_upper)
-        & (etabs["code_departement"].astype(str).str.zfill(2) == dept_code)
-    ] if not etabs.empty and "commune" in etabs.columns else pd.DataFrame()
-
-    prix_m2     = immo_c["prix_m2"].median() if not immo_c.empty else None
-    temps_acces = temps_c["temps_acces"].mean() if not temps_c.empty else None
+    prix_m2     = immo_c["prix_m2"].median() if not immo_c.empty else float("nan")
+    temps_acces = temps_c["temps_acces"].mean() if not temps_c.empty else float("nan")
     nb_trans    = len(immo_c)
     nb_etabs_c  = len(etabs_c)
 
@@ -104,34 +105,39 @@ def render(data: dict) -> None:
     with c1:
         render_kpi_card(
             "Prix médian /m²",
-            f"{prix_m2:.0f}\u202f€" if prix_m2 and pd.notna(prix_m2) else "N/D",
-            "Source DVF 2025" if prix_m2 else "Non disponible",
+            f"{prix_m2:.0f}\u202f€" if pd.notna(prix_m2) else "N/D",
+            (f"Source DVF 2025 · {nb_trans} vente{'s' if nb_trans > 1 else ''}"
+             if pd.notna(prix_m2) else "Non disponible"),
         )
     with c2:
         render_kpi_card(
-            "Temps d'accès médical",
-            f"{temps_acces:.1f}\u202fmin" if temps_acces and pd.notna(temps_acces) else "N/D",
-            "Vers établissement le + proche" if temps_acces else "Non disponible",
+            "Temps d'accès",
+            f"{temps_acces:.0f}\u202fmin" if pd.notna(temps_acces) else "N/D",
+            "Donnée communale (0 = sur place)" if pd.notna(temps_acces) else "Non disponible",
         )
     with c3:
         render_kpi_card(
             "Transactions 2025",
-            str(nb_trans) if nb_trans else "N/D",
+            str(nb_trans) if nb_trans else "Aucune (ou commune non rapprochée)",
             "Ventes immobilières",
         )
     with c4:
         render_kpi_card(
-            "Établissements sur place",
-            str(nb_etabs_c),
-            "Hôpitaux + cliniques FINESS",
+            "Établissements FINESS",
+            str(nb_etabs_c) if etabs_ok else "N/D",
+            "Recensés dans la commune" if etabs_ok
+            else "Non disponible pour ce département",
         )
 
     # ── ÉTABLISSEMENTS DU DÉPARTEMENT ─────────────────────────────────────────
     st.markdown(
         '<div class="section-header">'
-        '<div class="section-eyebrow">À PROXIMITÉ</div>'
+        '<div class="section-eyebrow">DANS LE DÉPARTEMENT</div>'
         f'<h2 class="section-title">Établissements de santé '
         f'<em>dans {dept_name}.</em></h2>'
+        '<p class="section-lead">Extrait du fichier FINESS chargé (commune '
+        'sélectionnée en premier). Aucune notion de distance : le fichier ne '
+        'contient pas de coordonnées.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -140,6 +146,9 @@ def render(data: dict) -> None:
     if not etabs_dept.empty:
         cols_to_show = [c for c in ["Rslongue", "categetab", "commune"]
                         if c in etabs_dept.columns]
+        if "commune" in etabs_dept.columns:
+            same = etabs_dept["commune"].map(norm_commune_name) == name_key
+            etabs_dept = pd.concat([etabs_dept[same], etabs_dept[~same]])
         etabs_show = etabs_dept.head(15)[cols_to_show].copy()
         rename_map = {"Rslongue": "Établissement", "categetab": "Catégorie",
                       "commune": "Commune"}

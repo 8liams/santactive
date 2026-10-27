@@ -57,6 +57,19 @@ assert abs(sum(d["weight"] for d in DIMENSIONS.values()) - 1.0) < 0.001, \
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def to_num(val) -> float:
+    """Convertit en float ; NaN si absent ou non numérique.
+
+    À utiliser à la place de ``float(x or défaut)`` : ce motif remplace un 0
+    réel par la valeur par défaut et laisse passer NaN (truthy).
+    """
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return float("nan")
+    return v if pd.notna(v) else float("nan")
+
+
 def percentile_rank(series: pd.Series, higher_is_better: bool = True) -> pd.Series:
     """Normalise une série en rang percentile 0-100. NaN conservés."""
     ranks = series.rank(method="average", na_option="keep", pct=True) * 100

@@ -58,38 +58,44 @@ def impact_display(internal: str) -> str:
     return _IMPACT_DISPLAY.get(str(internal), "Impact moyen")
 
 
+_PRIO_WEIGHTS = {"_frag_score": 0.32, "_impact_score": 0.28, "_fais_score": 0.22, "_sg": 0.18}
+
+
 def _compute_score_priorite(df: pd.DataFrame) -> pd.Series:
-    """Score décisionnel 0–100 à partir des signaux régionaux existants."""
-    score_sg = 1 - pd.to_numeric(df["score_global"], errors="coerce").rank(
-        pct=True, na_option="keep", method="average"
-    )
+    """Score décisionnel 0–100 à partir des signaux (rangs nationaux).
+
+    La composante « score global » utilise le score national (100 − score),
+    et non un rang intra-régional : dans une région à un seul département,
+    ce rang valait toujours 1 et donnait 0 au pire département de France.
+    Une composante absente est exclue et les poids sont renormalisés
+    (aucune valeur neutre 0,5 inventée).
+    """
+    comp = pd.DataFrame({
+        "_frag_score": pd.to_numeric(df["_frag_score"], errors="coerce"),
+        "_impact_score": pd.to_numeric(df["_impact_score"], errors="coerce"),
+        "_fais_score": pd.to_numeric(df["_fais_score"], errors="coerce"),
+        "_sg": 1 - pd.to_numeric(df["score_global"], errors="coerce") / 100,
+    }, index=df.index)
+    w = pd.Series(_PRIO_WEIGHTS)
+    num = comp.mul(w).sum(axis=1, skipna=True)
+    den = comp.notna().mul(w).sum(axis=1)
     zone_bonus = df["zone_short"].map(
         {"Critique": 0.07, "Intermédiaire": 0.03, "Favorable": 0.0}
     ).fillna(0)
-    raw = (
-        0.32 * df["_frag_score"].fillna(0.5)
-        + 0.28 * df["_impact_score"].fillna(0.5)
-        + 0.22 * df["_fais_score"].fillna(0.5)
-        + 0.18 * score_sg.fillna(0.5)
-        + zone_bonus
-    )
-    return (raw.clip(0, 1) * 100).round(0).astype(int)
+    raw = (num / den.where(den > 0)) + zone_bonus
+    return (raw.clip(0, 1) * 100).round(0).astype("Int64")
 
 
 def _estimate_pop_concernee(row: pd.Series, patho_info: dict | None) -> int | None:
+    """Population observée du département (INSEE).
+
+    Remplace l'ancienne « population concernée » obtenue par des
+    multiplicateurs non sourcés (0,80 / 0,60 / 0,42 / 0,25 / 0,55).
+    """
     pop = _num(row.get("population_num"))
     if pd.isna(pop) or pop <= 0:
         return None
-    impact = str(row.get("impact", "moyen"))
-    mult = _IMPACT_POP_MULT.get(impact, 0.42)
-    base = int(pop * mult)
-    if patho_info and patho_info.get("ntop"):
-        base = max(base, int(patho_info["ntop"]))
-    pct65 = _num(row.get("pct_plus_65"))
-    if pd.notna(pct65) and pct65 > 0:
-        seniors = int(pop * pct65 / 100)
-        base = max(base, int(seniors * 0.55))
-    return base
+    return int(pop)
 
 
 def _generate_justification_prioritaire(
@@ -126,20 +132,22 @@ def _generate_justification_prioritaire(
         else:
             clauses.append("temps d'accès supérieur à la médiane régionale")
 
-    nb_crit = int(_num(row.get("nb_communes_critiques"), 0) or 0)
-    if pd.notna(pct65) and pct65 > 23 and nb_crit > 0:
+    nb_crit = _num(row.get("nb_communes_critiques"))
+    if pd.notna(pct65) and pct65 > 23 and pd.notna(nb_crit) and nb_crit > 0:
         clauses.append(
-            "forte concentration de seniors et éloignement "
-            "des établissements de santé"
+            "forte part de seniors et communes à plus de 15\u202fmin "
+            "de temps d'accès"
         )
 
     if not clauses and patho_info and patho_info.get("prev_max", 0) > 16:
         plabel = _patho_short_label(str(patho_info.get("patho_name", ""))) or "chroniques"
-        clauses.append(f"prévalence {plabel.lower()} au-dessus de la médiane régionale")
+        clauses.append(
+            f"prévalence brute {plabel.lower()} élevée ({patho_info['prev_max']:.1f}\u202f%)"
+        )
 
     score_acces = _num(row.get("score_acces"))
     if not clauses and pd.notna(score_acces) and score_acces < 42:
-        clauses.append("accès aux soins de ville sous la médiane régionale")
+        clauses.append(f"score d'accès aux soins de {score_acces:.0f}/100 (rang national)")
 
     if not clauses:
         raisons = row.get("raisons", [])
@@ -189,7 +197,12 @@ def enrich_priorities_decision(
     df["justification_prioritaire"] = justifs
     df["lecture_rapide"] = df["justification_prioritaire"]
 
-    return df.sort_values("score_priorite", ascending=False).reset_index(drop=True)
+    # Classement unique (page, tableau technique et PDF) : score de priorité
+    df = df.sort_values(
+        ["score_priorite", "_frag_score"], ascending=[False, False], na_position="last"
+    ).reset_index(drop=True)
+    df["priorite_rang"] = range(1, len(df) + 1)
+    return df
 
 
 def _aggregate_faisabilite(labels: list[str]) -> str:
@@ -217,6 +230,8 @@ def _build_pourquoi_levier(
     depts = lev.get("depts") or []
     n_depts = len(depts)
     rows = region_depts[region_depts["Nom du département"].isin(depts)]
+    # Statistiques calculées sur les seuls départements ciblés par le levier
+    dept_codes = rows["dept"].astype(str).str.zfill(2).tolist() or dept_codes
     pop = int(pd.to_numeric(rows["population_num"], errors="coerce").sum())
     pop_fmt = _fmt_pop(pop if pop > 0 else None)
 
@@ -269,9 +284,9 @@ def _build_pourquoi_levier(
         )
         if desert:
             return (
-                f"{desert} département{'s' if desert > 1 else ''} en désert médical "
-                f"(APL < 2,5) justifient un recours à la téléexpertise "
-                f"pour {pop_fmt.replace(' personnes', '')} habitants."
+                f"{desert} département{'s' if desert > 1 else ''} avec un APL "
+                f"sous le repère de 2,5 ({pop_fmt.replace(' personnes', '')} "
+                f"habitants dans les départements ciblés)."
             )
 
     if "consultations avancées" in intitule or "navettes" in intitule:
@@ -299,7 +314,7 @@ def _build_pourquoi_maintenant(lev: dict, amplitude_pop: str) -> str:
     if tension:
         return (
             f"{tension.capitalize()} sur {n} département{'s' if n > 1 else ''} "
-            f"— population potentiellement concernée\u202f: {amplitude_pop}."
+            f"— population des départements ciblés\u202f: {amplitude_pop}."
         )
     return (
         f"Convergence des indicateurs régionaux sur {n} département"
@@ -331,9 +346,12 @@ def enrich_leviers_decision(
         )
         item["amplitude"] = amplitude
         item["horizon"] = amplitude.horizon
-        item["impact_pop_str"] = amplitude.population
+        pop_n = int(item.get("population_ciblee") or 0) or None
+        item["impact_pop_str"] = (
+            f"{_fmt_pop(pop_n)} habitants (départements ciblés, INSEE)"
+            if pop_n else "n.d."
+        )
 
-        pop_n = _parse_pop_from_amplitude(amplitude.population)
         if pop_n and pop_n >= 250_000:
             item["impact_niveau"] = "Impact très élevé"
         elif pop_n and pop_n >= 120_000:
@@ -353,7 +371,7 @@ def enrich_leviers_decision(
             item, region_depts, patho, dept_codes
         )
         item["pourquoi_maintenant"] = _build_pourquoi_maintenant(
-            item, amplitude.population
+            item, item["impact_pop_str"]
         )
         enriched.append(item)
     return enriched

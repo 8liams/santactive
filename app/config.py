@@ -67,6 +67,9 @@ PATHOS_EXCLUDED = [
     "Hospitalisations hors pathologies repérées (avec ou sans pathologies, traitements ou maternité)",
     "Traitements du risque vasculaire (hors pathologies)",
     "Traitements psychotropes (hors pathologies)",
+    # Libellé réel du fichier CNAM 2023 (l'entrée « Pas de pathologie repérée… »
+    # ci-dessus ne correspond à aucune ligne, ce traitement n'était pas exclu)
+    "Traitements antalgiques ou anti-inflammatoires (hors pathologies, traitements, maternité ou hospitalisations)",
 ]
 
 # ─── Palette DSFR-inspired ────────────────────────────────────────────────────

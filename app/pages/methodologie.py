@@ -86,7 +86,7 @@ def render(data: dict) -> None:
 <h2 class="section-title">Comment on calcule <em>le score global.</em></h2>
 <p class="section-lead">Le score Sant'active v2 est un indice composite sur 100,
 calculé sur 6 dimensions à partir de données open data officielles.
-Il permet de classer les 101 départements français et d'identifier
+Il permet de classer les 100 départements analysés (Mayotte exclue) et d'identifier
 les zones prioritaires d'intervention.</p>
 </div>
 """)
@@ -94,7 +94,7 @@ les zones prioritaires d'intervention.</p>
     st.html("""
 <div style="max-width:720px;font-size:14px;line-height:1.8;color:#2B2B2B;margin-bottom:32px;">
 <p>Chaque indicateur est normalisé en <strong>rang percentile</strong>
-sur les 101 départements, méthode standard utilisée par la DREES
+sur les 100 départements analysés, méthode standard utilisée par la DREES
 dans ses propres publications. Un score de 50 correspond exactement
 à la médiane nationale. Un score de 100 correspond au meilleur
 département sur cette dimension. Un score de 0 au pire.</p>

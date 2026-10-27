@@ -371,10 +371,15 @@ def build_region_audio_diagnostic_text(
 
     score_reg = _pop_weighted_mean(region_depts, "score_global")
     nb_crit = int((region_depts["zone_short"] == "Critique").sum())
-    zone_region = (
-        "critique" if nb_crit >= nb_depts / 2
-        else ("intermédiaire" if nb_crit > 0 else "favorable")
-    )
+    nb_fav = int((region_depts["zone_short"] == "Favorable").sum())
+    # « favorable » seulement si la majorité des départements est favorable
+    # (avant : toute région sans département critique était « favorable »).
+    if nb_crit >= nb_depts / 2:
+        zone_region = "critique"
+    elif nb_fav > nb_depts / 2 and nb_crit == 0:
+        zone_region = "favorable"
+    else:
+        zone_region = "intermédiaire"
 
     if pd.notna(score_reg):
         parts.append(

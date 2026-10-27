@@ -70,7 +70,7 @@ def _tooltip_style() -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CARTE NATIONALE (101 départements)
+# CARTE NATIONALE (100 départements analysés, Mayotte exclue)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_national_choropleth(
@@ -85,7 +85,7 @@ def render_national_choropleth(
     """Carte choroplèthe nationale avec tooltip adaptatif à l'indicateur."""
     st.markdown(_tooltip_style(), unsafe_allow_html=True)
 
-    if not geojson or master.empty:
+    if not geojson or not geojson.get("features") or master.empty:
         st.warning("Carte indisponible.")
         return None
 
@@ -283,7 +283,22 @@ def render_dom_cartouches(
                     else "#1B5E3F" if zone == "Favorable"
                     else "#9C9A92"
                 )
-                score_display = f"{score_val:.0f}/100" if score_val is not None else "N/D"
+                # Format selon l'indicateur affiché (avant : « /100 » pour tout,
+                # ex. « 3420/100 » pour un prix au m²)
+                _fmt_dom = {
+                    "score_global":         "{:.0f}/100",
+                    "apl_median_dept":      "{:.1f}\u202f/hab.",
+                    "temps_acces_median":   "{:.0f}\u202fmin",
+                    "med_gen_pour_100k":    "{:.0f}\u202f/100k",
+                    "structures_pour_100k": "{:.1f}\u202f/100k",
+                    "prix_m2_moyen":        "{:,.0f}\u202f€/m²",
+                    "pct_plus_65":          "{:.1f}\u202f%",
+                    "pct_moins_25":         "{:.1f}\u202f%",
+                }.get(metric, "{:.1f}")
+                score_display = (
+                    _fmt_dom.format(score_val).replace(",", "\u202f")
+                    if score_val is not None else "N/D"
+                )
 
                 st.markdown(
                     f'<div class="dom-cartouche-head">'

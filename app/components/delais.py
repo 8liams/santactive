@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 
-APL_SEUIL_DESERT = 2.5  # seuil DREES officiel désert médical
+APL_SEUIL_DESERT = 2.5  # repère de sous-densité (zonage médecins généralistes), pas une définition légale
 
 
 def load_delais_nationaux() -> pd.DataFrame:

@@ -152,7 +152,7 @@ def render(data: dict) -> None:
         '</div>'
         + _row("white",   "Indicateur d\u2019acc\u00e8s",     "Densit\u00e9 m\u00e9dicale brute (RPPS)",  "APL ANCT 2023 \u00b7 pond\u00e9r\u00e9 par \u00e2ge et activit\u00e9 r\u00e9elle")
         + _row("#FAFAF8", "D\u00e9lais de RDV",               "Non disponible ou national uniquement",    "Proxy par d\u00e9partement via APL \u00d7 DREES \u00b7 transparent")
-        + _row("white",   "Granularit\u00e9",                 "Nationale ou r\u00e9gionale",              "101 d\u00e9partements + carte des 35\u202f000 communes")
+        + _row("white",   "Granularit\u00e9",                 "Nationale ou r\u00e9gionale",              "100 d\u00e9partements + cartes communales (couverture partielle)")
         + _row("#FAFAF8", "Recommandations",                  "Absentes ou g\u00e9n\u00e9riques",         "Adapt\u00e9es \u00e0 la typologie INSEE \u00b7 chiffr\u00e9es \u00b7 localis\u00e9es")
         + _row("white",   "Transparence",                     "Bo\u00eete noire",                         "Page m\u00e9thodologie \u00b7 sources dat\u00e9es \u00b7 limites assum\u00e9es")
         + '</div>'

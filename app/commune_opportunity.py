@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .scoring import percentile_rank
+from .scoring import percentile_rank, to_num
 
 # Palette chaude : plus la couleur est intense, plus la priorité d'action est élevée
 _PRIORITY_LEVELS: list[tuple[float, str, str]] = [
@@ -161,10 +161,11 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
     """Phrase courte et différenciée — règles déterministes."""
     temps = row.get("temps_acces")
     pop = row.get("population")
-    pct_besoin = float(row.get("pct_besoin", 50) or 50)
-    pct_pop = float(row.get("pct_pop", 50) or 50)
-    pct_fais = float(row.get("pct_faisabilite", 50) or 50)
-    score = float(row.get("score_action", 0) or 0)
+    # NaN conservé (un percentile de 0 est une vraie valeur, pas une absence)
+    pct_besoin = to_num(row.get("pct_besoin"))
+    pct_pop = to_num(row.get("pct_pop"))
+    pct_fais = to_num(row.get("pct_faisabilite"))
+    score = to_num(row.get("score_action"))
 
     temps_f = float(temps) if pd.notna(temps) else None
     pop_f = float(pop) if pd.notna(pop) else None
@@ -177,17 +178,17 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
         candidates.append((priority, phrase))
 
     if temps_f is not None and temps_f > 15:
-        _add(90, "Temps de trajet élevé vers les établissements de santé.")
+        _add(90, "Temps d'accès supérieur à 15 min.")
     if temps_f is not None and temps_med > 0 and temps_f > temps_med * 1.15:
-        _add(85, "Temps d'accès supérieur à la moyenne départementale.")
+        _add(85, "Temps d'accès supérieur à la médiane départementale.")
     if pop_f is not None and pop_med > 0 and pop_f >= pop_med * 1.2 and temps_f and temps_f > temps_med:
         _add(88, "Accès aux soins éloigné et population importante.")
     if pop_f is not None and 1_500 <= pop_f < 5_000 and temps_f and temps_f > temps_med:
         _add(70, "Commune de taille intermédiaire avec accès contraint.")
     if pop_f is not None and pop_f >= 5_000 and pct_besoin >= 55:
-        _add(82, "Population importante exposée à une offre limitée.")
+        _add(82, "Population importante et temps d'accès dans le haut du département.")
     if pct_besoin >= 70 and pct_pop >= 60:
-        _add(86, "Forte combinaison besoin sanitaire et population concernée.")
+        _add(86, "Temps d'accès et population tous deux élevés dans le département.")
     if pct_besoin >= 65 and pct_pop >= 50:
         _add(80, "Potentiel élevé pour une action de proximité.")
     if temps_f is not None and temps_f > 12 and pop_f and pop_f >= 2_000:
@@ -199,7 +200,7 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
     if score >= 75 and pop_f and pop_f >= 3_000:
         _add(78, "Commune susceptible d'accueillir une action pilote.")
     if pct_besoin >= 55 and pct_pop < 45:
-        _add(55, "Faible densité de services à proximité.")
+        _add(55, "Temps d'accès relativement élevé pour une petite commune.")
     if pop_f is not None and pop_f >= pop_med and pct_besoin >= 45:
         _add(60, "Population concernée importante au regard du territoire.")
     if score >= 50 and score < 65:
@@ -209,7 +210,7 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
 
     if not candidates:
         if temps_f is not None and temps_f > temps_med:
-            return "Temps d'accès supérieur à la moyenne départementale."
+            return "Temps d'accès supérieur à la médiane départementale."
         if pop_f is not None and pop_f >= pop_med:
             return "Population concernée importante au regard du territoire."
         return "Indicateurs locaux à approfondir avec les acteurs de terrain."

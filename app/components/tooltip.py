@@ -20,8 +20,14 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "actifs dans un rayon de 20-30 min, de leur volume d'activité "
             "réel, et de la demande locale pondérée par l'âge des habitants."
             "<br><br>"
-            "<strong>Seuil officiel DREES :</strong> en dessous de 2.5, "
-            "le territoire est considéré en désert médical."
+            "<strong>Repère 2,5 :</strong> un APL inférieur à 2,5 consultations "
+            "par an et par habitant est le repère de sous-densité utilisé dans "
+            "la méthodologie nationale de zonage des médecins généralistes. "
+            "Il s'applique à des territoires (communes, territoires de vie-santé), "
+            "pas à un département entier."
+            "<br><br>"
+            "<strong>Dans Sant'active :</strong> la valeur départementale est la "
+            "médiane des APL communaux (non pondérée par la population)."
             "<br><br>"
             "<strong>Source :</strong> ANCT / Observatoire des territoires · "
             "Millésime 2023"
@@ -69,15 +75,17 @@ TOOLTIPS: dict[str, dict[str, str]] = {
     "med_100k": {
         "title": "Médecins généralistes / 100 000 habitants",
         "body": (
-            "Nombre de médecins généralistes actifs pour 100 000 habitants."
+            "Nombre de médecins généralistes recensés pour 100 000 habitants, "
+            "d'après le fichier des professionnels de santé retraité par "
+            "l'équipe (une ligne par lieu d'exercice recensé)."
             "<br><br>"
-            "<strong>⚠ Attention :</strong> le RPPS inclut tous les modes "
-            "d'exercice (libéral, salarié hospitalier, mixte). Un département "
-            "peut afficher une bonne densité RPPS tout en étant en désert "
-            "médical selon l'APL, qui ne compte que les libéraux avec une "
-            "activité réelle."
+            "<strong>⚠ Attention :</strong> un praticien exerçant sur "
+            "plusieurs lieux peut être compté plusieurs fois, et la "
+            "couverture des grandes villes est à vérifier. Indicateur à "
+            "lire avec l'APL, qui mesure l'accessibilité aux généralistes."
             "<br><br>"
-            "<strong>Source :</strong> RPPS · DREES · janv. 2026"
+            "<strong>Source :</strong> données professionnels de santé "
+            "retraitées · 2026"
         ),
     },
     "delais_rdv": {
@@ -104,7 +112,8 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         "title": "Classification par zone",
         "body": (
             "Chaque département est classé en trois zones calculées "
-            "par terciles réels sur les 101 départements français :"
+            "par terciles réels sur les 100 départements analysés "
+            "(Mayotte exclue faute de données de population) :"
             "<br><br>"
             "🔴 <strong>Critique</strong> : score dans le tiers inférieur "
             "(≤ 33e percentile)"
@@ -136,10 +145,13 @@ TOOLTIPS: dict[str, dict[str, str]] = {
     "patho": {
         "title": "Prévalence des pathologies",
         "body": (
-            "Taux de prévalence standardisé par pathologie : "
-            "pourcentage de la population du département pris en charge "
-            "pour cette pathologie, d'après la consommation de soins "
-            "remboursée par l'Assurance Maladie."
+            "Prévalence brute par pathologie : part des assurés du "
+            "département pris en charge pour cette pathologie, d'après la "
+            "consommation de soins remboursée par l'Assurance Maladie."
+            "<br><br>"
+            "<strong>⚠ Non standardisée sur l'âge :</strong> un département "
+            "âgé a mécaniquement des prévalences plus élevées. Les comparaisons "
+            "entre départements reflètent en partie la structure par âge."
             "<br><br>"
             "Un taux élevé indique un besoin de soins plus important, "
             "à croiser avec la disponibilité de l'offre médicale."

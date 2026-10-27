@@ -78,7 +78,7 @@ def render(data: dict) -> None:
     # ── HERO ──────────────────────────────────────────────────────────────────
     st.markdown("""
 <div class="home-hero">
-    <div class="hero-eyebrow">Observatoire · 101 départements · 35 000 communes</div>
+    <div class="hero-eyebrow">Observatoire · 100 départements analysés · vues communales partielles</div>
     <h1 class="hero-title">
         La santé de votre territoire,<br><em>en un seul regard.</em>
     </h1>
@@ -139,7 +139,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     st.markdown(
         '<div class="map-header">'
         '<div class="map-title">Accessibilité aux soins en France</div>'
-        f'<div class="map-sub">Score global · 101 départements · 2021–2026 '
+        f'<div class="map-sub">Score global · 100 départements · 2021–2026 '
         f'{info_tooltip("score_global")}</div>'
         '</div>',
         unsafe_allow_html=True,
@@ -279,8 +279,8 @@ def _render_national_kpis(data: dict) -> None:
             "context": "médiane nationale · données communales ANCT 2023",
             "detail":  (
                 "Nombre de consultations disponibles par an et par habitant. "
-                "En dessous de 2.5, la DREES considère le territoire "
-                "en désert médical officiel."
+                "Repère de sous-densité utilisé pour le zonage des "
+                "médecins généralistes : 2,5."
             ),
             "rouge": False,
         },

@@ -43,6 +43,16 @@ CONTENT_W = W - 2 * MARGIN
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+_MOIS_FR = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+            "août", "septembre", "octobre", "novembre", "décembre")
+
+
+def _date_fr(d: date | None = None) -> str:
+    """Date au format « 27 octobre 2026 » (strftime %B dépend de la locale)."""
+    d = d or date.today()
+    return f"{d.day} {_MOIS_FR[d.month - 1]} {d.year}"
+
+
 def _zone_color(zone: str) -> Any:
     return {"Critique": ROUGE_CRIT, "Intermédiaire": AMBRE, "Favorable": VERT_FAV}.get(zone, BLEU_ROYAL)
 
@@ -125,7 +135,7 @@ def _page_cb(dept_name: str):
         canvas.drawString(MARGIN, 11 * mm, f"Sant'active · Rapport confidentiel · {dept_name}")
         canvas.drawCentredString(
             W / 2, 8 * mm,
-            "Sources : INSEE 2021 · RPPS 2026 · FINESS 2026 · DVF 2025 · DREES · ANCT 2023",
+            "Sources : INSEE 2021 · Professionnels de santé (retraitement 2026) · FINESS 2026 · DVF 2025 · CNAM 2023 · DREES · ANCT 2023",
         )
         canvas.drawRightString(W - MARGIN, 11 * mm, f"Page {doc.page}")
         canvas.restoreState()
@@ -172,7 +182,7 @@ def generate_department_pdf(
             _s("cov_l", fontName="Helvetica-Bold", fontSize=9, textColor=BLANC),
         ),
         Paragraph(
-            f'<font color="white" size="8">Rapport confidentiel · {date.today().strftime("%d %B %Y")}</font>',
+            f'<font color="white" size="8">Rapport confidentiel · {_date_fr()}</font>',
             _s("cov_r", fontName="Helvetica", fontSize=8, alignment=TA_RIGHT, textColor=BLANC),
         ),
     ]], colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
@@ -201,11 +211,15 @@ def generate_department_pdf(
     story.append(Spacer(1, 12))
 
     # ── ③ SCORE GLOBAL + ZONE ─────────────────────────────────────────────────
-    ranked    = master.dropna(subset=["score_global"]).sort_values("score_global")
-    rang      = int((ranked["dept"] == r["dept"]).cumsum().max()) if score else 0
-    total     = len(ranked)
+    # Rang : même source que la page (rang_national, 1 = pire en interne).
+    # L'ancien calcul `cumsum().max()` valait toujours 1 → « 100ème » partout.
+    rang      = r.get("rang_national")
+    total     = int(master["score_global"].notna().sum())
     score_str = _fmt(score, "{:.1f}")
-    frag_str  = fmt_classement_national(rang, total) if rang else "N/D"
+    frag_str  = (
+        fmt_classement_national(rang, total)
+        if rang is not None and pd.notna(rang) else "N/D"
+    )
 
     score_block = Table([[
         Paragraph(
@@ -263,7 +277,7 @@ def generate_department_pdf(
     def _arrow(good: bool | None) -> str:
         if good is True:  return f'<font color="#{_hex(VERT_FAV)}">▲</font>'
         if good is False: return f'<font color="#{_hex(ROUGE_CRIT)}">▼</font>'
-        return '<font color="#999999">N/D</font>'
+        return ""  # pas de comparaison pertinente (≠ donnée absente)
 
     def _kpi(label, val_str, cmp_str, good):
         col = VERT_FAV if good is True else (ROUGE_CRIT if good is False else AMBRE)
@@ -282,7 +296,7 @@ def generate_department_pdf(
              _fmt(apl, "{:.2f}") + " /hab.",
              f"Méd. nat. {_fmt(apl_nat, '{:.2f}')}",
              _compare(apl, apl_nat)),
-        _kpi("Temps d'accès médial",
+        _kpi("Temps d'accès médian",
              _fmt(temps, "{:.0f}") + " min",
              f"Méd. nat. {_fmt(temp_nat, '{:.0f}')} min",
              _compare(temp_nat, temps)),  # inversé : moins = mieux
@@ -401,13 +415,13 @@ def generate_department_pdf(
                 if not dp.empty and "patho_niv1" in dp.columns:
                     dg = (
                         dp.groupby("patho_niv1")[["Ntop", "Npop"]]
-                        .sum()
+                        .sum(min_count=1)
                         .reset_index()
                     )
-                    dg["prev"] = (dg["Ntop"] / dg["Npop"] * 100).round(2)
-                    top5 = dg.sort_values("prev", ascending=False).head(5)
+                    dg["prev"] = (dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100).round(2)
+                    top5 = dg.dropna(subset=["prev"]).sort_values("prev", ascending=False).head(5)
                     if not top5.empty:
-                        _section_heading("Pathologies chroniques · prévalence territoriale", story)
+                        _section_heading("Pathologies · prévalence brute (non standardisée sur l'âge)", story)
 
                         p_rows = [[
                             Paragraph('<b><font size="9" color="white">Pathologie</font></b>',
@@ -418,7 +432,7 @@ def generate_department_pdf(
                             Paragraph('<b><font size="9" color="white">Patients</font></b>',
                                       _s("ph2", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
                                          fontName="Helvetica-Bold")),
-                            Paragraph('<b><font size="9" color="white">Rang (dept)</font></b>',
+                            Paragraph('<b><font size="9" color="white">Relatif (top 5)</font></b>',
                                       _s("ph3", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
                                          fontName="Helvetica-Bold")),
                         ]]
@@ -545,7 +559,7 @@ def generate_department_pdf(
         except Exception:
             return "N/D"
 
-    score_med = ranked["score_global"].median() if not ranked.empty else None
+    score_med = master["score_global"].median() if master["score_global"].notna().any() else None
 
     comp_rows = [[
         Paragraph('<b><font size="9" color="white">Indicateur</font></b>',
@@ -636,7 +650,7 @@ def generate_region_pdf(
             _s("cov_l", fontName="Helvetica-Bold", fontSize=9, textColor=BLANC),
         ),
         Paragraph(
-            f'<font color="white" size="8">Rapport · {date.today().strftime("%d %B %Y")}</font>',
+            f'<font color="white" size="8">Rapport · {_date_fr()}</font>',
             _s("cov_r", fontSize=8, alignment=TA_RIGHT, textColor=BLANC),
         ),
     ]], colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
@@ -656,7 +670,7 @@ def generate_region_pdf(
     story.append(Spacer(1, 6))
     story.append(Paragraph(
         f'<font size="11" color="#666666">Code région {region_code} · '
-        f'{nb_depts} départements</font>',
+        f'{nb_depts} département{"s" if nb_depts > 1 else ""}</font>',
         _s("rg_sub", fontSize=11, textColor=GRIS_TXT),
     ))
     story.append(Spacer(1, 18))
@@ -668,7 +682,7 @@ def generate_region_pdf(
         ("Zone critique", str(nb_crit)),
         ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
         ("APL médian", _fmt(apl_med, "{:.1f}") + " /hab."),
-        ("Tension principale", str(summary.get("tension_principale", "N/D"))[:40]),
+        ("Tension principale", str(summary.get("tension_principale", "N/D"))),
     ]
     rows = []
     for i in range(0, len(kpi_data), 2):
@@ -702,7 +716,7 @@ def generate_region_pdf(
                   _s("ph0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
         Paragraph('<b><font size="9" color="white">Département</font></b>',
                   _s("ph1", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Priorité</font></b>',
+        Paragraph('<b><font size="9" color="white">Score · priorité</font></b>',
                   _s("ph2", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
         Paragraph('<b><font size="9" color="white">Lecture</font></b>',
                   _s("ph3", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
@@ -713,8 +727,11 @@ def generate_region_pdf(
                       _s("pr0", fontSize=9, alignment=TA_CENTER)),
             Paragraph(f'<font size="9">{row.get("Nom du département", "")}</font>',
                       _s("pr1", fontSize=9)),
-            Paragraph(f'<font size="9">{row.get("priorite", "")}</font>',
-                      _s("pr2", fontSize=9)),
+            Paragraph(
+                f'<font size="9">{_fmt(row.get("score_priorite"), "{:.0f}")}/100 · '
+                f'{row.get("priorite", "")}</font>',
+                _s("pr2", fontSize=9),
+            ),
             Paragraph(
                 f'<font size="8" color="#666666">{str(row.get("lecture_rapide", ""))[:120]}</font>',
                 _s("pr3", fontSize=8, textColor=GRIS_TXT),
@@ -739,13 +756,17 @@ def generate_region_pdf(
     # Leviers
     if leviers:
         _section_heading("Leviers d'action recommandés", story)
-        for i, lev in enumerate(leviers[:4], 1):
+        for i, lev in enumerate(leviers[:3], 1):  # mêmes 3 leviers que la page
             titre = lev.get("intitule", lev.get("titre", lev.get("title", "")))
             story.append(Paragraph(
                 f'<b><font size="11" color="#{_hex(BLEU_NUIT)}">{titre}</font></b>',
                 _s(f"lv{i}", fontName="Helvetica-Bold", fontSize=11, textColor=BLEU_NUIT, spaceAfter=4),
             ))
-            desc = lev.get("justification", lev.get("description", lev.get("prose", "")))
+            desc = (lev.get("pourquoi_maintenant") or lev.get("justification")
+                    or lev.get("description") or lev.get("prose") or "")
+            depts_lev = ", ".join(lev.get("depts") or [])
+            if depts_lev:
+                desc = f"{desc} Départements ciblés : {depts_lev}."
             if desc:
                 story.append(Paragraph(
                     str(desc)[:500],

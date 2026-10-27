@@ -35,7 +35,8 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
     rang      = r.get("rang_national")
     zone      = str(r.get("zone_short", ""))
     apl       = r.get("apl_median_dept")
-    nb_classes = int(r.get("nb_classes", 101) or 101)
+    _nb = r.get("nb_classes")
+    nb_classes = int(_nb) if _nb is not None and pd.notna(_nb) else 0
 
     score_str = f"{float(score):.1f}/100" if score is not None and pd.notna(score) else "N/D"
     classement = (

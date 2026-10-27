@@ -73,7 +73,7 @@ def render(data: dict) -> None:
         '</p>'
         '<p>'
         "Sant'active agrège sept sources de données publiques pour produire, "
-        "pour chacun des 101 départements français, un diagnostic complet\u202f: "
+        "pour chacun des 100 départements analysés (Mayotte exclue), un diagnostic complet\u202f: "
         "accès aux médecins, établissements de santé, délais estimés, "
         "démographie, pathologies chroniques et contexte immobilier. "
         "L'objectif est de transformer des données brutes en signaux "

@@ -51,20 +51,24 @@ def render(data: dict) -> None:
     region_name = region_depts.iloc[0]["Nom de la région"]
     region_code_val = str(region_depts.iloc[0].get("Code région", ""))
 
-    priorities_raw = compute_dept_priorities(region_depts, data.get("patho"))
+    priorities_raw = compute_dept_priorities(
+        region_depts, data.get("patho"), reference=master
+    )
     delais_region = compute_specialites_tension(data.get("delais"), region_code_val)
     publics = compute_publics_prioritaires(
-        region_depts, data.get("patho"), priorities_raw
+        region_depts, data.get("patho"), priorities_raw, reference=master
     )
     priorities = enrich_priorities_decision(
         priorities_raw, region_depts, data.get("patho"), master
     )
+    # Résumé et tableau technique sur le même classement que la page et le PDF
     summary = compute_region_summary(
-        priorities_raw, region_depts, delais_region, publics=publics
+        priorities, region_depts, delais_region, publics=publics
     )
     leviers = enrich_leviers_decision(
         compute_leviers_action(
-            region_depts, priorities_raw, data.get("patho"), delais_region
+            region_depts, priorities_raw, data.get("patho"), delais_region,
+            reference=master,
         ),
         region_depts,
         priorities,
@@ -89,7 +93,7 @@ def render(data: dict) -> None:
     render_action_prioritaire(action_prioritaire)
     render_comment_agir(leviers)
     render_donnees_detaillees(
-        region_depts, region_name, data, delais_region, priorities_raw
+        region_depts, region_name, data, delais_region, priorities
     )
 
 
@@ -291,7 +295,9 @@ def render_hero(
 
 # ── Bloc 2 — Où agir ? ───────────────────────────────────────────────────────
 
-def _score_priorite_html(score: int) -> str:
+def _score_priorite_html(score) -> str:
+    if score is None or pd.isna(score):
+        return '<span style="color:#9C9A92;">N/D</span>'
     if score >= 80:
         color = "#A51C30"
     elif score >= 60:
@@ -317,8 +323,8 @@ def _impact_territoire_html(row: pd.Series) -> str:
     label = str(row.get("impact_label", "Impact moyen"))
     pop = row.get("impact_pop")
     pop_str = (
-        f"≈ {int(pop):,}".replace(",", "\u202f") + " habitants concernés"
-        if pd.notna(pop) and pop else "Population non estimée"
+        f"{int(pop):,}".replace(",", "\u202f") + " habitants (INSEE)"
+        if pd.notna(pop) and pop else "Population N/D"
     )
     return (
         f'<div style="font-size:13px;font-weight:500;color:#0A1938;">'
@@ -335,9 +341,10 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
         '</div>'
         '<p class="diagnostic-prose" style="font-size:14px;max-width:900px;'
         'margin:-8px 0 24px;line-height:1.6;">'
-        'Classement des départements où une action régionale pourrait produire '
-        'le plus d\u2019impact au regard des besoins de santé, de la population '
-        'concernée et de la faisabilité d\u2019intervention.'
+        'Classement des départements de la région selon un score de priorité '
+        'calculé sur des rangs nationaux (fragilité, volume de population, '
+        'faisabilité, score global). Le score est comparable entre régions\u202f; '
+        'ses pondérations sont un choix méthodologique, pas une mesure.'
         '</p>',
         unsafe_allow_html=True,
     )
@@ -345,8 +352,8 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
     rows_html: list[str] = []
     for _, row in priorities.iterrows():
         dept_code = str(row["dept"]).zfill(2)
-        score = int(row.get("score_priorite", 0))
-        bg = "#FEF9F9" if score >= 75 else "white"
+        score = row.get("score_priorite")
+        bg = "#FEF9F9" if pd.notna(score) and score >= 75 else "white"
         justif = str(row.get("justification_prioritaire", row.get("lecture_rapide", "")))
         rows_html.append(
             f'<div class="region-priority-row" style="background:{bg};">'
@@ -367,7 +374,7 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
         '<div class="region-priority-table sa-tbl-scroll">'
         '<div class="region-priority-header">'
         "<span>Département</span><span>Score de priorité</span>"
-        "<span>Impact potentiel estimé</span><span>Faisabilité</span>"
+        "<span>Niveau d\u2019impact · population</span><span>Faisabilité</span>"
         "<span>Justification</span>"
         "</div>"
         + "".join(rows_html)
@@ -659,6 +666,15 @@ def render_region_map(region_depts: pd.DataFrame, geojson) -> None:
             if f["properties"]["code"] in dept_codes
         ],
     }
+
+    if not filtered_gj["features"]:
+        # Le fond départemental chargé ne couvre que la métropole et la Corse :
+        # aucune géométrie pour les DOM (sans cette garde, folium plantait).
+        st.info(
+            "Carte départementale non disponible pour ce territoire : "
+            "le fond de carte national ne contient pas les départements d'outre-mer."
+        )
+        return
 
     region_code_val = str(region_depts.iloc[0].get("Code région", ""))
     event = render_national_choropleth(

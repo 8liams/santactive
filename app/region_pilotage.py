@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .config import NA_DISPLAY, PATHOS_EXCLUDED
+from .pathologies import dept_prevalences
 
 APL_SEUIL_DESERT = 2.5
 
@@ -69,9 +70,13 @@ def _weighted_mean(values: dict[str, float]) -> float:
     return sum(valid) / len(valid)
 
 
+NIVEAU_ND = "non évaluable"
+
+
 def _score_to_level(score: float, labels: tuple[str, ...]) -> str:
     if pd.isna(score):
-        return labels[1]
+        # Signal absent : on ne choisit pas un niveau par défaut
+        return NIVEAU_ND
     if score <= 0.25:
         return labels[0]
     if score <= 0.50:
@@ -89,7 +94,7 @@ def _level_index(label: str, labels: tuple[str, ...]) -> int:
 
 
 def _patho_metrics(patho: pd.DataFrame | None, dept_codes: list[str]) -> dict[str, dict]:
-    """Prévalence max et volume patients par département."""
+    """Prévalence brute max (hors catégories exclues) et volume patients par département."""
     out: dict[str, dict] = {}
     if patho is None or patho.empty or "_error" in patho.columns:
         return out
@@ -97,18 +102,15 @@ def _patho_metrics(patho: pd.DataFrame | None, dept_codes: list[str]) -> dict[st
     dp = patho.copy()
     dp["dept"] = dp["dept"].astype(str).str.zfill(2)
     dp = dp[~dp["patho_niv1"].isin(PATHOS_EXCLUDED)]
-
-    for code in dept_codes:
-        d = dp[dp["dept"] == str(code).zfill(2)]
-        if d.empty:
-            continue
-        dg = d.groupby("patho_niv1")[["Ntop", "Npop"]].sum().reset_index()
-        dg["prev"] = dg["Ntop"] / dg["Npop"].replace(0, float("nan")) * 100
-        dg = dg.dropna(subset=["prev"])
-        if dg.empty:
-            continue
-        top = dg.loc[dg["prev"].idxmax()]
-        out[str(code).zfill(2)] = {
+    dp = dp[dp["dept"].isin({str(c).zfill(2) for c in dept_codes})]
+    if dp.empty:
+        return out
+    dg = dp.groupby(["dept", "patho_niv1"])[["Ntop", "Npop"]].sum(min_count=1).reset_index()
+    dg["prev"] = dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100
+    dg = dg.dropna(subset=["prev"])
+    for code, d in dg.groupby("dept"):
+        top = d.loc[d["prev"].idxmax()]
+        out[str(code)] = {
             "prev_max": float(top["prev"]),
             "patho_name": str(top["patho_niv1"]),
             "ntop": float(top["Ntop"]),
@@ -137,10 +139,10 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     if pd.notna(apl):
         if apl < APL_SEUIL_DESERT:
             reasons.append(
-                f"APL de {apl:.1f}\u202f/hab., en désert médical officiel (seuil DREES\u202f: 2,5)."
+                f"APL médian communal de {apl:.1f}\u202f/hab., sous le repère de sous-densité (2,5)."
             )
         elif apl < 3.0:
-            reasons.append(f"APL de {apl:.1f}\u202f/hab., sous la médiane nationale (~2,9).")
+            reasons.append(f"APL médian communal de {apl:.1f}\u202f/hab., proche du repère de 2,5.")
 
     nb_crit = int(_num(row.get("nb_communes_critiques"), 0) or 0)
     if nb_crit > 0:
@@ -181,7 +183,7 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
 
     score_acces = _num(row.get("score_acces"))
     if pd.notna(score_acces) and score_acces < 40:
-        reasons.append("Accès aux soins dégradé (APL et temps de trajet sous la médiane régionale).")
+        reasons.append(f"Score d'accès aux soins de {score_acces:.0f}/100 (APL et temps d'accès, rang national).")
 
     etabs = _num(row.get("structures_pour_100k"))
     if pd.notna(etabs) and etabs < 4:
@@ -359,9 +361,18 @@ def _composite_score(signals: dict[str, pd.Series]) -> pd.Series:
 def compute_dept_priorities(
     region_depts: pd.DataFrame,
     patho: pd.DataFrame | None = None,
+    reference: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Calcule les 4 dimensions de priorisation pour chaque département de la région."""
-    df = region_depts.copy().reset_index(drop=True)
+    """Calcule les 4 dimensions de priorisation pour chaque département de la région.
+
+    Les rangs des signaux sont calculés sur `reference` (référentiel national :
+    les départements analysés). Sans référentiel, ils le sont dans la région,
+    ce qui dégénère pour les régions à 1 ou 2 départements (DOM, Corse) :
+    un département unique y obtient mécaniquement le rang maximal.
+    """
+    region_codes = set(region_depts["dept"].astype(str).str.zfill(2))
+    base = reference if reference is not None and not reference.empty else region_depts
+    df = base.copy().reset_index(drop=True)
     dept_codes = df["dept"].astype(str).str.zfill(2).tolist()
     patho_map = _patho_metrics(patho, dept_codes)
 
@@ -425,6 +436,8 @@ def compute_dept_priorities(
     df["fragilite"] = df["_frag_score"].apply(lambda s: _score_to_level(s, FRAG_LABELS))
     df["impact"] = df["_impact_score"].apply(lambda s: _score_to_level(s, IMPACT_LABELS))
     df["faisabilite"] = df["_fais_score"].apply(lambda s: _score_to_level(s, FAIS_LABELS))
+    # Rangs nationaux calculés : on ne garde que les départements de la région
+    df = df[df["dept"].astype(str).str.zfill(2).isin(region_codes)].reset_index(drop=True)
     df["priorite"] = df.apply(
         lambda r: _assign_priorite(r["fragilite"], r["impact"], r["faisabilite"]),
         axis=1,
@@ -527,9 +540,12 @@ def compute_region_summary(
 
     tension = "disparités d'accès aux soins entre départements"
     if nb_desert >= max(1, len(region_depts) // 3):
-        tension = "accès aux soins de ville (APL) insuffisant sur plusieurs départements"
+        tension = (
+            f"APL sous le repère de {APL_SEUIL_DESERT} dans {nb_desert} "
+            f"département{'s' if nb_desert > 1 else ''} sur {len(region_depts)}"
+        )
     elif nb_communes >= 10:
-        tension = "isolement géographique de communes éloignées des établissements"
+        tension = "communes avec un temps d'accès supérieur à 15 min"
     elif pd.notna(pct65_med) and pct65_med > 22:
         tension = "vieillissement démographique et pression sur les parcours de soins"
     elif delais_region is not None and not delais_region.empty:
@@ -603,7 +619,7 @@ def _patho_fragment_stats(
         ntop = float(d["Ntop"].sum())
         npop = float(d["Npop"].sum())
         prev = (ntop / npop * 100) if npop > 0 else float("nan")
-        rows.append({"dept": c, "ntop": ntop, "prev": prev})
+        rows.append({"dept": c, "ntop": ntop, "npop": npop, "prev": prev})
     return rows
 
 
@@ -614,12 +630,30 @@ def _dept_names_map(region_depts: pd.DataFrame) -> dict[str, str]:
     }
 
 
+def _national_position(value: float, reference: pd.Series) -> float:
+    """Part (0–1) des départements du référentiel dont la valeur est ≤ `value`."""
+    ref = pd.to_numeric(reference, errors="coerce").dropna()
+    if pd.isna(value) or ref.empty:
+        return float("nan")
+    return float((ref <= value).mean())
+
+
 def compute_publics_prioritaires(
     region_depts: pd.DataFrame,
     patho: pd.DataFrame | None,
     priorities: pd.DataFrame,
+    reference: pd.DataFrame | None = None,
 ) -> list[dict]:
-    """Publics et pathologies prioritaires à l'échelle régionale."""
+    """Publics et pathologies prioritaires à l'échelle régionale.
+
+    L'importance d'un public dépend de la position de la région dans la
+    distribution nationale des départements (référentiel commun) :
+    - seniors : part des 65 ans et plus de la région (pondérée population) ;
+    - pathologies : prévalence brute régionale (Σ patients / Σ population CNAM).
+    Une région peu âgée (ex. Guyane, 6 % de 65+) n'est donc plus classée
+    « importance majeure » sur les seniors.
+    """
+    ref = reference if reference is not None and not reference.empty else region_depts
     dept_codes = region_depts["dept"].astype(str).str.zfill(2).tolist()
     names = _dept_names_map(region_depts)
     axes: list[dict] = []
@@ -628,55 +662,59 @@ def compute_publics_prioritaires(
     if "pct_plus_65" in region_depts.columns:
         rd = region_depts.copy()
         rd["dept_z"] = rd["dept"].astype(str).str.zfill(2)
-        rd["seniors_abs"] = (
-            pd.to_numeric(rd["population_num"], errors="coerce")
-            * pd.to_numeric(rd["pct_plus_65"], errors="coerce") / 100
-        )
-        rd = rd.dropna(subset=["pct_plus_65"]).sort_values("seniors_abs", ascending=False)
-        if not rd.empty:
-            top = rd.head(3)
-            score = float(rd["pct_plus_65"].rank(pct=True, method="average").max())
+        rd["pop"] = pd.to_numeric(rd["population_num"], errors="coerce")
+        rd["seniors_abs"] = rd["pop"] * pd.to_numeric(rd["pct_plus_65"], errors="coerce") / 100
+        rd = rd.dropna(subset=["seniors_abs", "pop"]).sort_values("pct_plus_65", ascending=False)
+        if not rd.empty and rd["pop"].sum() > 0:
+            pct_reg = float(rd["seniors_abs"].sum() / rd["pop"].sum() * 100)
+            score = _national_position(pct_reg, ref["pct_plus_65"])
+            niveau = _score_to_level(score, PUBLIC_PRIO_LABELS)
             axes.append({
                 "label": "Seniors (65 ans et plus)",
                 "type": "démographie",
-                "depts": [names.get(str(r["dept_z"]), "?") for _, r in top.iterrows()],
-                "prev": f"{float(rd['pct_plus_65'].median()):.1f}\u202f% médiane régionale",
-                "volume": (
-                    f"{int(rd['seniors_abs'].sum()):,}".replace(",", "\u202f") + "\u202f seniors"
-                    if rd["seniors_abs"].notna().any() else "n.d."
-                ),
-                "priorite": _score_to_level(score, PUBLIC_PRIO_LABELS),
-                "importance": PUBLIC_IMPORTANCE.get(
-                    _score_to_level(score, PUBLIC_PRIO_LABELS), "Importance modérée"
-                ),
+                "depts": [names.get(str(r["dept_z"]), "?") for _, r in rd.head(3).iterrows()],
+                "prev": f"{pct_reg:.1f}\u202f% de 65+ dans la région",
+                "volume": f"{int(rd['seniors_abs'].sum()):,}".replace(",", "\u202f") + "\u202f seniors",
+                "priorite": niveau,
+                "importance": PUBLIC_IMPORTANCE.get(niveau, "Importance non évaluable"),
+                "position_nationale": score,
             })
 
-    # ── Pathologies CNAM ────────────────────────────────────────────────────
+    # ── Pathologies CNAM (prévalences brutes) ─────────────────────────────────
+    ref_codes = ref["dept"].astype(str).str.zfill(2).tolist()
+    prev_nat = dept_prevalences(patho, ref_codes)
     for axis in PUBLIC_PATHO_AXES:
         stats = _patho_fragment_stats(patho, dept_codes, axis["fragment"])
         if not stats:
             continue
         stats.sort(key=lambda x: x.get("prev", 0) or 0, reverse=True)
-        top3 = stats[:3]
         total_ntop = sum(s["ntop"] for s in stats)
-        max_prev = max(s["prev"] for s in stats if pd.notna(s.get("prev")))
-        score = max_prev / 25.0 if pd.notna(max_prev) else 0.5  # ~25% = référence haute
-        prio_label = _score_to_level(min(score, 1.0), PUBLIC_PRIO_LABELS)
+        total_npop = sum(s.get("npop", 0) for s in stats)
+        prev_reg = total_ntop / total_npop * 100 if total_npop > 0 else float("nan")
+        cols = [c for c in prev_nat.columns if axis["fragment"].lower() in c.lower()
+                and c not in PATHOS_EXCLUDED] if not prev_nat.empty else []
+        score = _national_position(prev_reg, prev_nat[cols[0]]) if cols else float("nan")
+        prio_label = _score_to_level(score, PUBLIC_PRIO_LABELS)
         axes.append({
             "label": axis["label"],
             "type": "pathologie CNAM",
-            "depts": [names.get(s["dept"], s["dept"]) for s in top3],
-            "prev": f"{max_prev:.1f}\u202f% max. régionale" if pd.notna(max_prev) else "n.d.",
+            "depts": [names.get(s["dept"], s["dept"]) for s in stats[:3]],
+            "prev": (f"{prev_reg:.1f}\u202f% (prévalence brute régionale)"
+                     if pd.notna(prev_reg) else "n.d."),
             "volume": (
                 f"{int(total_ntop):,}".replace(",", "\u202f") + "\u202f patients"
                 if total_ntop > 0 else "n.d."
             ),
             "priorite": prio_label,
-            "importance": PUBLIC_IMPORTANCE.get(prio_label, "Importance modérée"),
+            "importance": PUBLIC_IMPORTANCE.get(prio_label, "Importance non évaluable"),
+            "position_nationale": score,
         })
 
     prio_order = {"majeure": 4, "prioritaire": 3, "élevée": 2, "modérée": 1}
-    axes.sort(key=lambda a: prio_order.get(a["priorite"], 0), reverse=True)
+    axes.sort(
+        key=lambda a: (prio_order.get(a["priorite"], 0), _num(a.get("position_nationale"), -1)),
+        reverse=True,
+    )
     return axes
 
 
@@ -692,7 +730,7 @@ def _lever(
     return {
         "famille": famille,
         "intitule": intitule,
-        "depts": depts[:4],
+        "depts": list(dict.fromkeys(depts)),
         "public_cible": public,
         "tension": tension,
         "justification": justification,
@@ -705,53 +743,50 @@ def compute_leviers_action(
     priorities: pd.DataFrame,
     patho: pd.DataFrame | None,
     delais_region: pd.DataFrame | None,
+    reference: pd.DataFrame | None = None,
 ) -> list[dict]:
-    """Moteur simple de leviers d'action régionaux."""
+    """Moteur simple de leviers d'action régionaux.
+
+    Les départements cités sont TOUS ceux qui remplissent la condition,
+    triés du plus au moins exposé (plus de troncature dans l'ordre des codes).
+    """
+    ref = reference if reference is not None and not reference.empty else region_depts
     names = _dept_names_map(region_depts)
     dept_codes = region_depts["dept"].astype(str).str.zfill(2).tolist()
     levers: list[dict] = []
+    rd = region_depts.copy()
+
+    def _col(name: str) -> pd.Series:
+        return pd.to_numeric(rd[name], errors="coerce")
+
+    def _names(mask: pd.Series, sort_col: str, ascending: bool) -> list[str]:
+        sel = rd[mask.fillna(False)].copy()
+        sel["_k"] = pd.to_numeric(sel[sort_col], errors="coerce")
+        sel = sel.sort_values("_k", ascending=ascending)
+        return [names.get(str(r["dept"]).zfill(2), "?") for _, r in sel.iterrows()]
 
     def _dept_list(mask) -> list[str]:
         return [
             names.get(str(r["dept"]).zfill(2), "?")
             for _, r in priorities[mask].iterrows()
-        ][:4]
+        ]
 
     frag_high = priorities["fragilite"].isin(["forte", "très forte"])
-    fais_ok = priorities["faisabilite"].isin(["correcte", "favorable"])
-    acces_low = pd.to_numeric(region_depts["score_acces"], errors="coerce") < 45
-    acces_depts = [
-        names.get(str(r["dept"]).zfill(2), "?")
-        for _, r in region_depts[acces_low].iterrows()
-    ][:4]
+    acces_depts = _names(_col("score_acces") < 45, "score_acces", True)
 
-    pct65_high = pd.to_numeric(region_depts["pct_plus_65"], errors="coerce") > 22
-    senior_depts = [
-        names.get(str(r["dept"]).zfill(2), "?")
-        for _, r in region_depts[pct65_high].iterrows()
-    ][:4]
+    # Seuil seniors = médiane nationale des départements (référentiel commun)
+    pct65_nat = float(pd.to_numeric(ref["pct_plus_65"], errors="coerce").median())
+    senior_depts = _names(_col("pct_plus_65") > pct65_nat, "pct_plus_65", False)
 
-    nb_desert = int(
-        (pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < APL_SEUIL_DESERT).sum()
-    )
-    desert_depts = [
-        names.get(str(r["dept"]).zfill(2), "?")
-        for _, r in region_depts[
-            pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < APL_SEUIL_DESERT
-        ].iterrows()
-    ][:4]
+    desert_mask = _col("apl_median_dept") < APL_SEUIL_DESERT
+    nb_desert = int(desert_mask.sum())
+    desert_depts = _names(desert_mask, "apl_median_dept", True)
 
-    communes_high = pd.to_numeric(region_depts["nb_communes_critiques"], errors="coerce") > 3
-    iso_depts = [
-        names.get(str(r["dept"]).zfill(2), "?")
-        for _, r in region_depts[communes_high].iterrows()
-    ][:4]
+    iso_depts = _names(_col("nb_communes_critiques") > 3, "nb_communes_critiques", False)
+    temps_depts = _names(_col("temps_acces_median") > 12, "temps_acces_median", False)
 
-    temps_high = pd.to_numeric(region_depts["temps_acces_median"], errors="coerce") > 12
-    temps_depts = [
-        names.get(str(r["dept"]).zfill(2), "?")
-        for _, r in region_depts[temps_high].iterrows()
-    ][:4]
+    def _n_dept(n: int) -> str:
+        return f"{n} département" + ("s" if n > 1 else "")
 
     relais_mask = priorities["faisabilite"].isin(["correcte", "favorable", "à consolider"])
     coord_mask = frag_high & relais_mask
@@ -775,8 +810,8 @@ def compute_leviers_action(
             "Prévention et dépistage", "Dépistage diabète",
             [names.get(s["dept"], s["dept"]) for s in sorted(diab_stats, key=lambda x: x["prev"], reverse=True)[:3]],
             "Population à risque de diabète",
-            "Prévalence diabète CNAM au-dessus de la médiane régionale",
-            "Volumes patients CNAM identifiés sur plusieurs départements.",
+            "Prévalence brute du diabète (CNAM 2023)",
+            f"Volumes patients CNAM identifiés sur {_n_dept(len(diab_stats))}.",
             0.65,
         ))
 
@@ -797,7 +832,8 @@ def compute_leviers_action(
             senior_depts,
             "Personnes de 65 ans et plus",
             "Part des seniors élevée et accès aux soins contraint",
-            f"{len(senior_depts)} département(s) au-dessus de 22\u202f% de 65+ avec signaux d'accès faibles.",
+            f"{_n_dept(len(senior_depts))} au-dessus de la médiane nationale de 65+ "
+            f"({pct65_nat:.1f}\u202f%).",
             0.72,
         ))
 
@@ -817,7 +853,7 @@ def compute_leviers_action(
                          and delais_region["delai_jours_median"].max() >= 60):
         depts_num = desert_depts or acces_depts
         tension_num = (
-            "APL faible sur plusieurs départements"
+            f"APL sous le repère de {APL_SEUIL_DESERT} dans {_n_dept(nb_desert)}"
             if nb_desert > 0
             else "Délais spécialistes régionaux élevés"
         )
@@ -871,7 +907,7 @@ def compute_leviers_action(
 
     # ── Accès proximité ───────────────────────────────────────────────────────
     if iso_depts or temps_depts:
-        depts_prox = list(dict.fromkeys(iso_depts + temps_depts))[:4]
+        depts_prox = list(dict.fromkeys(iso_depts + temps_depts))
         levers.append(_lever(
             "Accès de proximité", "Consultations avancées",
             depts_prox,
@@ -909,11 +945,22 @@ def compute_leviers_action(
             0.68,
         ))
 
-    # Dédupliquer par intitulé, trier par pertinence
+    # Dédupliquer par intitulé, trier par pertinence puis par population des
+    # départements ciblés (donnée observée) plutôt que par l'ordre du code.
+    pop_by_name = {
+        str(r["Nom du département"]): _num(r.get("population_num"), 0.0)
+        for _, r in region_depts.iterrows()
+    }
+    for lev in levers:
+        lev["population_ciblee"] = int(sum(pop_by_name.get(d, 0.0) for d in lev["depts"]))
     seen: set[str] = set()
     unique: list[dict] = []
     pert_order = {p: i for i, p in enumerate(PERTINENCE_LABELS)}
-    for lev in sorted(levers, key=lambda x: pert_order.get(x["pertinence"], 0), reverse=True):
+    for lev in sorted(
+        levers,
+        key=lambda x: (pert_order.get(x["pertinence"], 0), x["population_ciblee"]),
+        reverse=True,
+    ):
         if lev["intitule"] in seen or not lev["depts"]:
             continue
         seen.add(lev["intitule"])

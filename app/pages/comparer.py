@@ -156,9 +156,9 @@ def render(data: dict) -> None:
     kind = "region" if is_region else "dept"
     mode_name = "Régions" if is_region else "Départements"
     mode_desc = (
-        "Indicateurs agrégés à l'échelle régionale (18 régions)."
+        "Indicateurs agrégés à l'échelle régionale (17 régions, Mayotte exclue)."
         if is_region
-        else "Indicateurs à l'échelle départementale (101 départements)."
+        else "Indicateurs à l'échelle départementale (100 départements analysés)."
     )
     st.markdown(
         f'<div class="comparer-mode-banner comparer-mode-{kind}">'
@@ -367,9 +367,7 @@ def _compute_radar_ranks(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _national_reference(master: pd.DataFrame, col: str) -> float | None:
-    """Référence nationale — médiane sur tous les départements (APL = ANCT 2,9)."""
-    if col == "apl_median_dept":
-        return APL_NATIONAL_REF
+    """Référence nationale — médiane des départements analysés (APL comprise)."""
     if col not in master.columns:
         return None
     val = pd.to_numeric(master[col], errors="coerce").median()
@@ -412,20 +410,20 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
         "mixed": "Profils sanitaires contrastés entre les territoires sélectionnés.",
     },
     "apl_median_dept": {
-        "all_better": "Accès aux médecins plus favorable que la moyenne nationale.",
-        "all_worse": "Accès aux soins de ville plus contraint que la moyenne nationale.",
+        "all_better": "Accès aux médecins plus favorable que la médiane nationale.",
+        "all_worse": "Accès aux soins de ville plus contraint que la médiane nationale.",
         "all_at": "Accessibilité aux médecins proche de la référence nationale.",
         "mixed": "Contraste marqué de l'accessibilité aux soins de ville entre les territoires.",
     },
     "temps_acces_median": {
-        "all_better": "Temps de trajet vers les soins inférieur à la moyenne nationale.",
+        "all_better": "Temps d'accès inférieur à la médiane nationale.",
         "all_worse": "Éloignement plus marqué des établissements de santé.",
         "all_at": "Proximité des établissements proche de la référence nationale.",
         "mixed": "Écarts sensibles de proximité des établissements entre territoires.",
     },
     "med_gen_pour_100k": {
-        "all_better": "Offre médicale supérieure à la moyenne nationale.",
-        "all_worse": "Densité médicale inférieure à la moyenne nationale.",
+        "all_better": "Offre médicale supérieure à la médiane nationale.",
+        "all_worse": "Densité médicale inférieure à la médiane nationale.",
         "all_at": "Densité médicale proche de la référence nationale.",
         "mixed": "Densité médicale inégale entre les territoires comparés.",
     },
@@ -437,7 +435,7 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
     },
     "prix_m2_moyen": {
         "all_better": "Conditions d'installation potentiellement favorables pour les professionnels.",
-        "all_worse": "Foncier plus contraint que la moyenne nationale.",
+        "all_worse": "Foncier plus contraint que la médiane nationale.",
         "all_at": "Coût foncier proche de la référence nationale.",
         "mixed": "Conditions d'installation foncière contrastées entre territoires.",
     },
@@ -509,7 +507,10 @@ def _render_comparison_table(
     is_region = kind == "region"
     region_note = (
         ' Agrégats régionaux\u202f: médiane des départements pour l\'APL, '
-        'moyennes pondérées par la population pour les autres indicateurs.'
+        'moyennes pondérées par la population pour les autres indicateurs, '
+        'somme pour les communes à plus de 15\u202fmin. ⚠ Mode expérimental\u202f: '
+        'la référence reste une médiane de départements, non directement '
+        'comparable à ces agrégats régionaux.'
         if is_region else ''
     )
 
@@ -599,8 +600,8 @@ def _render_comparison_table(
         '</table>'
         '</div>'
         '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
-        'Référence nationale = médiane calculée sur les 101 départements '
-        '(APL\u202f: médiane ANCT 2023, 2,9\u202f/hab.). '
+        'Référence nationale = médiane calculée sur les 100 départements analysés '
+        '(APL\u202f: médiane des APL médians départementaux, ANCT 2023). '
         'Vert = au-dessus de la médiane (ou en dessous si l\'indicateur est '
         'défavorable), rouge = en dessous.'
         f'{region_note}'

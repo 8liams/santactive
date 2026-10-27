@@ -114,6 +114,9 @@ def load_all_data():
             "Clinique|privé", na=False, case=False).sum()),
     ).reset_index()
     # Trim : ne garder que les colonnes utiles pour la carte et la fiche commune
+    # Le fichier FINESS chargé nomme la commune « Ville » (pas de coordonnées)
+    if "commune" not in _etabs_raw.columns and "Ville" in _etabs_raw.columns:
+        _etabs_raw = _etabs_raw.rename(columns={"Ville": "commune"})
     _etabs_cols = ["code_departement", "commune", "Rslongue", "categetab", "latitude", "longitude"]
     etabs = _etabs_raw[[c for c in _etabs_cols if c in _etabs_raw.columns]].copy()
     del _etabs_raw
@@ -157,14 +160,28 @@ def load_all_data():
         _patho_raw = read_dataset(PATHO_PATH, PATHO_FILE_ID, sep=";", low_memory=False)
         if "dept" in _patho_raw.columns:
             _patho_raw["dept"] = _patho_raw["dept"].astype(str).str.zfill(2)
-        # Trim : ne garder que les 4 colonnes utiles
-        _patho_cols = ["dept", "patho_niv1", "Ntop", "Npop"]
-        patho = _patho_raw[[c for c in _patho_cols if c in _patho_raw.columns]].copy()
+        for _c in ["Ntop", "Npop"]:
+            if _c in _patho_raw.columns:
+                _patho_raw[_c] = pd.to_numeric(_patho_raw[_c], errors="coerce")
+        # Une ligne par (dept, patho_niv1, classe d'âge). Certaines pathologies
+        # de niveau 1 regroupent plusieurs codes `top` (ex. « inflammatoires ou
+        # rares ou VIH » : 3 codes) qui répètent la même population Npop :
+        # Npop est pris une seule fois (max), Ntop est sommé (borne haute si
+        # un patient relève de plusieurs codes). Sans cela, Npop était compté
+        # 3 fois et la prévalence divisée par 3.
+        if {"cla_age_5", "Ntop", "Npop"} <= set(_patho_raw.columns):
+            patho = (
+                _patho_raw.groupby(["dept", "patho_niv1", "cla_age_5"], as_index=False)
+                .agg(Ntop=("Ntop", lambda s: s.sum(min_count=1)), Npop=("Npop", "max"))
+            )
+        else:
+            _patho_cols = ["dept", "patho_niv1", "Ntop", "Npop"]
+            patho = _patho_raw[[c for c in _patho_cols if c in _patho_raw.columns]].copy()
         del _patho_raw
         # Downcast pour économiser la RAM
         for _c in ["Ntop", "Npop"]:
             if _c in patho.columns:
-                patho[_c] = pd.to_numeric(patho[_c], errors="coerce").astype("float32")
+                patho[_c] = patho[_c].astype("float32")
     except Exception as e:
         patho = pd.DataFrame({"_error": [str(e)]})
 
