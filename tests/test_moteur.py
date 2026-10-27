@@ -466,3 +466,27 @@ class TestModesConfiguration(unittest.TestCase):
         env = dict(os.environ, PYTHONPATH=str(ROOT), SANTACTIVE_APL_METHODE="moyenne")
         r = subprocess.run([sys.executable, "-c", "import app.config"], cwd=ROOT, env=env, capture_output=True, text=True)
         self.assertNotEqual(r.returncode, 0); self.assertIn("valeurs admises", r.stderr)
+
+
+class TestNouvellesPages(unittest.TestCase):
+    def test_exploration_et_acces(self):
+        from streamlit.testing.v1 import AppTest
+
+        for view, attendu in (("exploration", "besoins"), ("acces", "IGN")):
+            at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+            at.query_params["view"] = view
+            at.run()
+            self.assertEqual(len(at.exception), 0, f"{view}: {[e.value for e in at.exception]}")
+            self.assertIn(attendu, " ".join(m.value for m in at.markdown))
+
+    def test_acces_ign_cher_coherent(self):
+        import json
+
+        d = json.loads((ROOT / "static/geo/acces_ign_18.json").read_text())
+        com = pd.DataFrame(d["communes"])
+        self.assertEqual(len(com), 286)
+        self.assertTrue(com["temps_ign_min"].notna().all())
+        self.assertTrue((com.loc[com["statut"] == "offre sur place", "temps_ign_min"] == 0).all())
+        self.assertTrue((com.loc[com["statut"] == "calculé", "temps_ign_min"] > 0).all())
+        cov = d["couverture_population"]
+        self.assertTrue(cov["10"] <= cov["15"] <= cov["20"] <= cov["30"] <= cov["total"])
