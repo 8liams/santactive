@@ -34,3 +34,4 @@ ENV/
 
 # Fichiers bruts DREES (≈120 Mo), régénérables par scripts/donnees/telecharger_drees_rpps.py
 data_corrections/references/drees/raw/
+data_corrections/.tmp_scores/

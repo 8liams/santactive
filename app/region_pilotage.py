@@ -135,7 +135,7 @@ def _assign_priorite(frag: str, impact: str, fais: str) -> str:
 def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     reasons: list[str] = []
 
-    apl = _num(row.get("apl_median_dept"))
+    apl = _num(row.get("apl_dept"))
     if pd.notna(apl):
         if apl < APL_SEUIL_DESERT:
             reasons.append(
@@ -276,7 +276,7 @@ def build_territoire_card(
     atouts: list[str] = []
     publics: list[str] = []
 
-    apl = _num(row.get("apl_median_dept"))
+    apl = _num(row.get("apl_dept"))
     if pd.notna(apl) and apl < APL_SEUIL_DESERT:
         fragilites.append("Désert médical")
 
@@ -378,7 +378,7 @@ def compute_dept_priorities(
 
     # ── Fragilité sanitaire ───────────────────────────────────────────────────
     frag_signals = {
-        "apl":        _signal_rank(df["apl_median_dept"], higher_is_worse=False),
+        "apl":        _signal_rank(df["apl_dept"], higher_is_worse=False),
         "acces":      _signal_rank(df["score_acces"], higher_is_worse=False),
         "med":        _signal_rank(df["med_gen_pour_100k"], higher_is_worse=False),
         "etabs":      _signal_rank(df["structures_pour_100k"], higher_is_worse=False),
@@ -386,7 +386,7 @@ def compute_dept_priorities(
         "seniors":    _signal_rank(df["pct_plus_65"], higher_is_worse=True),
     }
     df["_frag_score"] = _composite_score(frag_signals)
-    desert_bonus = df["apl_median_dept"].apply(
+    desert_bonus = df["apl_dept"].apply(
         lambda x: 0.12 if pd.notna(x) and float(x) < APL_SEUIL_DESERT else 0.0
     )
     df["_frag_score"] = (df["_frag_score"].fillna(0.5) + desert_bonus).clip(0, 1)
@@ -529,9 +529,9 @@ def compute_region_summary(
     )
     nb_exp = int((priorities["priorite"] == "candidat expérimentation").sum())
 
-    apl_med_reg = region_depts["apl_median_dept"].median()
+    apl_med_reg = region_depts["apl_dept"].median()
     nb_desert = int(
-        (pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < APL_SEUIL_DESERT).sum()
+        (pd.to_numeric(region_depts["apl_dept"], errors="coerce") < APL_SEUIL_DESERT).sum()
     )
     nb_communes = int(
         pd.to_numeric(region_depts["nb_communes_critiques"], errors="coerce").fillna(0).sum()
@@ -778,9 +778,9 @@ def compute_leviers_action(
     pct65_nat = float(pd.to_numeric(ref["pct_plus_65"], errors="coerce").median())
     senior_depts = _names(_col("pct_plus_65") > pct65_nat, "pct_plus_65", False)
 
-    desert_mask = _col("apl_median_dept") < APL_SEUIL_DESERT
+    desert_mask = _col("apl_dept") < APL_SEUIL_DESERT
     nb_desert = int(desert_mask.sum())
-    desert_depts = _names(desert_mask, "apl_median_dept", True)
+    desert_depts = _names(desert_mask, "apl_dept", True)
 
     iso_depts = _names(_col("nb_communes_critiques") > 3, "nb_communes_critiques", False)
     temps_depts = _names(_col("temps_acces_median") > 12, "temps_acces_median", False)

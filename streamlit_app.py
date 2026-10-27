@@ -123,11 +123,10 @@ load_css(STATIC_DIR / "style.css")
 try:
     master, pros, immo, etabs, temps, env, patho, delais, presence = load_all_data()
     master = compute_scores(master)
-except KeyError as exc:
+except (KeyError, FileNotFoundError, ValueError) as exc:
     st.error(
-        "Impossible de charger les données (structure CSV inattendue). "
-        "Rechargez la page dans quelques instants. "
-        f"Détail technique : colonne ou clé manquante `{exc}`."
+        "Impossible de charger les données (fichier ou configuration du moteur). "
+        f"Détail technique : `{exc}`."
     )
     st.stop()
 except Exception as exc:

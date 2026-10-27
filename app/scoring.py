@@ -8,7 +8,7 @@ import pandas as pd
 # ── Dimensions et pondérations ────────────────────────────────────────────────
 DIMENSIONS: dict[str, dict] = {
     "apl": {
-        "col":    "apl_median_dept",
+        "col":    "apl_dept",   # médiane communale ou moyenne pondérée selon config.APL_METHODE
         "weight": 0.30,
         "hib":    True,
         "label":  "Accessibilité soins de ville (APL)",

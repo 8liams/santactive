@@ -16,7 +16,7 @@ APL_NATIONAL_REF = 2.9
 
 COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Score global",         "score_global",          ".1f", "/100"),
-    ("APL (DREES)",          "apl_median_dept",       ".1f", "/hab."),
+    ("APL (DREES)",          "apl_dept",       ".1f", "/hab."),
     ("Temps d'accès médian", "temps_acces_median",    ".1f", " min"),
     ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
     ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
@@ -62,7 +62,7 @@ def build_regions_comparison_df(master: pd.DataFrame) -> pd.DataFrame:
             "dept": "",
             "territory_type": "region",
             "score_global": _pop_weighted_mean(group, "score_global"),
-            "apl_median_dept": group["apl_median_dept"].median(),
+            "apl_dept": group["apl_dept"].median(),
             "temps_acces_median": _pop_weighted_mean(group, "temps_acces_median"),
             "med_gen_pour_100k": _pop_weighted_mean(group, "med_gen_pour_100k"),
             "structures_pour_100k": _pop_weighted_mean(group, "structures_pour_100k"),
@@ -409,7 +409,7 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
         "all_at": "Profil sanitaire proche de la référence nationale.",
         "mixed": "Profils sanitaires contrastés entre les territoires sélectionnés.",
     },
-    "apl_median_dept": {
+    "apl_dept": {
         "all_better": "Accès aux médecins plus favorable que la médiane nationale.",
         "all_worse": "Accès aux soins de ville plus contraint que la médiane nationale.",
         "all_at": "Accessibilité aux médecins proche de la référence nationale.",

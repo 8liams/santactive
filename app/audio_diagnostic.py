@@ -226,7 +226,7 @@ def _pct_65_sentence(
 
 
 def _apl_sentence_dept(row: pd.Series) -> str | None:
-    apl = row.get("apl_median_dept")
+    apl = row.get("apl_dept")
     if apl is None or pd.isna(apl):
         return None
     apl_f = float(apl)
@@ -309,7 +309,7 @@ def build_audio_diagnostic_text(
         if "med_gen_pour_100k" in master.columns
         else None
     )
-    apl = row.get("apl_median_dept")
+    apl = row.get("apl_dept")
     if pd.notna(med) and med_nat is not None and pd.notna(med_nat):
         if pd.isna(apl) or float(apl) >= APL_SEUIL_DESERT:
             med_f = float(med)
@@ -404,7 +404,7 @@ def build_region_audio_diagnostic_text(
             f"sur {total} au classement national Sant'active."
         )
 
-    apl_med = region_depts["apl_median_dept"].median()
+    apl_med = region_depts["apl_dept"].median()
     if pd.notna(apl_med):
         apl_f = float(apl_med)
         if apl_f < APL_SEUIL_DESERT:
@@ -421,11 +421,11 @@ def build_region_audio_diagnostic_text(
             )
 
     nb_desert = int(
-        (pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < APL_SEUIL_DESERT).sum()
+        (pd.to_numeric(region_depts["apl_dept"], errors="coerce") < APL_SEUIL_DESERT).sum()
     )
     if nb_desert > 0:
         desert_names = region_depts[
-            pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < APL_SEUIL_DESERT
+            pd.to_numeric(region_depts["apl_dept"], errors="coerce") < APL_SEUIL_DESERT
         ]["Nom du département"].tolist()
         parts.append(
             f"{nb_desert} département{'s' if nb_desert > 1 else ''} "

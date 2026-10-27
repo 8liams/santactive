@@ -260,7 +260,7 @@ def generate_department_pdf(
     # ── ④ KPI GRID (6 indicateurs 3×2) ───────────────────────────────────────
     _section_heading("Indicateurs clés", story)
 
-    apl     = r.get("apl_median_dept")
+    apl     = r.get("apl_dept")
     temps   = r.get("temps_acces_median")
     med_gen = r.get("med_gen_pour_100k")
     prix    = r.get("prix_m2_moyen")
@@ -269,7 +269,7 @@ def generate_department_pdf(
     score_acces = r.get("score_acces")
     score_etabs = r.get("score_etabs")
 
-    apl_nat   = master["apl_median_dept"].median()   if "apl_median_dept"   in master.columns else None
+    apl_nat   = master["apl_dept"].median()   if "apl_dept"   in master.columns else None
     temp_nat  = master["temps_acces_median"].median() if "temps_acces_median" in master.columns else None
     med_nat   = master["med_gen_pour_100k"].median()  if "med_gen_pour_100k"  in master.columns else None
     pct65_nat = master["pct_plus_65"].median()        if "pct_plus_65"        in master.columns else None
@@ -628,7 +628,7 @@ def generate_region_pdf(
     nb_depts = len(region_depts)
     nb_crit  = int((region_depts["zone_short"] == "Critique").sum())
     pop_tot  = region_depts["population_num"].sum()
-    apl_med  = region_depts["apl_median_dept"].median()
+    apl_med  = region_depts["apl_dept"].median()
 
     doc = SimpleDocTemplate(
         buf,

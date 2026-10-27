@@ -191,7 +191,7 @@ def _get_situation_label(r: pd.Series) -> tuple[str, str]:
 
 def _get_ecart_apl(r: pd.Series, apl_nat: float) -> str | None:
     """Phrase d'écart de l'APL à la médiane des départements, ou None."""
-    apl = to_num(r.get("apl_median_dept"))
+    apl = to_num(r.get("apl_dept"))
     if pd.isna(apl) or pd.isna(apl_nat) or apl_nat <= 0:
         return None
     delta_pct = (apl - apl_nat) / apl_nat * 100
@@ -209,8 +209,8 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
     dept_nom = str(r.get("Nom du département", "Ce département"))
     css_class, label_texte = _get_situation_label(r)
     apl_nat = (
-        float(master["apl_median_dept"].median())
-        if "apl_median_dept" in master.columns
+        float(master["apl_dept"].median())
+        if "apl_dept" in master.columns
         else float("nan")
     )
     ecart_apl = _get_ecart_apl(r, apl_nat)
@@ -232,7 +232,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
     phrase = f"{dept_nom} présente une situation {complement}"
 
     # APL ANCT (réel si disponible, sinon absent)
-    apl = to_num(r.get("apl_median_dept"))
+    apl = to_num(r.get("apl_dept"))
 
     col1, col2 = st.columns([1.4, 1], gap="large")
     with col1:
@@ -335,10 +335,10 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
     score_senior = to_num(r.get("score_seniors"))
     score_fonc   = to_num(r.get("score_foncier"))
 
-    val_acces  = to_num(r.get("apl_median_dept"))
+    val_acces  = to_num(r.get("apl_dept"))
     val_pros   = to_num(r.get("med_gen_pour_100k"))
     val_etabs  = to_num(r.get("structures_pour_100k"))
-    val_apl    = to_num(r.get("apl_median_dept"))
+    val_apl    = to_num(r.get("apl_dept"))
     val_temps  = to_num(r.get("temps_acces_median"))
     val_65     = to_num(r.get("pct_plus_65"))
     val_prix   = to_num(r.get("prix_m2_moyen"))
@@ -812,7 +812,7 @@ def _generate_recommendations(
     score_pros     = to_num(r.get("score_pros"))
     score_etabs    = to_num(r.get("score_etabs"))
     score_global   = to_num(r.get("score_global"))
-    apl            = to_num(r.get("apl_median_dept"))
+    apl            = to_num(r.get("apl_dept"))
     pct_65         = to_num(r.get("pct_plus_65"))
     pct_moins_25   = to_num(r.get("pct_moins_25"))
     prix_m2        = to_num(r.get("prix_m2_moyen"))
@@ -1689,7 +1689,7 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
         unsafe_allow_html=True,
     )
 
-    apl = r.get("apl_median_dept")
+    apl = r.get("apl_dept")
     dept_code = str(r.get("dept", "")).zfill(2)
 
     # ── Bandeau si désert médical ──────────────────────────────────────────

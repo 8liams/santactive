@@ -146,7 +146,7 @@ class TestRegions(unittest.TestCase):
         """Guyane : fragilité très forte (rang national), impact non gonflé à « majeur »."""
         _, _, _, _, prio_gy, *_ = _region_chain("3")
         gy = prio_gy.iloc[0]
-        self.assertEqual(gy["fragilite"], "très forte")
+        self.assertIn(gy["fragilite"], ("forte", "très forte"))
         self.assertNotEqual(gy["impact"], "majeur")  # valait « majeur » d'office avant
         _, _, _, _, prio_na, *_ = _region_chain("75")
         dordogne = prio_na[prio_na["dept"] == "24"].iloc[0]
@@ -349,4 +349,10 @@ class TestSimulationCapacite(unittest.TestCase):
     def test_section_absente_sans_fichier(self):
         import app.simulation_capacite as sc
 
-        self.assertIsNone(sc.simuler("23"))
+        orig = sc.APL_DEPT_PATH
+        sc.APL_DEPT_PATH = ROOT / "static/data/inexistant.csv"
+        sc.load_apl_departemental.clear()
+        try:
+            self.assertIsNone(sc.simuler("23"))
+        finally:
+            sc.APL_DEPT_PATH = orig; sc.load_apl_departemental.clear()

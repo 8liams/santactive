@@ -34,7 +34,7 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
     score     = r.get("score_global")
     rang      = r.get("rang_national")
     zone      = str(r.get("zone_short", ""))
-    apl       = r.get("apl_median_dept")
+    apl       = r.get("apl_dept")
     _nb = r.get("nb_classes")
     nb_classes = int(_nb) if _nb is not None and pd.notna(_nb) else 0
 
@@ -79,7 +79,7 @@ def region_share_context(
     nb_crit  = int((region_depts["zone_short"] == "Critique").sum())
     pop_tot  = region_depts["population_num"].sum()
     pop_str  = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "N/D"
-    apl_med  = region_depts["apl_median_dept"].median()
+    apl_med  = region_depts["apl_dept"].median()
     apl_str  = f"{float(apl_med):.1f}/hab." if pd.notna(apl_med) else "N/D"
     tension  = summary.get("tension_principale", "N/D")
 

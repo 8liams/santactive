@@ -155,7 +155,7 @@ def _generate_region_synthesis(
         region_depts["score_global"].max() - region_depts["score_global"].min()
     )
     nb_desert = int(
-        (pd.to_numeric(region_depts["apl_median_dept"], errors="coerce") < 2.5).sum()
+        (pd.to_numeric(region_depts["apl_dept"], errors="coerce") < 2.5).sum()
     )
     nb_crit = int((region_depts["zone_short"] == "Critique").sum())
 
@@ -229,7 +229,7 @@ def render_hero(
     badge_class = {"Critique": "crit", "Intermédiaire": "inter",
                    "Favorable": "fav"}.get(zone_region, "")
 
-    apl_med = region_depts["apl_median_dept"].median()
+    apl_med = region_depts["apl_dept"].median()
     apl_str = f"{apl_med:.1f}" if pd.notna(apl_med) else "N/D"
 
     pop_fmt = f"{int(pop_tot):,}".replace(",", "\u202f") if pd.notna(pop_tot) else "N/D"

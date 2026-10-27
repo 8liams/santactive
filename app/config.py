@@ -1,6 +1,42 @@
-"""Configuration centralisée : IDs Drive, constantes métier, pondérations."""
+"""Configuration centralisée : sources, constantes métier, pondérations."""
 
+import os
 from pathlib import Path
+
+
+def _option(nom: str, defaut: str, valeurs: tuple[str, ...]) -> str:
+    """Option de moteur : variable d'environnement, sinon st.secrets, sinon défaut.
+
+    Permet de changer de mode sur Railway / Streamlit Cloud sans toucher au code.
+    Une valeur inconnue est refusée (pas de bascule silencieuse).
+    """
+    val = os.environ.get(nom)
+    if val is None:
+        try:  # st.secrets lève une exception s'il n'existe pas de secrets.toml
+            import streamlit as st
+
+            val = st.secrets.get(nom) if hasattr(st, "secrets") else None
+        except Exception:
+            val = None
+    val = (val or defaut).strip().lower()
+    if val not in valeurs:
+        raise ValueError(f"{nom}={val!r} : valeurs admises {valeurs}")
+    return val
+
+
+# ─── Sélection EXPLICITE des sources et méthodes du moteur ───────────────────
+# Mode cible = valeurs par défaut. L'ancien mode n'existe que pour les
+# comparaisons historiques ; aucun fichier n'active une méthode par sa seule
+# présence.
+SOURCE_EFFECTIFS = _option("SANTACTIVE_SOURCE_EFFECTIFS", "drees", ("drees", "equipe"))
+#   drees  : effectifs DREES/RPPS au 1er janvier 2026 (personnes distinctes)
+#   equipe : lignes du fichier territorial de l'équipe (présences — historique)
+APL_METHODE = _option("SANTACTIVE_APL_METHODE", "mediane", ("mediane", "ponderee"))
+#   mediane  : médiane simple des APL communaux (méthode historique)
+#   ponderee : moyenne pondérée par la population standardisée (méthode DREES)
+ETABS_DEFINITION = _option("SANTACTIVE_ETABS_DEFINITION", "actuelle", ("actuelle", "court_sejour"))
+#   actuelle     : CH + CHR + établissements privés SSR
+#   court_sejour : CH + CHR + hôpitaux locaux + privés MCO + CLCC
 
 # ─── Sources locales (prioritaires) ───────────────────────────────────────────
 DATA_DIR = Path("static/data")
@@ -15,13 +51,27 @@ PATHO_PATH = DATA_DIR / "pathologies.csv.gz"
 MEDIC_PATH = DATA_DIR / "medicaments.csv"
 
 # ─── Effectifs officiels DREES / RPPS (jeu A) ─────────────────────────────────
-# Activés seulement si les fichiers sont présents dans static/data/ ; produits
-# par scripts/donnees/telecharger_drees_rpps.py (candidats dans
-# data_corrections/references/drees/). Sans eux, l'application retombe sur le
-# fichier « professionnels » de l'équipe (jeu B : présence locale, pas effectifs).
+# Produits par scripts/donnees/telecharger_drees_rpps.py et
+# calculer_apl_departemental.py. Utilisés selon SOURCE_EFFECTIFS / APL_METHODE
+# (ci-dessus) ; le fichier « professionnels » de l'équipe reste le jeu B
+# (présence locale, pas effectifs).
 MEDECINS_DREES_PATH  = DATA_DIR / "drees_medecins_dept_2026.csv"
 AUTRES_PS_DREES_PATH = DATA_DIR / "drees_autres_rpps_dept_2026.csv"
 IDEL_DREES_PATH      = DATA_DIR / "drees_infirmieres_liberales_dept_2023.csv"
+APL_DEPT_DREES_PATH  = DATA_DIR / "apl_mg_departemental_2023.csv"   # APL communal agrégé (DREES 2023)
+
+# Catégories FINESS (categetab) comptées comme « structures » selon la définition
+ETABS_CATEGORIES = {
+    "actuelle": ["Centre Hospitalier (C.H.)", "Centre Hospitalier Régional (C.H.R.)",
+                 "Etablissement de santé privé autorisé en SSR"],
+    "court_sejour": ["Centre Hospitalier (C.H.)", "Centre Hospitalier Régional (C.H.R.)",
+                     "Centre hospitalier, ex Hôpital local",
+                     "Etablissement de Soins Pluridisciplinaire", "Etablissement de Soins Chirurgicaux",
+                     "Etablissement de Soins Médicaux",
+                     "Etablissement Soins Obstétriques Chirurgico-Gynécologiques",
+                     "Centre de Lutte Contre Cancer"],
+}
+APL_LABELS = {"mediane": "APL médian communal", "ponderee": "APL moyen pondéré (méthode DREES)"}
 
 # ─── Google Drive — secours si le fichier local est absent ─────────────────────
 POP_FILE_ID   = "11rOLt12iXUxbEQTRlZlbuil_AEp2jxue"

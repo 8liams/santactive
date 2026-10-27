@@ -104,7 +104,7 @@ def _pop_acces_ville_contraint(r: pd.Series) -> int | None:
     pop = _num(r.get("population_num"))
     if pop <= 0:
         return None
-    apl = _num(r.get("apl_median_dept"), default=2.9)
+    apl = _num(r.get("apl_dept"), default=2.9)
     score_acces = _num(r.get("score_acces"), default=50.0)
     if apl >= 2.9 and score_acces >= 45:
         return None

@@ -107,7 +107,7 @@ def render_national_choropleth(
     # Label et format du tooltip selon l'indicateur sélectionné
     _metric_meta: dict[str, tuple[str, str]] = {
         "score_global":         ("Score global",        "{:.1f}/100"),
-        "apl_median_dept":      ("APL médian",          "{:.1f}\u202f/hab."),
+        "apl_dept":      ("APL médian",          "{:.1f}\u202f/hab."),
         "temps_acces_median":   ("Temps d'accès",       "{:.1f}\u202fmin"),
         "med_gen_pour_100k":    ("Médecins / 100k",     "{:.0f}"),
         "structures_pour_100k": ("Structures / 100k",   "{:.1f}"),
@@ -287,7 +287,7 @@ def render_dom_cartouches(
                 # ex. « 3420/100 » pour un prix au m²)
                 _fmt_dom = {
                     "score_global":         "{:.0f}/100",
-                    "apl_median_dept":      "{:.1f}\u202f/hab.",
+                    "apl_dept":      "{:.1f}\u202f/hab.",
                     "temps_acces_median":   "{:.0f}\u202fmin",
                     "med_gen_pour_100k":    "{:.0f}\u202f/100k",
                     "structures_pour_100k": "{:.1f}\u202f/100k",

@@ -11,7 +11,12 @@ import requests
 import streamlit as st
 
 from .config import (
+    APL_DEPT_DREES_PATH,
+    APL_METHODE,
     AUTRES_PS_DREES_PATH,
+    ETABS_CATEGORIES,
+    ETABS_DEFINITION,
+    SOURCE_EFFECTIFS,
     DELAIS_RDV_PATH,
     IDEL_DREES_PATH,
     MEDECINS_DREES_PATH,
@@ -118,29 +123,38 @@ def load_all_data():
         "nb_pros": "presence_lignes_pros", "nb_med_gen": "presence_lignes_med_gen",
         "nb_infirmiers": "presence_lignes_infirmiers", "nb_pharmaciens": "presence_lignes_pharmaciens",
     })
-    pros_dept["source_effectifs"] = "fichier équipe (présence)"
-    # Effectifs officiels (jeu A) si disponibles, sinon repli sur les lignes du
-    # fichier équipe (comportement historique, à signaler dans l'UI).
-    drees = load_drees_ps()
-    if drees["medecins"] is not None:
-        eff = _effectifs_drees(drees)
-        pros_dept = pros_dept.merge(eff, on="dept", how="left")
+    # Source des effectifs : choix EXPLICITE (config.SOURCE_EFFECTIFS).
+    if SOURCE_EFFECTIFS == "drees":
+        drees = load_drees_ps()
+        if drees["medecins"] is None:
+            raise FileNotFoundError(
+                "SOURCE_EFFECTIFS=drees mais static/data/drees_medecins_dept_2026.csv est absent "
+                "(générer avec scripts/donnees/telecharger_drees_rpps.py)."
+            )
+        pros_dept = pros_dept.merge(_effectifs_drees(drees), on="dept", how="left")
         pros_dept["source_effectifs"] = "DREES RPPS 2026"
-    else:
+    else:  # « equipe » : comportement historique, comparaisons seulement
         for new, old in [("nb_pros", "presence_lignes_pros"), ("nb_med_gen", "presence_lignes_med_gen"),
                          ("nb_infirmiers", "presence_lignes_infirmiers"),
                          ("nb_pharmaciens", "presence_lignes_pharmaciens")]:
             pros_dept[new] = pros_dept[old]
+        pros_dept["source_effectifs"] = "fichier équipe (présences, historique)"
 
     # ── Établissements ────────────────────────────────────────────────────────
     _etabs_raw = read_dataset(ETABS_PATH, ETABS_FILE_ID, sep=";")
     _etabs_raw["dept"] = _etabs_raw["code_departement"].apply(_zd)
+    _cats = ETABS_CATEGORIES
     etabs_dept = _etabs_raw.groupby("dept").agg(
         nb_etabs     =("Rslongue", "count"),
         nb_hopitaux  =("categetab", lambda x: x.isin(
             ["Centre Hospitalier (C.H.)", "Centre Hospitalier Régional (C.H.R.)"]).sum()),
+        # Historique : « cliniques » = établissements privés autorisés en SSR uniquement
         nb_cliniques =("categetab", lambda x: x.str.contains(
             "Clinique|privé", na=False, case=False).sum()),
+        nb_structures_actuelle     =("categetab", lambda x: x.isin(_cats["actuelle"]).sum()),
+        nb_structures_court_sejour =("categetab", lambda x: x.isin(_cats["court_sejour"]).sum()),
+        nb_chs_psychiatrie =("categetab", lambda x: (x == "Centre Hospitalier Spécialisé lutte Maladies Mentales").sum()),
+        nb_ssr_prive =("categetab", lambda x: (x == "Etablissement de santé privé autorisé en SSR").sum()),
     ).reset_index()
     # Trim : ne garder que les colonnes utiles pour la carte et la fiche commune
     # Le fichier FINESS chargé nomme la commune « Ville » (pas de coordonnées)
@@ -250,6 +264,29 @@ def load_all_data():
         master["apl_p25"] = pd.NA
         master["apl_p75"] = pd.NA
 
+    # ── APL départemental : méthode explicite (config.APL_METHODE) ───────────
+    # apl_dept = valeur utilisée par le score et les affichages ;
+    # apl_median_dept (historique) et apl_moyen_pondere (DREES) restent disponibles.
+    if Path(APL_DEPT_DREES_PATH).exists():
+        _apl_p = pd.read_csv(APL_DEPT_DREES_PATH, dtype={"dept": str})
+        master = master.merge(
+            _apl_p[["dept", "apl_moyen_pondere", "part_pop_apl_inf_2_5",
+                    "apl_p25_pond", "apl_p75_pond"]],
+            on="dept", how="left")
+    else:
+        for _c in ["apl_moyen_pondere", "part_pop_apl_inf_2_5", "apl_p25_pond", "apl_p75_pond"]:
+            master[_c] = pd.NA
+    if APL_METHODE == "ponderee":
+        if master["apl_moyen_pondere"].isna().all():
+            raise FileNotFoundError(
+                "APL_METHODE=ponderee mais static/data/apl_mg_departemental_2023.csv est absent "
+                "(générer avec scripts/donnees/calculer_apl_departemental.py)."
+            )
+        master["apl_dept"] = pd.to_numeric(master["apl_moyen_pondere"], errors="coerce")
+    else:
+        master["apl_dept"] = pd.to_numeric(master["apl_median_dept"], errors="coerce")
+    master["apl_methode"] = APL_METHODE
+
     # ── Indicateurs dérivés ───────────────────────────────────────────────────
     master["population_num"] = pd.to_numeric(
         master["population"].astype(str).str.replace(" ", "").str.replace(",", "."),
@@ -259,7 +296,10 @@ def load_all_data():
     master["pros_pour_100k"]       = master["nb_pros"]    / p100
     master["med_gen_pour_100k"]    = master["nb_med_gen"] / p100
     master["hopitaux_pour_100k"]   = master["nb_hopitaux"] / p100
-    master["structures_pour_100k"] = (master["nb_hopitaux"] + master["nb_cliniques"]) / p100
+    # Définition des « structures » : choix explicite (config.ETABS_DEFINITION)
+    master["nb_structures"] = master[f"nb_structures_{ETABS_DEFINITION}"]
+    master["structures_pour_100k"] = master["nb_structures"] / p100
+    master["structures_definition"] = ETABS_DEFINITION
 
     # ── Downcast master — float64 → float32 pour réduire la RAM ─────────────
     _float_cols = master.select_dtypes(include="float64").columns.tolist()

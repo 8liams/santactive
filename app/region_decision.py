@@ -107,8 +107,8 @@ def _generate_justification_prioritaire(
     """Justification factuelle pour un territoire prioritaire."""
     clauses: list[str] = []
 
-    apl = _num(row.get("apl_median_dept"))
-    apl_nat = pd.to_numeric(master["apl_median_dept"], errors="coerce").median()
+    apl = _num(row.get("apl_dept"))
+    apl_nat = pd.to_numeric(master["apl_dept"], errors="coerce").median()
     if pd.notna(apl) and pd.notna(apl_nat) and apl < apl_nat * 0.98:
         pct = (1 - apl / apl_nat) * 100
         clause = f"APL inférieur de {pct:.0f}\u202f% à la médiane nationale"
@@ -280,7 +280,7 @@ def _build_pourquoi_levier(
 
     if "téléexpertise" in intitule or "teleexpertise" in intitule:
         desert = int(
-            (pd.to_numeric(rows["apl_median_dept"], errors="coerce") < 2.5).sum()
+            (pd.to_numeric(rows["apl_dept"], errors="coerce") < 2.5).sum()
         )
         if desert:
             return (
