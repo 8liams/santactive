@@ -118,22 +118,23 @@ def render_national_choropleth(
     main_label, main_fmt = _metric_meta.get(metric, (metric, "{}"))
 
     m = folium.Map(
-        location=[46.6, 2.5],
+        location=[46.5, 2.4],
         zoom_start=6,
         tiles=TILE_URL,
         attr=TILE_ATTR,
         zoom_control=True,
-        scrollWheelZoom=True,
+        scrollWheelZoom=False,   # la molette ne doit pas capturer le défilement de la page
         min_zoom=5,
         max_zoom=10,
+        zoom_snap=0.25,          # zooms fractionnaires : la France remplit le cadre
         # Restreint le pan/zoom à l'emprise de la France métropolitaine
         max_bounds=True,
-        min_lat=41.0,
-        max_lat=51.5,
-        min_lon=-5.5,
-        max_lon=10.0,
+        min_lat=40.5,
+        max_lat=52.0,
+        min_lon=-6.5,
+        max_lon=11.0,
     )
-    m.fit_bounds([[41.0, -5.5], [51.5, 10.0]])
+    m.fit_bounds([[41.3, -5.2], [51.1, 9.6]], padding=(8, 8))
 
     # Enrichit les propriétés GeoJSON — valeur principale + contexte
     import copy
@@ -180,10 +181,10 @@ def render_national_choropleth(
                 "weight": 2, "fillOpacity": 0.15}
 
     tooltip = folium.GeoJsonTooltip(
-        fields=["dept_name", "code", "main_display",
-                "score_global_display", "zone", "region_name"],
-        aliases=["Département", "Code", main_label,
-                 "Score global", "Zone", "Région"],
+        fields=["dept_name", "main_display",
+                "score_global_display", "zone", "region_name", "code"],
+        aliases=["Département", main_label,
+                 "Score global", "Zone", "Région", "Code"],
         localize=True,
         sticky=False,
         labels=True,
@@ -381,7 +382,11 @@ def render_dom_cartouches(
 
                 if event and event.get("last_object_clicked"):
                     from ..router import navigate
-                    navigate("dept", dept_code=code_dom)
+                    # Garde : ne renavigue pas à chaque rerun sur un clic déjà traité
+                    sig = (code_dom, str(event.get("last_object_clicked")))
+                    if st.session_state.get("_dom_last_click") != sig:
+                        st.session_state["_dom_last_click"] = sig
+                        navigate("dept", dept_code=code_dom)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

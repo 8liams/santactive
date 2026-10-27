@@ -30,12 +30,15 @@ def _get_communes_for_search() -> pd.DataFrame:
     if temps is None or temps.empty:
         _COMMUNES_CACHE = pd.DataFrame(columns=["commune", "code_departement"])
     else:
+        from ..search import _norm
+
         _COMMUNES_CACHE = (
             temps[["commune", "code_departement"]]
             .dropna()
             .drop_duplicates(subset=["commune", "code_departement"])
             .reset_index(drop=True)
         )
+        _COMMUNES_CACHE["commune_norm"] = _COMMUNES_CACHE["commune"].map(_norm)
     return _COMMUNES_CACHE
 
 
@@ -72,7 +75,10 @@ def render(data: dict) -> None:
     master: pd.DataFrame = data["master"]
     _MASTER_CACHE = master
     _DATA_CACHE = data
-    _COMMUNES_CACHE = None  # reset à chaque render pour forcer recalcul si données changent
+    # Le cache communes n'est recalculé que si le jeu de données change
+    if st.session_state.get("_home_temps_id") != id(data.get("temps")):
+        _COMMUNES_CACHE = None
+        st.session_state["_home_temps_id"] = id(data.get("temps"))
     geojson = data.get("geojson")
 
     # ── HERO ──────────────────────────────────────────────────────────────────
@@ -95,8 +101,8 @@ def render(data: dict) -> None:
         '<div class="home-search-intro">'
         '<div class="home-search-eyebrow">EXPLORER UN TERRITOIRE</div>'
         '<div class="home-search-title">'
-        'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em> '
-        'ou une r\u00e9gion.'
+        'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em>, '
+        'une r\u00e9gion ou une commune.'
         '</div>'
         '</div>',
         unsafe_allow_html=True,
@@ -107,7 +113,7 @@ def render(data: dict) -> None:
         label="",
         key="home_searchbox",
         clear_on_submit=False,
-        rerun_on_update=True,
+        rerun_on_update=False,   # pas de rerun (carte, DOM) à chaque frappe
     )
 
     if selection and isinstance(selection, dict):
@@ -127,6 +133,8 @@ def render(data: dict) -> None:
             _render_national_map(master, geojson)
         with col_kpi:
             _render_national_kpis(data)
+    with st.container(key="home_dom"):
+        _render_dom_section(master, geojson)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -205,11 +213,13 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
 
     # Clic sur un département → ouvre la fiche
     if event:
-        clicked = event.get("last_active_drawing") or event.get("last_object_clicked")
-        if clicked:
+        clicked = event.get("last_active_drawing")
+        if clicked and event.get("last_object_clicked"):
             props = (clicked.get("properties") or {}) if isinstance(clicked, dict) else {}
             code = props.get("code")
-            if code:
+            # Garde : un clic déjà traité ne doit pas renaviguer à chaque rerun
+            if code and st.session_state.get("_home_map_last_click") != (code, str(event.get("last_object_clicked"))):
+                st.session_state["_home_map_last_click"] = (code, str(event.get("last_object_clicked")))
                 navigate("dept", dept_code=str(code))
 
     # Légende zones — uniquement pour le score global (terciles Sant'active)
@@ -222,7 +232,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             f'Critique <span class="count">({int(counts.get("Critique", 0))})</span>'
             '</span>'
             f'<span class="legend-item">'
-            f'<span class="swatch" style="background:#E5B04A;"></span>'
+            f'<span class="swatch" style="background:#E8A838;"></span>'
             f'Intermédiaire <span class="count">({int(counts.get("Intermédiaire", 0))})</span>'
             '</span>'
             f'<span class="legend-item">'
@@ -233,28 +243,44 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             unsafe_allow_html=True,
         )
 
-    # ── Cartouches DOM-TOM ────────────────────────────────────────────────
+    else:
+        # Légende dégradée (min → max) pour les indicateurs hors score global
+        from ..components.maps import COLORMAPS
+        vals = pd.to_numeric(master[col_key], errors="coerce").dropna()
+        stops = ", ".join(reversed(COLORMAPS[cmap_name]) if reverse_scale else COLORMAPS[cmap_name])
+        unit = {"apl_dept": "/hab.", "temps_acces_median": "min", "med_gen_pour_100k": "/100k",
+                "prix_m2_moyen": "€/m²", "pct_plus_65": "%"}.get(col_key, "")
+        if not vals.empty:
+            st.markdown(
+                '<div class="map-legend map-legend--gradient">'
+                f'<span class="count">{vals.min():,.0f}\u202f{unit}</span>'
+                f'<span class="gradient" style="background:linear-gradient(90deg,{stops});"></span>'
+                f'<span class="count">{vals.max():,.0f}\u202f{unit}</span>'
+                '</div>'.replace(",", "\u202f"),
+                unsafe_allow_html=True,
+            )
+    st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)
+
+
+def _render_dom_section(master: pd.DataFrame, geojson) -> None:
+    """Cartouches DOM en pleine largeur (sous le bloc carte / KPI)."""
     from ..components.maps import render_dom_cartouches
 
+    col_key, cmap_name, reverse_scale = st.session_state.get(
+        "_home_map_choice", ("score_global", "score", False))
     st.markdown(
-        '<div style="margin-top:16px;padding-top:12px;'
-        'border-top:1px solid #E8E6DD;">'
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#9C9A92;margin-bottom:8px;">'
-        'DÉPARTEMENTS ET RÉGIONS D\'OUTRE-MER'
-        '</div>'
-        '</div>',
+        '<div class="map-section-eyebrow">DÉPARTEMENTS ET RÉGIONS D\'OUTRE-MER</div>',
         unsafe_allow_html=True,
     )
-
-    render_dom_cartouches(
-        master=master,
-        geojson_dom=geojson,
-        metric=col_key,
-        colormap_name=cmap_name,
-        reverse=reverse_scale,
-        height=112,
-    )
+    with st.spinner("Chargement des cartes d'outre-mer…"):
+        render_dom_cartouches(
+            master=master,
+            geojson_dom=geojson,
+            metric=col_key,
+            colormap_name=cmap_name,
+            reverse=reverse_scale,
+            height=130,
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

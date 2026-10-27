@@ -290,7 +290,7 @@ def info_tooltip(key: str, size: int = 14, *, open_dir: str = "auto") -> str:
     dir_class = " sa-tip--open-right" if open_dir == "right" else ""
 
     return (
-        f'<span class="sa-tip{dir_class}">'
+        f'<span class="sa-tip{dir_class}" tabindex="0" role="button" aria-label="Définition : {title}">'
         f'<span class="sa-tip-icon" style="font-size:{size - 2}px;">'
         f'ⓘ'
         f'</span>'

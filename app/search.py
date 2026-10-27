@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Literal
@@ -19,11 +20,25 @@ class SearchResult:
     score: int              # 0-100, pour ordonner les résultats
 
 
+_LEVEL_ORDER = {"region": 0, "departement": 1, "commune": 2}
+
+
 def _norm(s: str) -> str:
+    """Minuscules sans accents ; tirets, apostrophes et espaces multiples → espace."""
     if not isinstance(s, str):
         return ""
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    return s.lower().strip()
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+    return " ".join(re.sub(r"[-'’\s]+", " ", s).split())
+
+
+def _score(norm_name: str, q: str) -> int:
+    if norm_name == q:
+        return 100
+    if norm_name.startswith(q):
+        return 95
+    if any(w.startswith(q) for w in norm_name.split()):
+        return 85
+    return 70
 
 
 def search_territory(
@@ -50,7 +65,7 @@ def search_territory(
         name = str(r["Nom de la région"])
         code = str(r["Code région"])
         if q in _norm(name):
-            score = 100 if _norm(name).startswith(q) else 70
+            score = _score(_norm(name), q)
             key = f"region_{code}"
             if key not in seen_codes:
                 seen_codes.add(key)
@@ -69,8 +84,9 @@ def search_territory(
         code = str(r.get("dept", ""))
         if not name or not code:
             continue
-        if q in _norm(name) or q == code:
-            score = 100 if _norm(name).startswith(q) or q == code else 80
+        code_ok = q.upper() == code or q.zfill(2) == code
+        if q in _norm(name) or code_ok:
+            score = 100 if code_ok else _score(_norm(name), q)
             key = f"dept_{code}"
             if key not in seen_codes:
                 seen_codes.add(key)
@@ -85,12 +101,13 @@ def search_territory(
 
     # ── Communes (si fournies) ─────────────────────────────────────────────────
     if communes is not None and not communes.empty:
-        q_upper = q.upper()
-        matches = communes[
-            communes["commune"].apply(
-                lambda c: isinstance(c, str) and q_upper in _norm(c).upper()
-            )
-        ].head(30)
+        # Colonne normalisée pré-calculée si possible (home.py), sinon à la volée
+        norm_col = communes["commune_norm"] if "commune_norm" in communes.columns \
+            else communes["commune"].map(_norm)
+        hit = communes[norm_col.str.contains(q, regex=False, na=False)].copy()
+        hit["_norm"] = norm_col[hit.index]
+        hit["_s"] = hit["_norm"].map(lambda n: _score(n, q))
+        matches = hit.sort_values(["_s", "_norm"], ascending=[False, True]).head(30)
         for _, r in matches.iterrows():
             commune_name = str(r["commune"])
             dept_code    = str(r.get("code_departement", "")).zfill(2)
@@ -110,8 +127,8 @@ def search_territory(
                 name=commune_name,
                 parent_code=dept_code,
                 parent_name=dept_name,
-                score=60,
+                score=int(r["_s"]) - 10,   # une commune ne devance pas un territoire de même score
             ))
 
-    results.sort(key=lambda x: (-x.score, x.level))
+    results.sort(key=lambda x: (-x.score, _LEVEL_ORDER.get(x.level, 9), _norm(x.name)))
     return results[:limit]
