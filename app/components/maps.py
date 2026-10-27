@@ -480,9 +480,18 @@ def _fetch_dept_outline(dept_code: str) -> dict | None:
     return None
 
 
+def _round_coords(obj, nd: int = 4):
+    """Arrondit les coordonnées (4 décimales ≈ 10 m) : HTML Folium ~40 % plus léger."""
+    if isinstance(obj, list):
+        if obj and isinstance(obj[0], (int, float)):
+            return [round(float(v), nd) for v in obj]
+        return [_round_coords(x, nd) for x in obj]
+    return obj
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_communes_geojson(dept_code: str) -> dict | None:
-    """Récupère le GeoJSON communal depuis geo.api.gouv.fr."""
+    """Récupère le GeoJSON communal depuis geo.api.gouv.fr (coordonnées arrondies)."""
     url = (
         f"https://geo.api.gouv.fr/departements/{dept_code}/communes"
         "?fields=code,nom,centre,contour,population&format=geojson&geometry=contour"
@@ -490,9 +499,14 @@ def _fetch_communes_geojson(dept_code: str) -> dict | None:
     try:
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
-        return resp.json()
+        gj = resp.json()
     except Exception:
         return None
+    for f in gj.get("features", []):
+        g = f.get("geometry") or {}
+        if "coordinates" in g:
+            g["coordinates"] = _round_coords(g["coordinates"])
+    return gj
 
 
 def render_commune_choropleth(
