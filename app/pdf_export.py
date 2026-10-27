@@ -339,6 +339,33 @@ def generate_department_pdf(
     story.append(kpi_tbl)
     story.append(Spacer(1, 18))
 
+    # ── ④bis RENFORCEMENT THÉORIQUE DE CAPACITÉ (APL communal DREES) ─────────
+    try:
+        from .simulation_capacite import simuler
+        sim = simuler(dept_code)
+    except Exception:
+        sim = None
+    if sim:
+        _section_heading("Renforcement théorique de capacité médicale (simulation)", story)
+        lo, mid, hi = sim["etp_2,5"]
+        txt = (
+            f'APL moyen pondéré (méthode DREES) : <b>{sim["apl_moyen_pondere"]:.2f}</b> consult./an/hab. · '
+            f'population vivant sous le repère 2,5 : <b>{sim["part_pop_apl_inf_2_5"]:.0%}</b> '
+            f'({sim["nb_communes_inf_2_5"]} communes sur {sim["nb_communes"]}). Pour amener chaque commune '
+            f'sous le seuil 2,5 au niveau du seuil, il manquerait environ {sim["deficit_2,5"]:,.0f} '
+            f'consultations accessibles par an, soit <b>environ {mid:.0f} ETP</b> (fourchette {lo:.0f} à {hi:.0f} ETP '
+            f'pour 6 000 à 3 600 actes/an ; 1 ETP = 5 400 actes, convention DREES).'
+        ).replace(",", "\u202f")
+        story.append(Paragraph(f'<font size="9">{txt}</font>', _s("sim", fontSize=9, textColor=NOIR, leading=13)))
+        story.append(Paragraph(
+            '<i><font size="8" color="#666666">Simulation statique, pas un effectif officiel de '
+            'médecins manquants : offre existante supposée inchangée, déficit calculé commune par '
+            'commune (effets de voisinage ignorés, tendance à surestimer), ETP différents des médecins '
+            'physiques. Source : DREES, APL aux médecins généralistes 2023.</font></i>',
+            _s("simn", fontSize=8, textColor=colors.HexColor("#666666"), leading=11),
+        ))
+        story.append(Spacer(1, 14))
+
     # ── ⑤ DÉLAIS DE RDV ESTIMÉS ──────────────────────────────────────────────
     try:
         from .components.delais import compute_delais_proxy

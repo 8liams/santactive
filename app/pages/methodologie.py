@@ -31,7 +31,67 @@ def _prose(*paragraphs: str) -> None:
 
 # ── Render principal ──────────────────────────────────────────────────────────
 
+_TABLE_DIMENSIONS = '''
+<div style="border:1px solid #E8E6DD;border-radius:6px;overflow:hidden;margin-bottom:32px;">
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;background:#0A1938;padding:12px 20px;gap:0;">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">DIMENSION</div>
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">POIDS</div>
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">INDICATEUR · SOURCE · MILLÉSIME</div>
+<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">DIRECTION</div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité soins de ville</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Dimension principale</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">30 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">{APL_LIGNE}<br><span style="color:#9C9A92;">DREES · APL aux médecins généralistes · 2023</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité physique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Temps de trajet</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médiane simple des temps d'accès communaux (non pondérée ; 0 = offre dans la commune)<br><span style="color:#9C9A92;">Calcul interne de l'équipe · 2026 · méthode de production à documenter</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon</div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Densité médecins généralistes</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Offre professionnelle</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">{MED_LIGNE}</div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Offre hospitalière</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Structures de soins</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">15 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">{ETABS_LIGNE}<br><span style="color:#9C9A92;">FINESS · mars 2026 · nombre de sites, pas de capacité</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Pression démographique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Vieillissement de la population</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">10 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Part des 65 ans et plus<br>Les 75-79 ans consomment environ 1,6 fois la moyenne de soins de médecine générale, les 90 ans et plus 2,3 fois (pondérations APL DREES 2023).<br><span style="color:#9C9A92;">INSEE · Recensement 2021</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(fort vieillissement = forte demande)</span></div>
+</div>
+<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;background:#FAFAF8;gap:0;align-items:start;">
+<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Contexte foncier</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Attractivité à l'installation</div></div>
+<div style="font-size:22px;font-weight:300;color:#1A3D8F;">5 %</div>
+<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Prix médian au m² (DVF)<br>Un foncier accessible facilite l'installation médicale.<br><span style="color:#9C9A92;">DVF · DGFiP · 2025</span></div>
+<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(prix bas = installation facilitée)</span></div>
+</div>
+</div>
+'''
+
+
+def _cfg() -> dict:
+    """Paramètres actifs du moteur, pour que la page décrive ce qui est exécuté."""
+    from ..config import (APL_AGREGATION, APL_LABEL, APL_METHODE, ETABS_CATEGORIES,
+                          ETABS_DEFINITION, SOURCE_EFFECTIFS)
+    return dict(apl_methode=APL_METHODE, apl_label=APL_LABEL, apl_agregation=APL_AGREGATION,
+                etabs_def=ETABS_DEFINITION, etabs_cats=ETABS_CATEGORIES[ETABS_DEFINITION],
+                source=SOURCE_EFFECTIFS)
+
+
 def render(data: dict) -> None:
+    cfg = _cfg()
+    master = data.get("master")
+    apl_nat = (float(master["apl_dept"].median()) if master is not None and "apl_dept" in master else float("nan"))
 
     render_breadcrumb([
         NavCrumb("Accueil", "home"),
@@ -109,52 +169,20 @@ Un département avec moins de 3 dimensions disponibles ne reçoit pas de score g
 </div>
 """)
 
-    st.html("""
-<div style="border:1px solid #E8E6DD;border-radius:6px;overflow:hidden;margin-bottom:32px;">
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;background:#0A1938;padding:12px 20px;gap:0;">
-<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">DIMENSION</div>
-<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">POIDS</div>
-<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">INDICATEUR · SOURCE · MILLÉSIME</div>
-<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.5);">DIRECTION</div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité soins de ville</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Dimension principale</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">30 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">APL médian départemental<br><span style="color:#9C9A92;">ANCT · Observatoire des territoires · 2023</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Accessibilité physique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Temps de trajet</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médiane simple des temps d'accès communaux (non pondérée)<br><span style="color:#9C9A92;">Calcul interne de l'équipe · méthode de production à documenter</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon</div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Densité médecins généralistes</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Offre professionnelle</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">20 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Médecins généralistes pour 100&#8239;000 hab. (population INSEE 2021)<br><span style="color:#9C9A92;">Effectifs DREES/RPPS au 1<sup>er</sup> janv. 2026 si activés ; sinon fichier territorial de l'équipe (présences, non recommandé)</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:#FAFAF8;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Offre hospitalière</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Structures de soins</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">15 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Centres hospitaliers (CH, CHR) + établissements privés SSR pour 100&#8239;000 hab. — sites, pas capacités ; cliniques MCO et hôpitaux locaux non comptés (définition à revoir)<br><span style="color:#9C9A92;">FINESS · mars 2026</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Haut = bon</div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;border-bottom:1px solid #E8E6DD;background:white;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Pression démographique</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Vieillissement de la population</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">10 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Part des 65 ans et plus<br>Les 75-79 ans consomment environ 1,6 fois la moyenne de soins de médecine générale, les 90 ans et plus 2,3 fois (pondérations APL DREES 2023).<br><span style="color:#9C9A92;">INSEE · Recensement 2021</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(fort vieillissement = forte demande)</span></div>
-</div>
-<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:14px 20px;background:#FAFAF8;gap:0;align-items:start;">
-<div><div style="font-size:13px;font-weight:700;color:#0A1938;">Contexte foncier</div><div style="font-size:11px;color:#9C9A92;margin-top:3px;">Attractivité à l'installation</div></div>
-<div style="font-size:22px;font-weight:300;color:#1A3D8F;">5 %</div>
-<div style="font-size:12px;color:#4B4B48;line-height:1.5;">Prix médian au m² (DVF)<br>Un foncier accessible facilite l'installation médicale.<br><span style="color:#9C9A92;">DVF · DGFiP · 2025</span></div>
-<div style="font-size:12px;color:#2B2B2B;font-weight:600;">Bas = bon<br><span style="font-weight:400;font-size:11px;color:#9C9A92;">(prix bas = installation facilitée)</span></div>
-</div>
-</div>
-""")
+    apl_ligne = {
+        "ponderee": "APL moyen pondéré par la population standardisée (méthode DREES) ; médiane communale conservée pour comparaison",
+        "mediane": "Médiane simple des APL communaux (chaque commune pèse autant)",
+    }[cfg["apl_methode"]]
+    med_ligne = {
+        "drees": "Généralistes actifs au 1<sup>er</sup> janvier 2026 (personnes distinctes, tous modes d'exercice) / population INSEE 2021 × 100&#8239;000<br><span style=\"color:#9C9A92;\">DREES · RPPS · 2026</span>",
+        "equipe": "Lignes du fichier territorial de l'équipe (présences, pas effectifs) / population INSEE 2021 — mode historique de comparaison<br><span style=\"color:#9C9A92;\">fichier équipe · 2026</span>",
+    }[cfg["source"]]
+    etabs_ligne = {
+        "actuelle": "Sites FINESS : centres hospitaliers (CH, CHR) + établissements privés SSR, pour 100&#8239;000 hab. ; cliniques MCO, hôpitaux locaux et CHS non comptés",
+        "court_sejour": "Sites FINESS de court séjour : CH, CHR, hôpitaux locaux, privés MCO, centres de lutte contre le cancer, pour 100&#8239;000 hab.",
+    }[cfg["etabs_def"]]
+    st.html(_TABLE_DIMENSIONS.format(APL_LIGNE=apl_ligne, MED_LIGNE=med_ligne, ETABS_LIGNE=etabs_ligne))
+
 
     st.html("""
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px;">
@@ -182,6 +210,8 @@ Les établissements hospitaliers (15 %) complètent avec l'offre de soins second
 La pression démographique (10 %) et le contexte foncier (5 %) sont des facteurs de contexte qui modulent l'intensité du besoin et la capacité d'y répondre.
 <br><br>
 Ces pondérations sont <strong>transparentes et discutables</strong>. Elles reflètent les priorités de Sant'active mais d'autres pondérations seraient défendables selon les objectifs.
+<br><br>
+<strong>Limite connue.</strong> L'APL, la densité de généralistes et le temps d'accès (70 % du score) mesurent trois facettes d'une même réalité, l'offre de médecine générale : le score global est d'abord un indice d'offre et d'accès (corrélation 0,99 avec un indice d'offre seul), les besoins sanitaires (vieillissement, pathologies) n'y pèsent que 10 %. Une analyse de sensibilité et une étude de deux indices complémentaires (offre/accès et besoins) sont documentées dans le dépôt (scripts/analyse) ; aucun changement de pondération n'est appliqué sans validation.
 </div>
 """)
 
@@ -206,8 +236,8 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "dans un rayon de 20 à 30 minutes de trajet, pondéré par leur volume d'activité "
         "réel en ETP (équivalent temps plein).",
         "<strong>2. La demande</strong> : population locale pondérée par l'âge : un "
-        "habitant de 75 ans génère environ 4 fois plus de consultations qu'un adulte "
-        "de 30 ans.",
+        "habitant de 75 à 79 ans pèse 1,6 fois la consommation moyenne de médecine générale, "
+        "un habitant de 30 à 34 ans 0,8 fois (pondérations DREES 2023).",
         "<strong>3. La distance</strong> : seuls les médecins accessibles dans un temps "
         "de trajet raisonnable sont comptabilisés.",
         "L'APL dépasse les limites de la densité simple : un médecin à 45 minutes "
@@ -218,19 +248,23 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "zonage des médecins généralistes. Il s'applique à des communes ou territoires de "
         "vie-santé, pas à un département entier\u202f; il n'existe pas de définition légale "
         "du «\u202fdésert médical\u202f».",
-        "Dans Sant'active, l'APL est affiché à deux niveaux : valeur médiane "
-        "départementale (médiane des valeurs communales) et interquartiles P25\u202f/\u202fP75, "
-        "qui montrent la dispersion interne du département. Un département avec une "
-        "médiane correcte peut masquer des communes très sous-dotées.",
+        f"<strong>Agrégation départementale active\u202f: {cfg['apl_agregation']}.</strong> "
+        + ("La DREES prescrit cette pondération pour tout APL agrégé (en-tête du fichier "
+           "communal). La médiane simple des communes, utilisée auparavant, donnait 0,3 à la "
+           "Haute-Corse contre 3,7 en moyenne pondérée\u202f: elle reste calculée pour comparaison "
+           "(colonne apl_median_dept, mode SANTACTIVE_APL_METHODE=mediane)."
+           if cfg["apl_methode"] == "ponderee" else
+           "Chaque commune pèse autant quelle que soit sa population\u202f; la DREES recommande "
+           "une moyenne pondérée par la population standardisée, disponible en option."),
+        "Trois lectures complètent la valeur départementale sur chaque fiche\u202f: la part de "
+        "population vivant dans une commune sous le repère 2,5, les quartiles communaux "
+        "pondérés par la population (dispersion interne) et le nombre de communes sous 2,5.",
+        f"Référence nationale affichée\u202f: médiane des 100 valeurs départementales "
+        f"({apl_nat:.2f} consultations/an/habitant)\u202f; APL national pondéré DREES 2023\u202f: 3,74\u202f; "
+        "16,6\u202f% de la population vit dans une commune sous 2,5.",
         "Source\u202f: DREES, APL aux médecins généralistes, millésime 2023 (diffusé aussi par "
-        "l'Observatoire des territoires, ANCT), 34\u202f954 communes hors Mayotte. "
-        "Agrégation à la maille département par médiane simple des valeurs communales "
-        "(chaque commune pèse autant, quelle que soit sa population). La «\u202fmédiane "
-        "nationale\u202f» (2,9) est la médiane de ces 100 médianes départementales. "
-        "La DREES recommande pour un APL départemental une moyenne pondérée par la "
-        "population standardisée (3,7 au niveau national en 2023)\u202f: cette valeur et la "
-        "part de population sous 2,5 sont affichées sur les fiches lorsque le fichier "
-        "communal est chargé, mais n'entrent pas encore dans le score.",
+        "l'Observatoire des territoires, ANCT), 34\u202f954 communes hors Mayotte, population "
+        "standardisée 2021. Licence Ouverte 2.0.",
     )
 
     st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:40px 0;'>",
@@ -334,7 +368,9 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "<p>L'enquête DREES «\u202fDélais d'attente en matière d'accès aux soins\u202f» "
         "(Études et Résultats n°1085, octobre 2018) est la seule enquête française "
         "avec protocole statistique rigoureux sur ce sujet (label CNIS, 40\u202f000 "
-        "personnes, 9 spécialités). Elle fournit les délais médians nationaux ci-dessous.</p>"
+        "personnes, 9 spécialités, France métropolitaine, résultats provisoires). Elle fournit les "
+        "délais nationaux ci-dessous (tableau 1 de la publication)\u202f; elle n'est pas déclinée "
+        "par région ni par département.</p>"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -347,13 +383,13 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "</tr></thead>"
         "<tbody>"
         "<tr><td>Médecin généraliste</td><td>2 jours</td><td>6 jours</td></tr>"
-        "<tr><td>Pédiatre</td><td>21 jours</td><td>21 jours</td></tr>"
-        "<tr><td>Radiologue</td><td>21 jours</td><td>21 jours</td></tr>"
-        "<tr><td>Chirurgien-dentiste</td><td>30 jours</td><td>30 jours</td></tr>"
-        "<tr><td>Gynécologue</td><td>45 jours</td><td>45 jours</td></tr>"
-        "<tr><td>Rhumatologue</td><td>45 jours</td><td>45 jours</td></tr>"
-        "<tr><td>Cardiologue</td><td>50 jours</td><td>50 jours</td></tr>"
-        "<tr><td>Dermatologue</td><td>52 jours</td><td>61 jours</td></tr>"
+        "<tr><td>Pédiatre</td><td>8 jours</td><td>22 jours</td></tr>"
+        "<tr><td>Radiologue</td><td>11 jours</td><td>21 jours</td></tr>"
+        "<tr><td>Chirurgien-dentiste</td><td>17 jours</td><td>28 jours</td></tr>"
+        "<tr><td>Rhumatologue</td><td>31 jours</td><td>45 jours</td></tr>"
+        "<tr><td>Gynécologue</td><td>32 jours</td><td>44 jours</td></tr>"
+        "<tr><td>Cardiologue</td><td>37 jours</td><td>50 jours</td></tr>"
+        "<tr><td>Dermatologue</td><td>50 jours</td><td>61 jours</td></tr>"
         "<tr><td>Ophtalmologue</td><td>52 jours</td><td>80 jours</td></tr>"
         "</tbody></table>"
         "</div>",
@@ -376,16 +412,16 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
     )
 
     _prose(
-        "L'APL nationale utilisée est 2,9 (médiane ANCT 2023). Le facteur est plafonné "
-        "à ×3 pour éviter des valeurs aberrantes dans les territoires très sous-dotés "
-        "(DOM, Corse).",
-        "<strong>Exemple 1 : Cher (APL\u202f=\u202f1,7)</strong>\u202f: facteur\u202f=\u202f2,9\u202f/\u202f1,7\u202f=\u202f1,71 "
-        "→ délai ophtalmo estimé à <strong>89\u202fjours</strong> (vs 52\u202fjours national).",
-        "<strong>Exemple 2 : Métropole de Lyon (APL\u202f≈\u202f3,0)</strong>\u202f: facteur\u202f≈\u202f0,97 "
-        "→ délai ophtalmo estimé à <strong>50\u202fjours</strong>.",
-        "Ces valeurs sont des estimations indicatives, non des mesures directes. "
-        "Elles visent à donner un ordre de grandeur différencié par territoire, "
-        "pas une prédiction exacte.",
+        f"L'APL national de référence est la médiane des valeurs départementales "
+        f"({apl_nat:.2f}, même méthode d'agrégation que l'APL du département). Le facteur est "
+        "plafonné à ×3.",
+        "<strong>Limites</strong>\u202f: la DREES documente une corrélation entre faible "
+        "accessibilité et délais plus longs, pas une proportionnalité inverse\u202f; l'APL ne "
+        "porte que sur les généralistes alors que le proxy module aussi les délais de "
+        "spécialistes\u202f; un APL supérieur à la référence raccourcit le délai estimé, ce qui "
+        "n'est pas établi. Ces valeurs sont des estimations indicatives, non des mesures. "
+        "Aucune valeur régionale de délai n'est affichée\u202f: le fichier régional utilisé "
+        "auparavant n'avait pas de source identifiable.",
     )
 
     st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:40px 0;'>",
@@ -447,13 +483,15 @@ Ces pondérations sont <strong>transparentes et discutables</strong>. Elles refl
         "Comment sont classés <em>les départements d'une région.</em>",
     )
     _prose(
-        "Sur la fiche région, un département n'est pas priorisé uniquement selon "
-        "son score Sant'active. La priorisation repose sur trois familles de "
-        "critères croisés, calculés à l'échelle intra-régionale à partir des "
-        "données déjà disponibles dans Sant'active.",
-        "Les niveaux affichés (priorité immédiate, priorité forte, priorité "
-        "secondaire, surveillance) sont des traductions lisibles d'une priorisation "
-        "interne. Ils ne remplacent pas le score global départemental.",
+        "Sur la fiche région, chaque département reçoit un score de priorité sur 100 "
+        "calculé sur des rangs <strong>nationaux</strong> (les 100 départements analysés), "
+        "pour rester comparable d'une région à l'autre\u202f: les régions à un ou deux "
+        "départements ne sont plus classées contre elles-mêmes.",
+        "Score de priorité = moyenne à poids égaux du <strong>besoin</strong> (fragilité "
+        "territoriale et complément du score global) et du <strong>volume</strong> "
+        "(population et publics concernés). La <strong>faisabilité</strong> est calculée et "
+        "affichée à part\u202f; elle n'entre pas dans le score. Les poids égaux sont un choix "
+        "explicite, faute de référence validée pour d'autres.",
     )
 
     st.markdown("""
@@ -466,10 +504,10 @@ densité médicale, offre hospitalière, vieillissement, isolement géographique
 </div>
 </div>
 <div style="padding:18px 20px;background:white;border:1px solid #E8E6DD;border-radius:6px;border-top:3px solid #1A3D8F;">
-<div style="font-size:12px;font-weight:700;color:#1A3D8F;margin-bottom:10px;">2 · IMPACT POTENTIEL</div>
+<div style="font-size:12px;font-weight:700;color:#1A3D8F;margin-bottom:10px;">2 · VOLUME CONCERNÉ</div>
 <div style="font-size:13px;color:#4B4B48;line-height:1.65;">
-Estime l'ampleur du besoin&nbsp;: population concernée, volume de patients,
-poids des pathologies (CNAM), nombre de communes ou de publics touchés.
+Volume observé&nbsp;: population INSEE, seniors, communes à plus de 15 min,
+patients CNAM (prévalence et effectifs), en rangs nationaux.
 </div>
 </div>
 <div style="padding:18px 20px;background:white;border:1px solid #E8E6DD;border-radius:6px;border-top:3px solid #1B5E3F;">
@@ -482,10 +520,10 @@ présents, relais de terrain, accessibilité, contexte foncier.
 </div>
 <div style="max-width:720px;padding:16px 20px;background:#F3F2EC;border-radius:6px;font-size:13px;color:#4B4B48;line-height:1.7;margin-bottom:32px;">
 <strong style="color:#0A1938;">Principe clé.</strong>
-Un territoire très fragile n'est pas automatiquement la première priorité si la
-capacité d'action locale est faible. La priorisation croise le besoin, le volume
-de population concernée et la faisabilité de déploiement, sans désigner
-mécaniquement le département au score le plus bas.
+Un territoire très fragile reste prioritaire même si la capacité d'action locale
+est faible : besoin et faisabilité sont deux lectures distinctes. Le score de
+priorité combine besoin et volume de population ; la faisabilité renseigne sur
+les conditions de déploiement, pas sur l'urgence du besoin.
 </div>
 """, unsafe_allow_html=True)
 
@@ -505,12 +543,12 @@ mécaniquement le département au score le plus bas.
         "Plusieurs profils peuvent ressortir selon les régions&nbsp;: seniors, "
         "maladies cardiovasculaires, diabète, cancers, maladies respiratoires, "
         "santé mentale, maladies neurologiques ou dégénératives.",
-        "Pour chaque axe, Sant'active indique, lorsque les données le permettent, "
-        "le volume estimé de patients ou de personnes concernées, les "
-        "départements les plus touchés et un niveau d'importance relatif à "
-        "l'échelle régionale. Ces profils varient d'une région à l'autre&nbsp;: "
-        "un même indicateur national peut masquer des priorités de public "
-        "différentes entre territoires.",
+        "Pour chaque axe, Sant'active indique le volume <strong>observé</strong> "
+        "(seniors INSEE, patients CNAM), les départements les plus touchés et un "
+        "niveau d'importance fondé sur la position de la région dans la distribution "
+        "nationale des départements (part des 65 ans et plus de la région, prévalence "
+        "brute régionale). Une région jeune n'a donc pas les seniors comme public "
+        "prioritaire par construction.",
     )
 
     st.markdown("<hr style='border:none;border-top:1px solid #E8E6DD;margin:32px 0;'>",
@@ -537,17 +575,18 @@ mécaniquement le département au score le plus bas.
 <span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Coordination territoriale</span>
 <span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Consultations avancées</span>
 <span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Accompagnement des seniors</span>
-<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Médiation en santé</span>
-<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Actions mobiles</span>
-<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Expérimentations locales</span>
+<span style="padding:6px 12px;background:#F3F2EC;border-radius:4px;font-size:12px;color:#4B4B48;">Navettes santé</span>
 </div>
 """, unsafe_allow_html=True)
 
     _prose(
         "Ces leviers ne sont <strong>jamais affichés systématiquement</strong>. "
         "Ils sont générés à partir du profil réel observé sur le territoire "
-        "(APL, délais, pathologies CNAM, part des seniors, professionnels et "
-        "établissements présents, isolement, communes éloignées des soins).",
+        "(APL, pathologies CNAM, part des seniors, professionnels et établissements "
+        "présents, communes à plus de 15 min). Chaque levier cite TOUS les départements "
+        "qui remplissent sa condition et sa portée observée (part de la population "
+        "régionale des départements ciblés)\u202f; les volumes affichés sont des quantités "
+        "observées (INSEE, CNAM, DREES), jamais des multiplicateurs.",
         "Un levier n'est proposé que lorsqu'il est cohérent avec les indicateurs "
         "disponibles. Deux régions aux profils différents n'affichent donc pas "
         "forcément les mêmes recommandations.",
@@ -604,21 +643,19 @@ mécaniquement le département au score le plus bas.
     limites = [
         (
             "01",
-            "Pas de données infra-départementales sur la santé",
-            "Les indicateurs RPPS, CNAM et APL agrégés au département masquent les "
-            "disparités internes. Un département avec une bonne médiane peut contenir "
-            "des cantons en désert médical. La carte communale (prix m² et temps "
-            "d'accès) permet une lecture partielle, mais les données de santé à la "
-            "commune ne sont pas disponibles en open data.",
+            "Lecture infra-départementale partielle",
+            "Les effectifs DREES et les prévalences CNAM sont agrégés au département. "
+            "Seul l'APL est connu à la commune (DREES)\u202f: il alimente la part de population "
+            "sous 2,5, les quartiles communaux et la simulation de capacité. La carte "
+            "communale (prix m², temps d'accès) reste partielle (couverture des noms de "
+            "communes, pas de données de santé communales).",
         ),
         (
             "02",
             "Délais RDV estimés, non mesurés",
-            "Les délais affichés par spécialité sont des estimations calculées à partir "
-            "de données nationales DREES 2016-2017, ajustées par l'APL. Ce ne sont pas "
-            "des mesures directes. La situation s'est probablement dégradée depuis 2017. "
-            "Une future intégration de données Doctolib départementales améliorerait "
-            "significativement cet indicateur.",
+            "Les délais départementaux par spécialité sont des estimations (médianes "
+            "nationales DREES 2016-2017 modulées par l'APL), pas des mesures. Les délais "
+            "régionaux affichés auparavant ont été retirés faute de source identifiable.",
         ),
         (
             "03",
@@ -632,11 +669,11 @@ mécaniquement le département au score le plus bas.
         (
             "04",
             "Données avec décalage temporel",
-            "Le recensement INSEE date de 2021. Les données pathologies CNAM de 2023. "
-            "Le RPPS est à jour à janvier 2026, FINESS à mars 2026. L'APL est millésimé "
-            "2023. Ces décalages sont normaux dans la statistique publique mais peuvent "
-            "sous-estimer des évolutions récentes (désertification accélérée dans "
-            "certains départements depuis 2023).",
+            "Population et structure par âge INSEE 2021, pathologies CNAM 2023, APL 2023, "
+            "effectifs DREES/RPPS au 1<sup>er</sup> janvier 2026 (densités DREES rapportées à la "
+            "population 2026, nos densités à la population 2021\u202f: écart médian +1,3\u202f%), "
+            "FINESS mars 2026, DVF 2025, délais DREES 2016-2017. Ces décalages sont normaux "
+            "dans la statistique publique et sont indiqués sur chaque indicateur.",
         ),
         (
             "05",
@@ -662,6 +699,24 @@ mécaniquement le département au score le plus bas.
             "aides à la décision et non des prescriptions. Ils reposent sur des règles "
             "transparentes construites à partir des données disponibles et ne "
             "remplacent pas l'expertise des acteurs locaux.",
+        ),
+        (
+            "08",
+            "Effectifs, présence et temps d'accès\u202f: trois choses différentes",
+            "Les effectifs DREES comptent des personnes (têtes, pas ETP, salariés inclus). "
+            "Le fichier territorial de l'équipe ne contient pas d'effectifs\u202f: il sert à la "
+            "présence locale d'une spécialité (villes où elle est recensée). Le temps d'accès "
+            "communal est un calcul interne dont la méthode de production reste à documenter\u202f; "
+            "les communes à 0 min sont celles où une offre de médecine générale est recensée. "
+            "En Guyane, seules 82\u202f% des communes sont couvertes.",
+        ),
+        (
+            "09",
+            "Renforcement théorique de capacité\u202f: une simulation",
+            "Les ETP affichés résultent d'une simulation statique (déficit de consultations "
+            "sous un seuil d'APL, converti à 5\u202f400 actes par ETP, convention DREES, fourchette "
+            "3\u202f600 à 6\u202f000). Ils surestiment le besoin (effets de voisinage ignorés) et ne "
+            "sont ni un effectif officiel de médecins manquants ni un objectif de recrutement.",
         ),
     ]
 

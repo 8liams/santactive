@@ -72,11 +72,11 @@ def render_simulation_capacite(r: pd.Series) -> bool:
     nom = html.escape(str(r.get("Nom du département", "")))
     st.markdown(
         '<div class="section-header">'
-        '<div class="section-eyebrow">ACCESSIBILITÉ AUX GÉNÉRALISTES · APL COMMUNAL</div>'
-        '<h2 class="section-title">Où l\'offre de <em>médecine générale</em> manque-t-elle ?</h2>'
-        '<p class="section-lead">APL communal DREES 2023 agrégé selon la méthode DREES '
-        '(moyenne pondérée par la population standardisée) et simulation de capacité. '
-        'Ces valeurs complètent le score, qui utilise toujours la médiane communale.</p>'
+        '<div class="section-eyebrow">RENFORCEMENT THÉORIQUE DE CAPACITÉ MÉDICALE</div>'
+        '<h2 class="section-title">Combien d\'offre de <em>médecine générale</em> manquerait-il\u00a0?</h2>'
+        '<p class="section-lead">Simulation statique à partir de l\'APL communal DREES 2023\u202f: '
+        'volume de consultations accessibles qui manque, commune par commune, pour atteindre un seuil, '
+        'converti en équivalents temps plein. Ce n\'est pas un effectif officiel de médecins manquants.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -94,7 +94,7 @@ def render_simulation_capacite(r: pd.Series) -> bool:
     kpi(c3, "Disparités communales", f"{_fmt(sim['apl_p25'], '.1f')} – {_fmt(sim['apl_p75'], '.1f')}",
         "quartiles communaux pondérés par la population")
     lo, mid, hi = sim["etp_2,5"]
-    kpi(c4, "Simulation · seuil 2,5", f"≈ {mid:.0f} ETP", f"fourchette {lo:.0f} – {hi:.0f} ETP")
+    kpi(c4, "Renforcement théorique · seuil 2,5", f"≈ {mid:.0f} ETP", f"fourchette {lo:.0f} – {hi:.0f} ETP")
     lo3, mid3, hi3 = sim["etp_3,0"]
     st.markdown(
         '<div style="margin-top:10px;padding:12px 16px;background:#F3F2EC;border-radius:4px;'
@@ -104,9 +104,14 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         f'{_fmt(sim["deficit_2,5"], ",.0f")} consultations accessibles par an (seuil 2,5), soit '
         f'<strong>{mid:.0f} ETP</strong> de médecine générale à 5 400 actes/an par ETP '
         f'(convention DREES ; fourchette {lo:.0f}–{hi:.0f} ETP pour 6 000–3 600 actes). '
-        f'Au seuil 3,0 : ≈ {mid3:.0f} ETP ({lo3:.0f}–{hi3:.0f}). Hypothèses : offre existante '
-        'inchangée, pas de flux entre départements, APL 2023. Source : DREES, APL aux médecins '
-        'généralistes 2023 (Licence Ouverte).'
+        f'Au seuil 3,0\u202f: ≈ {mid3:.0f} ETP ({lo3:.0f}–{hi3:.0f}). '
+        '<strong>Limites.</strong> Simulation statique\u202f: offre existante supposée inchangée\u202f; '
+        'déficit calculé commune par commune alors qu\u2019un médecin installé relève aussi '
+        'l\u2019APL des communes voisines (rayon 20 min, méthode DREES)\u202f: le total tend à '
+        'surestimer. Les ETP ne sont pas des médecins physiques (activité libérale de 3\u202f600 à '
+        '6\u202f000 actes/an selon les bornes DREES\u202f; 1 ETP = 5\u202f400 actes, convention de '
+        'l\u2019indicateur APL). APL 2023, population standardisée 2021. Source\u202f: DREES, APL aux '
+        'médecins généralistes 2023 (Licence Ouverte).'
         '</div>',
         unsafe_allow_html=True,
     )
