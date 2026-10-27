@@ -1433,11 +1433,22 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
 
     # ── Affichage en grille 3 colonnes ─────────────────────────────────────
     delais = delais.sort_values("delai_estime_jours")
+    # Modèle v2 (expérimental) : facteur propre à chaque spécialité (densité DREES)
+    from ..components.delais import compute_delais_v2
+    try:
+        v2 = compute_delais_v2(dept_code, data).set_index("specialite")
+    except Exception:
+        v2 = pd.DataFrame()
 
     cols = st.columns(3)
     for i, (_, row) in enumerate(delais.iterrows()):
         est = int(row["delai_estime_jours"])
         interp = row["interpretation"]
+        v2_txt = ""
+        if not v2.empty and row["specialite"] in v2.index and pd.notna(v2.loc[row["specialite"], "delai_estime_v2_jours"]):
+            v2_txt = (f'<div class="comp neutral" style="font-size:11px;">v2 (densité de la spécialité)\u202f: '
+                      f'{int(v2.loc[row["specialite"], "delai_estime_v2_jours"])} j · facteur '
+                      f'{v2.loc[row["specialite"], "facteur_v2"]:.2f}</div>')
 
         if est <= 7:
             color_class = "fav"
@@ -1460,9 +1471,19 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
                 f'<div class="dur {color_class}">{est}'
                 f'<span class="unit">jours</span></div>'
                 f'<div class="comp {interp_class}">{interp}</div>'
+                f'{v2_txt}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
+    st.markdown(
+        '<div style="font-size:11px;color:#9C9A92;margin-top:6px;line-height:1.5;">Deux modèles sont '
+        'affichés pour comparaison\u202f: v1 = médiane nationale DREES × (APL de référence / APL du '
+        'département) pour toutes les spécialités\u202f; v2 (expérimental) = la même base modulée, pour '
+        'chaque spécialité, par le rapport entre la densité médiane des départements et la densité DREES '
+        '2026 du département (généraliste\u202f: APL\u202f; rhumatologue\u202f: repli v1). Facteurs bornés '
+        '[0,7\u202f; 3]. Aucun des deux n\u2019est validé par des délais observés localement.</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── Note méthodologique ────────────────────────────────────────────────
     dept_name = r.get("Nom du département", "")
