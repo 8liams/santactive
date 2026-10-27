@@ -570,7 +570,7 @@ def compute_specialites_tension(
     delais: pd.DataFrame | None,
     region_code: str,
 ) -> pd.DataFrame:
-    """Spécialités sous tension à partir des délais DREES régionaux."""
+    """Spécialités sous tension à partir du fichier de délais régionaux (provenance à confirmer)."""
     if delais is None or delais.empty:
         return pd.DataFrame()
 
@@ -862,7 +862,7 @@ def compute_leviers_action(
             depts_num,
             "Patients en attente de spécialistes",
             tension_num,
-            "Isolement médical et/ou délais DREES justifient un recours au numérique.",
+            "APL faible et/ou délais régionaux élevés (source des délais à confirmer).",
             0.80 if nb_desert > 0 else 0.65,
         ))
 
@@ -871,7 +871,7 @@ def compute_leviers_action(
             "Numérique en santé", "Téléconsultation assistée",
             acces_depts,
             "Usagers en difficulté d'accès aux spécialistes",
-            "Accès de ville contraint et délais DREES élevés",
+            "Accès de ville contraint et délais régionaux élevés (source à confirmer)",
             "Croisement score d'accès départemental et délais régionaux.",
             0.68,
         ))

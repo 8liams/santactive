@@ -755,7 +755,18 @@ def render_delais_detail(delais_region: pd.DataFrame, region_name: str) -> None:
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">PARCOURS DE SOINS</div>'
-        '<h2 class="section-title">Délais <em>spécialistes</em> (DREES).</h2>'
+        '<h2 class="section-title">Délais <em>spécialistes</em> régionaux.</h2>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="background:#FCF4DB;border:1px solid #F4C430;border-radius:4px;'
+        'padding:10px 14px;margin:0 0 16px;font-size:12px;color:#7D4A00;">'
+        '<strong>Source à confirmer.</strong> Ces délais régionaux ne sont pas '
+        'cohérents avec la médiane nationale de l\u2019enquête DREES 2016-2017 '
+        '(toutes les régions la dépassent). Ils sont présentés à titre '
+        'indicatif et ne doivent pas être comparés aux estimations '
+        'départementales, calculées par une autre méthode.'
         '</div>',
         unsafe_allow_html=True,
     )

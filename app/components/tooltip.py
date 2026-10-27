@@ -60,16 +60,16 @@ TOOLTIPS: dict[str, dict[str, str]] = {
     "temps_acces": {
         "title": "Temps d'accès médian",
         "body": (
-            "Temps de trajet médian (en voiture) vers l'hôpital ou la "
-            "clinique FINESS la plus proche, calculé pour chaque commune "
-            "du département et agrégé en médiane pondérée par la population."
+            "Temps d'accès calculé pour chaque commune (en minutes ; "
+            "0 = offre présente dans la commune), agrégé par département en "
+            "médiane simple des communes (non pondérée par la population)."
             "<br><br>"
-            "Mesure la distance physique aux structures hospitalières. "
-            "Distinct de l'APL qui mesure la disponibilité des médecins "
-            "de ville."
+            "<strong>⚠ À documenter :</strong> les communes à 0 min "
+            "correspondent à 99 % à des communes où un médecin généraliste "
+            "est recensé ; l'indicateur est donc proche d'un temps d'accès "
+            "au généraliste, et recoupe en partie l'APL."
             "<br><br>"
-            "<strong>Source :</strong> calcul interne · FINESS mars 2026 "
-            "+ INSEE 2021"
+            "<strong>Source :</strong> calcul interne de l'équipe"
         ),
     },
     "med_100k": {

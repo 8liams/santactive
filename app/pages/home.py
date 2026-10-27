@@ -288,10 +288,11 @@ def _render_national_kpis(data: dict) -> None:
             "label":   f'Temps d\'accès {info_tooltip("temps_acces")}',
             "value":   f"{temps_median:.1f}",
             "unit":    "min",
-            "context": "médiane nationale · trajet établissement le plus proche",
+            "context": "médiane des médianes départementales",
             "detail":  (
-                "Temps de trajet médian vers l'hôpital ou clinique FINESS "
-                "le plus proche. Calculé par commune, pondéré par population."
+                "Temps d'accès communal (0 min = offre présente dans la "
+                "commune), agrégé en médiane simple des communes par "
+                "département, non pondérée par la population."
             ),
             "rouge": False,
         },
