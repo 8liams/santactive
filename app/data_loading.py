@@ -11,7 +11,10 @@ import requests
 import streamlit as st
 
 from .config import (
+    AUTRES_PS_DREES_PATH,
     DELAIS_RDV_PATH,
+    IDEL_DREES_PATH,
+    MEDECINS_DREES_PATH,
     ENV_FILE_ID,
     ENV_PATH,
     ETABS_FILE_ID,
@@ -99,9 +102,35 @@ def load_all_data():
         nb_infirmiers  =("specialite_libelle", lambda x: (x == "Infirmier").sum()),
         nb_pharmaciens =("specialite_libelle", lambda x: (x == "Pharmacien").sum()),
     ).reset_index()
+    # Présence locale (jeu B) : nombre de villes du département où la
+    # spécialité est recensée. Le fichier démultiplie chaque enregistrement
+    # par le nombre de communes du code postal : les lignes ne sont pas des
+    # effectifs, seules les présences (code postal, ville) sont exploitables.
+    presence = (
+        _pros_raw.groupby(["dept", "specialite_libelle"])
+        .agg(nb_villes=("coordonnees_ville", "nunique"), nb_lignes=("specialite_libelle", "size"))
+        .reset_index()
+    )
     # Trim : ne garder que les 2 colonnes utiles en aval (reco spécialistes)
     pros = _pros_raw[["dept", "specialite_libelle"]].copy()
     del _pros_raw
+    pros_dept = pros_dept.rename(columns={
+        "nb_pros": "presence_lignes_pros", "nb_med_gen": "presence_lignes_med_gen",
+        "nb_infirmiers": "presence_lignes_infirmiers", "nb_pharmaciens": "presence_lignes_pharmaciens",
+    })
+    pros_dept["source_effectifs"] = "fichier équipe (présence)"
+    # Effectifs officiels (jeu A) si disponibles, sinon repli sur les lignes du
+    # fichier équipe (comportement historique, à signaler dans l'UI).
+    drees = load_drees_ps()
+    if drees["medecins"] is not None:
+        eff = _effectifs_drees(drees)
+        pros_dept = pros_dept.merge(eff, on="dept", how="left")
+        pros_dept["source_effectifs"] = "DREES RPPS 2026"
+    else:
+        for new, old in [("nb_pros", "presence_lignes_pros"), ("nb_med_gen", "presence_lignes_med_gen"),
+                         ("nb_infirmiers", "presence_lignes_infirmiers"),
+                         ("nb_pharmaciens", "presence_lignes_pharmaciens")]:
+            pros_dept[new] = pros_dept[old]
 
     # ── Établissements ────────────────────────────────────────────────────────
     _etabs_raw = read_dataset(ETABS_PATH, ETABS_FILE_ID, sep=";")
@@ -238,7 +267,60 @@ def load_all_data():
 
     delais_df = load_delais_rdv()
     # medic supprimé : non utilisé nulle part (économie ~50–100 Mo)
-    return master, pros, immo, etabs, temps, env, patho, delais_df
+    return master, pros, immo, etabs, temps, env, patho, delais_df, presence
+
+
+@st.cache_data(show_spinner=False)
+def load_drees_ps() -> dict:
+    """Effectifs officiels DREES/RPPS par département (jeu A), si présents.
+
+    Clés : medecins (dept, specialites, exercice, effectif, densite_drees),
+    autres (profession, dept, secteur_activite, exercice, effectif,
+    densite_drees), idel (dept, effectif). None si le fichier est absent.
+    """
+    out = {"medecins": None, "autres": None, "idel": None}
+    if Path(MEDECINS_DREES_PATH).exists():
+        out["medecins"] = pd.read_csv(MEDECINS_DREES_PATH, dtype={"dept": str})
+    if Path(AUTRES_PS_DREES_PATH).exists():
+        out["autres"] = pd.read_csv(AUTRES_PS_DREES_PATH, dtype={"dept": str})
+    if Path(IDEL_DREES_PATH).exists():
+        out["idel"] = pd.read_csv(IDEL_DREES_PATH, dtype={"dept": str})
+    return out
+
+
+def _effectifs_drees(drees: dict) -> pd.DataFrame:
+    """Agrégats départementaux issus des extraits DREES (personnes, pas lieux)."""
+    med = drees["medecins"]
+    ens = med[med["exercice"] == "0-Ensemble"]
+    # « 00-Ensemble » existe pour chaque niveau d'agrégation : on retient le total
+    mg = (ens[ens["specialites"] == "01-Médecine générale"]
+          .drop_duplicates("dept").set_index("dept"))
+    tous = (ens[(ens["specialites"] == "00-Ensemble")
+                & (ens["specialites_agregees"] == "00-Ensemble")]
+            .drop_duplicates("dept").set_index("dept"))
+    ville = med[(med["specialites"] == "01-Médecine générale")
+                & med["exercice"].isin(["1-Libéral", "2-Mixte"])].groupby("dept")["effectif"].sum(min_count=1)
+    eff = pd.DataFrame({
+        "nb_med_gen": mg["effectif"],
+        "med_gen_densite_drees": mg["densite_drees"],
+        "nb_med_gen_ville": ville,          # libéraux + mixtes (offre de ville)
+        "nb_pros": tous["effectif"],         # tous médecins (généralistes + spécialistes)
+    })
+    autres = drees.get("autres")
+    if autres is not None:
+        a = autres[(autres["secteur_activite"].astype(str).str.startswith("00"))
+                   & (autres["exercice"] == "0-Ensemble")]
+        piv = a.pivot_table(index="dept", columns="profession", values="effectif", aggfunc="first")
+        if "pharmaciens" in piv.columns:
+            eff["nb_pharmaciens"] = piv["pharmaciens"]
+        if "chirurgiens_dentistes" in piv.columns:
+            eff["nb_dentistes"] = piv["chirurgiens_dentistes"]
+        if "sages_femmes" in piv.columns:
+            eff["nb_sages_femmes"] = piv["sages_femmes"]
+    idel = drees.get("idel")
+    if idel is not None:
+        eff["nb_infirmiers"] = idel.set_index("dept")["effectif"]  # libérales, SNDS 2023
+    return eff.reset_index()
 
 
 @st.cache_data(show_spinner=False)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from app.data_loading import load_all_data, load_geojson
+from app.data_loading import load_all_data, load_drees_ps, load_geojson
 from app.pages import (
     about,
     comparer,
@@ -121,7 +121,7 @@ load_css(STATIC_DIR / "style.css")
 
 # ─── DATA ─────────────────────────────────────────────────────────────────────
 try:
-    master, pros, immo, etabs, temps, env, patho, delais = load_all_data()
+    master, pros, immo, etabs, temps, env, patho, delais, presence = load_all_data()
     master = compute_scores(master)
 except KeyError as exc:
     st.error(
@@ -256,6 +256,8 @@ data = {
     "patho":   patho,
     "delais":  delais,
     "geojson": geojson,
+    "presence": presence,      # jeu B : présence locale des spécialités (fichier équipe)
+    "drees": load_drees_ps(),  # jeu A : effectifs officiels DREES/RPPS (si présents)
 }
 
 # ─── ROUTING : afficher la bonne page ─────────────────────────────────────────

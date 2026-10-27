@@ -1,0 +1,52 @@
+{
+  "producteur": "DREES/OSAM",
+  "jeu_de_donnees": "https://data.drees.solidarites-sante.gouv.fr/explore/dataset/la-demographie-des-professionnels-de-sante-depuis-2012/",
+  "licence": "Licence Ouverte v2.0 (Etalab)",
+  "publication_rpps": "2026-07-02",
+  "millesime_rpps": "effectifs au 1er janvier 2026",
+  "millesime_infirmieres_liberales": "SNDS 2023",
+  "fichiers": {
+    "lisez_moi": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/lisez_moi_drees_demographie_des_professionnels_de_sante_pdf",
+      "fichier": "lisez_moi.pdf",
+      "octets": 302418,
+      "sha256": "22ca11ff5218c1f40fd486eb627c0bb6ef41336637a832eb581c064f7869a35b",
+      "date_recuperation": "2026-10-27"
+    },
+    "medecins": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/medecins_rpps_2012_2026_xlsx",
+      "fichier": "medecins.xlsx",
+      "octets": 73131775,
+      "sha256": "16481f22ab583c6426fe3dc8d76b30021b32e2ec8f024a66d275b11999269a08",
+      "date_recuperation": "2026-10-27"
+    },
+    "pharmaciens": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/pharmaciens_rpps_2012_2026_xlsx",
+      "fichier": "pharmaciens.xlsx",
+      "octets": 18496439,
+      "sha256": "a5a694ea46289ac34c5606bcfe9e077b3f5395e580c7840542b296cbc56e392f",
+      "date_recuperation": "2026-10-27"
+    },
+    "sages_femmes": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/sages_femmes_rpps_2012_2026_xlsx",
+      "fichier": "sages_femmes.xlsx",
+      "octets": 14733628,
+      "sha256": "65e6cacfd5534e251785800fd6bc85c5747807876d0853a677f927767359293b",
+      "date_recuperation": "2026-10-27"
+    },
+    "chirurgiens_dentistes": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/chirurgiens_dentistes_rpps_2012_2026_xlsx",
+      "fichier": "chirurgiens_dentistes.xlsx",
+      "octets": 15218779,
+      "sha256": "9f00c6d795bd1a02e5b0893ed5605234530b018465288c727d0707b38257d437",
+      "date_recuperation": "2026-10-27"
+    },
+    "infirmieres_liberales": {
+      "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/la-demographie-des-professionnels-de-sante-depuis-2012/attachments/infirmieres_liberales_snds_2012_2023_xlsx",
+      "fichier": "infirmieres_liberales.xlsx",
+      "octets": 319235,
+      "sha256": "3d2e09f56f94aeb7a9948ed52ce7da012387d945c6a7f486ce9cadeff364a729",
+      "date_recuperation": "2026-10-27"
+    }
+  }
+}

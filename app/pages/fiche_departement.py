@@ -20,8 +20,11 @@ from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate, navigate_compare
 from ..scoring import fmt_classement_national, to_num
 from ..components.delais import APL_SEUIL_DESERT
+from ..offre_medicale import render_offre_medicale_drees
+from ..simulation_capacite import render_simulation_capacite
 from ..pathologies import (
     PATHO_CARDIO,
+    dept_prevalences_standardisees,
     PATHO_DIABETE,
     PREV_SEUIL_RELATIF,
     dept_prevalences,
@@ -52,6 +55,7 @@ def render(data: dict) -> None:
     render_scorecard(r, master)
     render_carte_communale(r, data)
     render_contexte(r, data)
+    render_simulation_capacite(r)   # APL pondéré + simulation ETP (si fichier DREES présent)
     render_offre_medicale(r, data)
     render_delais_rdv(r, data)
     render_suggestions_comparaison(r, master)
@@ -1239,6 +1243,9 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
     dg["prev"] = (dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100).round(2)
     top5 = dg.dropna(subset=["prev"]).sort_values("prev", ascending=False).head(5)
     max_prev = float(top5["prev"].max())
+    # Prévalence standardisée sur l'âge (structure de référence : départements analysés)
+    std = dept_prevalences_standardisees(patho)
+    std_row = std.loc[dept_code] if not std.empty and dept_code in std.index else None
 
     colors = ["#1A3D8F", "#3A5DA3", "#5A7DB7", "#7B9DCB", "#9BBDDF"]
     html = '<div class="patho-list">'
@@ -1249,13 +1256,24 @@ def _render_top_pathologies(r: pd.Series, patho: pd.DataFrame) -> None:
         html += (
             '<div class="patho-item">'
             f'<div class="patho-name">{str(row["patho_niv1"])[:55]}</div>'
-            f'<div class="patho-val">{row["prev"]:.2f}\u202f%\u2002·\u2002{ntop_str}\u202fpat.</div>'
+            f'<div class="patho-val">{row["prev"]:.2f}\u202f% brute'
+            + (f' · {std_row[row["patho_niv1"]]:.2f}\u202f% stand. âge'
+               if std_row is not None and pd.notna(std_row.get(row["patho_niv1"])) else "")
+            + f'\u2002·\u2002{ntop_str}\u202fpat.</div>'
             '<div class="patho-bar">'
             f'<div class="patho-bar-fill" style="width:{width:.1f}%;background:{colors[i]};"></div>'
             '</div>'
             '</div>'
         )
     html += '</div>'
+    html += (
+        '<div style="font-size:11px;color:#9C9A92;margin-top:6px;line-height:1.5;">'
+        'Brute = patients pris en charge / population CNAM du département (2023). '
+        'Standardisée = taux par classe d\u2019âge appliqués à la structure par âge '
+        'de l\u2019ensemble des départements du fichier CNAM\u202f: elle neutralise l\u2019effet du vieillissement '
+        '(cellules sous secret statistique comptées à 0).'
+        '</div>'
+    )
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -1372,6 +1390,10 @@ def _build_patho_to_spec(pros_df: pd.DataFrame) -> dict:
 
 
 def render_offre_medicale(r: pd.Series, data: dict) -> None:
+    # Jeu A (effectifs DREES/RPPS) si disponible ; sinon tableau historique
+    # fondé sur le fichier équipe (présences, pas effectifs).
+    if render_offre_medicale_drees(r, data):
+        return
 
     st.markdown(
         '<div class="section-header">'

@@ -1,0 +1,15 @@
+{
+  "url": "https://data.drees.solidarites-sante.gouv.fr/api/explore/v2.1/catalog/datasets/530_l-accessibilite-potentielle-localisee-apl/attachments/indicateur_d_apl_aux_medecins_generalistes_xlsx",
+  "producteur": "DREES",
+  "licence": "Licence Ouverte v2.0 (Etalab)",
+  "fichier": "apl_medecins_generalistes.xlsx",
+  "sha256": "21c73deff57dc7a83a3cd6fcfd5b5ceb8c7a40e98590a50b5b1194f2dd4d75a2",
+  "date_recuperation": "2026-10-27",
+  "millesimes_disponibles": [
+    "2022",
+    "2023",
+    "2024"
+  ],
+  "unite": "consultations/visites/téléconsultations accessibles par an et par habitant standardisé",
+  "champ": "omnipraticiens libéraux + salariés en centre de santé ; France hors Mayotte"
+}

@@ -14,6 +14,15 @@ ENV_PATH   = DATA_DIR / "environnement.csv"
 PATHO_PATH = DATA_DIR / "pathologies.csv.gz"
 MEDIC_PATH = DATA_DIR / "medicaments.csv"
 
+# ─── Effectifs officiels DREES / RPPS (jeu A) ─────────────────────────────────
+# Activés seulement si les fichiers sont présents dans static/data/ ; produits
+# par scripts/donnees/telecharger_drees_rpps.py (candidats dans
+# data_corrections/references/drees/). Sans eux, l'application retombe sur le
+# fichier « professionnels » de l'équipe (jeu B : présence locale, pas effectifs).
+MEDECINS_DREES_PATH  = DATA_DIR / "drees_medecins_dept_2026.csv"
+AUTRES_PS_DREES_PATH = DATA_DIR / "drees_autres_rpps_dept_2026.csv"
+IDEL_DREES_PATH      = DATA_DIR / "drees_infirmieres_liberales_dept_2023.csv"
+
 # ─── Google Drive — secours si le fichier local est absent ─────────────────────
 POP_FILE_ID   = "11rOLt12iXUxbEQTRlZlbuil_AEp2jxue"
 PROS_FILE_ID  = "1_wkO1vtWE2WO9aZmiI8lNPdbecO5V3pA"

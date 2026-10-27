@@ -27,13 +27,14 @@ def setUpModule() -> None:
     import os
 
     os.chdir(ROOT)  # les chemins de données sont relatifs à la racine
-    from app.data_loading import load_all_data
+    from app.data_loading import load_all_data, load_drees_ps
     from app.scoring import compute_scores
 
-    master, pros, immo, etabs, temps, env, patho, delais = load_all_data()
+    master, pros, immo, etabs, temps, env, patho, delais, presence = load_all_data()
     DATA.update(
         master=compute_scores(master), pros=pros, immo=immo, etabs=etabs,
         temps=temps, env=env, patho=patho, delais=delais, geojson=None,
+        presence=presence, drees=load_drees_ps(),
     )
 
 
@@ -91,8 +92,13 @@ class TestPdfDepartement(unittest.TestCase):
             rang, total = spy.call_args[0]
             self.assertEqual(int(rang), int(r["rang_national"]), dept)
             self.assertEqual(total, 100)
-        # Paris est 14e (rang interne 87 / 100) et non plus « 100e »
-        self.assertEqual(fmt_classement_national(_row("75")["rang_national"], 100), "14 ème")
+        # Le pire département (rang interne 1) s'affiche 100e, le meilleur 1er
+        m = DATA["master"]
+        pire = m.loc[m["rang_national"] == 1].iloc[0]
+        meilleur = m.loc[m["rang_national"] == 100].iloc[0]
+        self.assertEqual(fmt_classement_national(pire["rang_national"], 100), "100\u202fème")
+        self.assertEqual(fmt_classement_national(meilleur["rang_national"], 100), "1er")
+        self.assertLess(pire["score_global"], meilleur["score_global"])
 
 
 class TestPrevalences(unittest.TestCase):
@@ -250,3 +256,97 @@ class TestPages(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEffectifsDrees(unittest.TestCase):
+    """Chemin « jeu A » : effectifs DREES/RPPS injectés à la place du fichier équipe."""
+
+    DREES = ROOT / "data_corrections" / "references" / "drees"
+
+    @classmethod
+    def setUpClass(cls):
+        import app.data_loading as dl
+
+        cls.dl = dl
+        cls.orig = (dl.MEDECINS_DREES_PATH, dl.AUTRES_PS_DREES_PATH, dl.IDEL_DREES_PATH)
+        dl.MEDECINS_DREES_PATH = cls.DREES / "drees_medecins_dept_2026.csv"
+        dl.AUTRES_PS_DREES_PATH = cls.DREES / "drees_autres_rpps_dept_2026.csv"
+        dl.IDEL_DREES_PATH = cls.DREES / "drees_infirmieres_liberales_dept_2023.csv"
+        dl.load_all_data.clear(); dl.load_drees_ps.clear()
+        from app.scoring import compute_scores
+
+        master, pros, immo, etabs, temps, env, patho, delais, presence = dl.load_all_data()
+        cls.data = dict(master=compute_scores(master), pros=pros, immo=immo, etabs=etabs,
+                        temps=temps, env=env, patho=patho, delais=delais, geojson=None,
+                        presence=presence, drees=dl.load_drees_ps())
+
+    @classmethod
+    def tearDownClass(cls):
+        (cls.dl.MEDECINS_DREES_PATH, cls.dl.AUTRES_PS_DREES_PATH, cls.dl.IDEL_DREES_PATH) = cls.orig
+        cls.dl.load_all_data.clear(); cls.dl.load_drees_ps.clear()
+
+    def test_effectifs_personnes_et_source(self):
+        m = self.data["master"].set_index("dept")
+        self.assertEqual(int(m.loc["75", "nb_med_gen"]), 5040)   # DREES, pas 41 lignes
+        self.assertEqual(int(m.loc["973", "nb_med_gen"]), 308)
+        self.assertTrue((m["source_effectifs"] == "DREES RPPS 2026").all())
+        self.assertAlmostEqual(float(m.loc["75", "med_gen_pour_100k"]), 5040 / 2133111 * 1e5, places=2)
+        self.assertGreater(float(m.loc["75", "score_medecins"]), 90)
+
+    def test_presence_conservee_separement(self):
+        p = self.data["presence"]
+        self.assertIn("nb_villes", p.columns)
+        m = self.data["master"].set_index("dept")
+        self.assertEqual(int(m.loc["75", "presence_lignes_med_gen"]), 41)
+
+    def test_table_offre(self):
+        from app.offre_medicale import table_offre
+
+        r = self.data["master"].set_index("dept").loc["23"]
+        r["dept"] = "23"
+        t = table_offre(r, self.data).set_index("label")
+        self.assertEqual(int(t.loc["Médecins généralistes", "effectif"]), 214)
+        self.assertGreater(t.loc["Médecins généralistes", "presence_villes"], 0)
+        self.assertIn("Pharmaciens (RPPS 2026)", t.index)
+
+    def test_pages_avec_drees(self):
+        from streamlit.testing.v1 import AppTest
+
+        for code in ("75", "973", "2A"):
+            at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+            at.query_params["view"] = "dept"; at.query_params["dept_code"] = code
+            at.run()
+            self.assertEqual(len(at.exception), 0, f"dept {code}: {[e.value for e in at.exception]}")
+            html = " ".join(m.value for m in at.markdown)
+            self.assertIn("DREES", html)
+
+
+class TestSimulationCapacite(unittest.TestCase):
+    """Section APL pondéré + simulation ETP, activée par la présence du fichier DREES."""
+
+    def test_section_rendue_si_fichier_present(self):
+        import app.simulation_capacite as sc
+        from streamlit.testing.v1 import AppTest
+
+        orig = sc.APL_DEPT_PATH
+        sc.APL_DEPT_PATH = ROOT / "data_corrections/references/drees/apl_mg_departemental_2023.csv"
+        sc.load_apl_departemental.clear()
+        try:
+            sim = sc.simuler("2B")
+            self.assertAlmostEqual(sim["apl_moyen_pondere"], 3.70, places=1)
+            lo, mid, hi = sim["etp_2,5"]
+            self.assertTrue(lo < mid < hi)
+            self.assertAlmostEqual(mid, sim["deficit_2,5"] / 5400, places=6)
+            at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+            at.query_params["view"] = "dept"; at.query_params["dept_code"] = "23"
+            at.run()
+            self.assertEqual(len(at.exception), 0)
+            html = " ".join(m.value for m in at.markdown)
+            self.assertIn("ETP", html); self.assertIn("Simulation, pas mesure", html)
+        finally:
+            sc.APL_DEPT_PATH = orig; sc.load_apl_departemental.clear()
+
+    def test_section_absente_sans_fichier(self):
+        import app.simulation_capacite as sc
+
+        self.assertIsNone(sc.simuler("23"))
