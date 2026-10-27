@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from ..config import APL_LABEL_COURT
 from ..scoring import fmt_classement_national
 
 BASE_URL = "https://santactive.streamlit.app"
@@ -55,7 +56,7 @@ def dept_share_context(r: pd.Series) -> dict[str, str]:
         f"Score global : {score_str}\n"
         f"Classement national : {rang_str}\n"
         f"Zone : {zone}\n"
-        f"APL médian : {apl_str}\n\n"
+        f"{APL_LABEL_COURT} : {apl_str}\n\n"
         f"Consulter la fiche complète :\n{fiche_url}\n\n"
         f"Sant'active · Observatoire Santé Territorial\n"
         f"santactive.esdata@gmail.com"
@@ -90,7 +91,7 @@ def region_share_context(
         f"Voici la fiche pilotage Sant'active pour la région {region_name}.\n\n"
         f"Départements : {nb_depts} · Zone critique : {nb_crit}\n"
         f"Population : {pop_str} hab.\n"
-        f"APL médian : {apl_str}\n"
+        f"{APL_LABEL_COURT} : {apl_str}\n"
         f"Tension principale : {tension}\n\n"
         f"Consulter la fiche complète :\n{fiche_url}\n\n"
         f"Sant'active · Observatoire Santé Territorial\n"

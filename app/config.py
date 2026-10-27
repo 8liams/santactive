@@ -31,7 +31,7 @@ def _option(nom: str, defaut: str, valeurs: tuple[str, ...]) -> str:
 SOURCE_EFFECTIFS = _option("SANTACTIVE_SOURCE_EFFECTIFS", "drees", ("drees", "equipe"))
 #   drees  : effectifs DREES/RPPS au 1er janvier 2026 (personnes distinctes)
 #   equipe : lignes du fichier territorial de l'équipe (présences — historique)
-APL_METHODE = _option("SANTACTIVE_APL_METHODE", "mediane", ("mediane", "ponderee"))
+APL_METHODE = _option("SANTACTIVE_APL_METHODE", "ponderee", ("mediane", "ponderee"))
 #   mediane  : médiane simple des APL communaux (méthode historique)
 #   ponderee : moyenne pondérée par la population standardisée (méthode DREES)
 ETABS_DEFINITION = _option("SANTACTIVE_ETABS_DEFINITION", "actuelle", ("actuelle", "court_sejour"))
@@ -72,6 +72,12 @@ ETABS_CATEGORIES = {
                      "Centre de Lutte Contre Cancer"],
 }
 APL_LABELS = {"mediane": "APL médian communal", "ponderee": "APL moyen pondéré (méthode DREES)"}
+APL_LABEL = APL_LABELS[APL_METHODE]
+APL_LABEL_COURT = {"mediane": "APL médian", "ponderee": "APL pondéré"}[APL_METHODE]
+APL_AGREGATION = {
+    "mediane": "médiane simple des APL communaux (chaque commune pèse autant)",
+    "ponderee": "moyenne des APL communaux pondérée par la population standardisée (méthode DREES)",
+}[APL_METHODE]
 
 # ─── Google Drive — secours si le fichier local est absent ─────────────────────
 POP_FILE_ID   = "11rOLt12iXUxbEQTRlZlbuil_AEp2jxue"

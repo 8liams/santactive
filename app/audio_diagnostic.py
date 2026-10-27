@@ -10,6 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from .components.delais import APL_SEUIL_DESERT
+from .config import APL_LABEL_COURT
 from .scoring import rang_affichage
 
 _AUDIO_VOICE = "fr-FR-DeniseNeural"
@@ -411,12 +412,12 @@ def build_region_audio_diagnostic_text(
             level = "très faible" if apl_f < 1.5 else "faible"
             parts.append(
                 f"L'accessibilité aux médecins généralistes est {level} "
-                f"à l'échelle régionale : l'APL médian atteint {apl_f:.1f} "
+                f"à l'échelle régionale : l'{APL_LABEL_COURT} atteint {apl_f:.1f} "
                 f"consultation par habitant, sous le seuil de 2,5."
             )
         else:
             parts.append(
-                f"L'APL médian régional atteint {apl_f:.1f} consultation "
+                f"L'{APL_LABEL_COURT} régional atteint {apl_f:.1f} consultation "
                 f"par habitant, au-dessus du seuil de 2,5."
             )
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 from datetime import date
+
+from .config import APL_LABEL_COURT
 from typing import Any
 
 import pandas as pd
@@ -342,13 +344,14 @@ def generate_department_pdf(
         from .components.delais import compute_delais_proxy
         apl_val = float(apl) if apl is not None and not pd.isna(apl) else None
         if apl_val:
-            delais_df = compute_delais_proxy(dept_code, apl_val)
+            apl_nat_ref = float(pd.to_numeric(master["apl_dept"], errors="coerce").median())
+            delais_df = compute_delais_proxy(dept_code, apl_val, apl_nat_ref)
             if not delais_df.empty and "delai_estime_jours" in delais_df.columns:
                 _section_heading("Délais de rendez-vous estimés", story)
 
                 story.append(Paragraph(
                     f'<i><font size="8" color="#666666">Estimation proxy : délai national DREES '
-                    f'× (APL nationale 2,9 / APL département {apl_val:.2f}). '
+                    f'× (APL national {apl_nat_ref:.2f} / APL département {apl_val:.2f}). '
                     f'Facteur plafonné à 3,0 pour éviter les aberrations.</font></i>',
                     _s("dmeta", fontSize=8, textColor=colors.HexColor("#666666"),
                        fontName="Helvetica", leading=11),
@@ -681,7 +684,7 @@ def generate_region_pdf(
         ("Départements", str(nb_depts)),
         ("Zone critique", str(nb_crit)),
         ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
-        ("APL médian", _fmt(apl_med, "{:.1f}") + " /hab."),
+        (APL_LABEL_COURT, _fmt(apl_med, "{:.1f}") + " /hab."),
         ("Tension principale", str(summary.get("tension_principale", "N/D"))),
     ]
     rows = []

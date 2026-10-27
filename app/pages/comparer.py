@@ -12,7 +12,7 @@ from ..config import PALETTE, PLOTLY_TEMPLATE
 from ..router import navigate
 
 # Médiane APL nationale (ANCT 2023) — même référence que l'accueil et les fiches dept.
-APL_NATIONAL_REF = 2.9
+APL_NATIONAL_REF = None  # référence = médiane des valeurs départementales (voir _national_reference)
 
 COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Score global",         "score_global",          ".1f", "/100"),
@@ -601,7 +601,7 @@ def _render_comparison_table(
         '</div>'
         '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
         'Référence nationale = médiane calculée sur les 100 départements analysés '
-        '(APL\u202f: médiane des APL médians départementaux, ANCT 2023). '
+        '(APL\u202f: médiane des valeurs départementales, DREES 2023). '
         'Vert = au-dessus de la médiane (ou en dessous si l\'indicateur est '
         'défavorable), rouge = en dessous.'
         f'{region_note}'

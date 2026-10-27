@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import NA_DISPLAY, PATHOS_EXCLUDED
+from .config import APL_LABEL, NA_DISPLAY, PATHOS_EXCLUDED
 from .pathologies import dept_prevalences
 
 APL_SEUIL_DESERT = 2.5
@@ -139,10 +139,10 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     if pd.notna(apl):
         if apl < APL_SEUIL_DESERT:
             reasons.append(
-                f"APL médian communal de {apl:.1f}\u202f/hab., sous le repère de sous-densité (2,5)."
+                f"{APL_LABEL} de {apl:.1f}\u202f/hab., sous le repère de sous-densité (2,5)."
             )
         elif apl < 3.0:
-            reasons.append(f"APL médian communal de {apl:.1f}\u202f/hab., proche du repère de 2,5.")
+            reasons.append(f"{APL_LABEL} de {apl:.1f}\u202f/hab., proche du repère de 2,5.")
 
     nb_crit = int(_num(row.get("nb_communes_critiques"), 0) or 0)
     if nb_crit > 0:

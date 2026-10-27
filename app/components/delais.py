@@ -50,8 +50,8 @@ def compute_delais_proxy(
 
     Args:
         dept_code    : code département (pour la traçabilité)
-        apl_dept     : APL médian du département (ANCT 2023)
-        apl_nationale: APL médiane nationale (2.9 selon ANCT 2023)
+        apl_dept     : APL du département (méthode config.APL_METHODE)
+        apl_nationale: médiane des valeurs départementales (même méthode)
 
     Returns:
         DataFrame avec colonnes :

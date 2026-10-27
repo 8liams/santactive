@@ -9,7 +9,7 @@ import streamlit as st
 from branca.colormap import LinearColormap
 from streamlit_folium import st_folium
 
-from ..config import PALETTE
+from ..config import APL_LABEL_COURT, PALETTE
 
 # ── Tuiles CartoDB Positron : fond gris-clair minimal institutionnel ──────────
 TILE_URL  = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -107,7 +107,7 @@ def render_national_choropleth(
     # Label et format du tooltip selon l'indicateur sélectionné
     _metric_meta: dict[str, tuple[str, str]] = {
         "score_global":         ("Score global",        "{:.1f}/100"),
-        "apl_dept":      ("APL médian",          "{:.1f}\u202f/hab."),
+        "apl_dept":      (APL_LABEL_COURT,       "{:.1f}\u202f/hab."),
         "temps_acces_median":   ("Temps d'accès",       "{:.1f}\u202fmin"),
         "med_gen_pour_100k":    ("Médecins / 100k",     "{:.0f}"),
         "structures_pour_100k": ("Structures / 100k",   "{:.1f}"),

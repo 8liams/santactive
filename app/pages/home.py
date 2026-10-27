@@ -264,7 +264,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
 def _render_national_kpis(data: dict) -> None:
     master = data["master"] if isinstance(data, dict) else data
 
-    apl_nationale  = 2.9
+    apl_nationale  = float(pd.to_numeric(master["apl_dept"], errors="coerce").median())
     temps_median   = round(float(pd.to_numeric(master["temps_acces_median"], errors="coerce").median()), 1) if "temps_acces_median" in master.columns else 12.0
     med_median     = round(float(pd.to_numeric(master["med_gen_pour_100k"], errors="coerce").median()), 0) if "med_gen_pour_100k" in master.columns else 110.0
     nb_critiques   = int((master["zone_short"] == "Critique").sum()) if "zone_short" in master.columns else 0

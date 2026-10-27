@@ -10,6 +10,8 @@ Usage :
 """
 from __future__ import annotations
 
+from ..config import APL_AGREGATION
+
 # ── Dictionnaire centralisé de toutes les définitions ────────────────────────
 TOOLTIPS: dict[str, dict[str, str]] = {
     "apl": {
@@ -27,7 +29,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "pas à un département entier."
             "<br><br>"
             "<strong>Dans Sant'active :</strong> la valeur départementale est la "
-            "médiane des APL communaux (non pondérée par la population)."
+            + APL_AGREGATION + "."
             "<br><br>"
             "<strong>Source :</strong> ANCT / Observatoire des territoires · "
             "Millésime 2023"
@@ -95,7 +97,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "<br>1. Base nationale réelle : enquête DREES 2016-2017 "
             "(40 000 personnes, 9 spécialités)"
             "<br>2. Ajustement par l'APL du département : "
-            "délai estimé = délai national × (APL nationale 2.9 / APL dept)"
+            "délai estimé = délai national × (APL national médian / APL dept)"
             "<br><br>"
             "Un APL faible → délais estimés plus longs, conformément à la "
             "corrélation documentée par la DREES."

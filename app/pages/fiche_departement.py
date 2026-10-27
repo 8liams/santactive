@@ -20,6 +20,7 @@ from ..action_impact import project_levier_impact, render_impact_html
 from ..router import navigate, navigate_compare
 from ..scoring import fmt_classement_national, to_num
 from ..components.delais import APL_SEUIL_DESERT
+from ..config import APL_AGREGATION, APL_LABEL, APL_LABEL_COURT
 from ..offre_medicale import render_offre_medicale_drees
 from ..simulation_capacite import render_simulation_capacite
 from ..pathologies import (
@@ -278,7 +279,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
                 f'letter-spacing:0.08em;text-transform:uppercase;">'
                 f'Source ANCT · Observatoire des territoires · 2023'
                 f'&nbsp;·&nbsp;'
-                f'APL médian des communes (non pondéré) · repère sous-densité &lt; 2,5'
+                f'{APL_AGREGATION} · repère sous-densité &lt; 2,5'
                 f'</div>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -884,7 +885,7 @@ def _generate_recommendations(
         recos.append({
             "title": "Implanter une maison de santé pluridisciplinaire dans les zones isolées.",
             "prose": (
-                f"L'APL médian des communes de {dept_nom} ({apl:.1f} consult./an/hab.) "
+                f"L'{APL_LABEL_COURT} de {dept_nom} ({apl:.1f} consult./an/hab.) "
                 f"est sous le repère de {APL_SEUIL_DESERT} utilisé pour identifier "
                 "les zones sous-denses en médecine générale. "
                 + (f"{nb_communes_eloignees} communes ont un temps d'accès "
@@ -897,7 +898,7 @@ def _generate_recommendations(
                   "professionnels autour d'un projet de santé commun."
             ),
             "stats": [
-                (f"{apl:.1f}", "APL médian communal"),
+                (f"{apl:.1f}", APL_LABEL),
                 (f"{APL_SEUIL_DESERT}", "Repère sous-densité"),
                 (_f(prix_m2, ".0f", " €"), "Prix médian /m²"),
             ],
@@ -911,7 +912,7 @@ def _generate_recommendations(
         recos.append({
             "title": "Renforcer l'accès aux soins par télémédecine et consultations avancées.",
             "prose": (
-                f"Malgré une densité urbaine, l'APL médian de {apl:.1f} "
+                f"Malgré une densité urbaine, l'{APL_LABEL_COURT} de {apl:.1f} "
                 "signale une offre de médecine générale insuffisante "
                 "au regard de la population. "
                 "Le déploiement de téléconsultations, de "
@@ -919,7 +920,7 @@ def _generate_recommendations(
                 "centres de santé permettrait d'élargir l'offre de premier recours."
             ),
             "stats": [
-                (f"{apl:.1f}", "APL médian communal"),
+                (f"{apl:.1f}", APL_LABEL),
                 (_f(score_acces, ".0f", "/100"), "Score accès"),
                 (_f(temps, ".0f", " min"), "Temps d'accès médian"),
             ],
@@ -1082,7 +1083,7 @@ def _generate_recommendations(
             ),
             "stats": [
                 (f"{prix_m2:.0f} €", "Prix médian /m²"),
-                (f"{apl:.1f}", "APL médian communal"),
+                (f"{apl:.1f}", APL_LABEL),
             ],
             "priority": 3,
         })
@@ -1103,7 +1104,7 @@ def _generate_recommendations(
             ),
             "stats": [
                 (f"{score_global:.0f}/100", "Score global actuel"),
-                (_f(apl, ".1f"), "APL médian communal"),
+                (_f(apl, ".1f"), APL_LABEL),
             ],
             "priority": 3,
         })
@@ -1123,7 +1124,7 @@ def _generate_recommendations(
             ),
             "stats": [
                 (_f(score_global, ".0f", "/100"), "Score global"),
-                (_f(apl, ".1f"), "APL médian communal"),
+                (_f(apl, ".1f"), APL_LABEL),
             ],
             "priority": 3,
         })
@@ -1706,7 +1707,8 @@ def render_delais_rdv(r: pd.Series, data: dict) -> None:
         )
 
     # ── Calcul du proxy ────────────────────────────────────────────────────
-    APL_NATIONALE = 2.9  # médiane nationale ANCT 2023
+    # Référence nationale = médiane des valeurs départementales (même méthode que apl_dept)
+    APL_NATIONALE = float(pd.to_numeric(data["master"]["apl_dept"], errors="coerce").median())
 
     if pd.isna(apl):
         st.info("APL non disponible pour ce département : délais non calculables.")

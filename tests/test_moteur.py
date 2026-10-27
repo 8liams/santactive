@@ -165,9 +165,9 @@ class TestRegions(unittest.TestCase):
         rd, *_rest = _region_chain("24")
         lev = _rest[-1]
         tele = next(l for l in lev if l["intitule"] == "Téléexpertise")
-        nb_desert = int((pd.to_numeric(rd["apl_median_dept"]) < 2.5).sum())
-        self.assertEqual(len(tele["depts"]), nb_desert)
-        self.assertIn("Loiret", tele["depts"])
+        attendus = set(rd.loc[pd.to_numeric(rd["apl_dept"]) < 2.5, "Nom du département"])
+        self.assertEqual(set(tele["depts"]), attendus)   # tous, sans troncature à 4
+        self.assertGreaterEqual(len(attendus), 2)
 
     def test_population_observee_et_non_multiplicateurs(self):
         rd, _, _, _, prio, _, _ = _region_chain("4")
