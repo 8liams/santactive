@@ -195,8 +195,12 @@ def load_all_data():
     del _temps_raw
 
     # ── Immobilier — médiane ──────────────────────────────────────────────────
+    # dtypes compacts : 900 000 transactions ; les noms de communes et codes se répètent
+    # (category divise la mémoire par huit, contrainte Streamlit Cloud ~1 Go)
     _immo_raw = read_dataset(IMMO_PATH, IMMO_FILE_ID, sep=";", low_memory=False,
-                             usecols=["code_departement", "commune", "prix_m2", "valeur_fonciere", "surface_m2"])
+                             usecols=["code_departement", "commune", "prix_m2", "valeur_fonciere", "surface_m2"],
+                             dtype={"code_departement": "category", "commune": "category", "prix_m2": "float32",
+                                    "valeur_fonciere": "float32", "surface_m2": "float32"})
     _immo_raw["dept"] = _immo_raw["code_departement"].pipe(_zd_series)
     immo_dept = _immo_raw.groupby("dept").agg(
         prix_m2_moyen   =("prix_m2",        "median"),
@@ -497,7 +501,15 @@ def load_delais_rdv() -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Chargement de la carte…")
 def load_geojson():
-    """Télécharge le GeoJSON des départements français."""
+    """Contours simplifiés des départements : copie locale (static/geo, gregoiredavid/france-geojson,
+    96 départements métropolitains) ; téléchargement seulement si le fichier local manque."""
+    local = Path("static") / "geo" / "departements_simplifie.geojson"
+    if local.exists():
+        try:
+            import json
+            return json.loads(local.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
     try:
         return requests.get(GEOJSON_URL, timeout=15).json()
     except Exception:

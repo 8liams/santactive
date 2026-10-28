@@ -394,3 +394,40 @@ département. Non intégré au score.
 - **Rang national** : calculé sur le score non arrondi (cinq égalités au dixième
   apparaissaient avec le temps INSEE, d'où des rangs en double) ; égalité stricte
   départagée par le code du département ; rangs uniques de 1 à 100 (`score_global_raw`).
+
+## 18. Audit final avant publication (28 octobre 2026)
+
+- **Cohérence vérifiée** : score global = moyenne pondérée des dimensions disponibles
+  (recalcul indépendant, écart < 0,05 dû à l'arrondi) ; rangs uniques 1–100 ; terciles
+  33/34/33 ; sources des dimensions `DREES 2024` et `INSEE 2025` ; chiffres nationaux
+  identiques entre accueil, diagnostic national et calculs directs (12,3 M d'habitants
+  sous APL 2,5 soit 18,2 % ; 7 départements sous 2,5 ; 514 254 habitants à plus de
+  15 min soit 0,8 %) ; agrégats départementaux INSEE et simulateur alignés (carreaux
+  réécrits à deux décimales : Cher 8 072 contre 8 080 habitants à plus de 15 min,
+  écart < 0,2 % d'arrondi).
+- **Guadeloupe et Guyane** (sans temps INSEE, score sur cinq dimensions) :
+  Guadeloupe 57,8 (62ᵉ, intermédiaire), Guyane 29,7 (17ᵉ, critique). Sensibilité à
+  une imputation du temps : médiane nationale → 61ᵉ / 24ᵉ ; pire valeur → 44ᵉ / 6ᵉ ;
+  meilleure valeur → 75ᵉ (favorable) / 40ᵉ (intermédiaire). La comparaison nationale
+  reste défendable (zone inchangée sauf dans l'hypothèse la plus favorable) ; la fiche
+  affiche la dimension comme « non disponible, exclue du score », le PDF porte
+  désormais une mention explicite (score sur 5 dimensions).
+- **Corrections certaines** : contours départementaux servis en local
+  (`static/geo/departements_simplifie.geojson`, téléchargement en repli) ;
+  `requirements.txt` réduit aux dépendances réellement importées (ajout de shapely,
+  retrait de geopandas, scikit-learn, statsmodels, streamlit-searchbox, weasyprint
+  non utilisés) ; dtypes compacts pour les transactions DVF (122 → 9 Mo) ; infobulles
+  APL et score (sources DREES/INSEE) ; note PDF sur les dimensions manquantes.
+- **Décision méthodologique à trancher (non modifiée)** : les indicateurs « communes
+  critiques » (`nb_communes_critiques`, `pop_communes_critiques`,
+  `part_pop_communes_critiques`) et les « secteurs » cités dans les leviers viennent
+  encore du fichier interne (1 228 communes, 219 218 habitants à plus de 15 min) alors
+  que l'INSEE en compte 1 928 et 514 254. Les leviers mêlent donc un temps médian INSEE
+  et des comptes de communes internes sur la même carte. Bascule simulée vers l'INSEE :
+  leviers modifiés dans 13 départements ruraux (ajout d'équipes mobiles et de navettes :
+  Allier, Hautes-Alpes, Ardèche, Ariège, Aveyron, Corrèze, Dordogne, Gers, Lot,
+  Haute-Marne, Nièvre, Var, Vosges). Recommandation : basculer avant publication.
+- **Seuils absolus hérités** (pilotage régional : « temps > 12 min », « ≤ 10 min ») :
+  déjà quasi inertes avec l'indicateur interne (1 et 99 départements), inertes avec
+  l'INSEE (0 et 98) ; à remplacer par un critère relatif (au-dessus du 3ᵉ quartile,
+  3,3 min) si l'on souhaite conserver ces mentions.

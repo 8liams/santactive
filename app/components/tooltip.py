@@ -31,7 +31,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "<strong>Dans Sant'active :</strong> la valeur départementale est la "
             + APL_AGREGATION + "."
             "<br><br>"
-            "<strong>Source :</strong> ANCT / Observatoire des territoires · "
+            "<strong>Source :</strong> DREES, APL aux médecins généralistes · "
             f"Millésime {APL_MILLESIME}"
         ),
     },
@@ -55,8 +55,8 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "<br>Le score est calculé uniquement si au moins 3 dimensions "
             "sont disponibles."
             "<br><br>"
-            "<strong>Source :</strong> calcul Sant'active v2 · INSEE · ANCT · "
-            "RPPS · FINESS · DVF"
+            "<strong>Sources :</strong> DREES (APL 2024, RPPS 2026) · INSEE (RP 2021, "
+            "accès aux équipements 2025) · FINESS 2026 · DVF 2025"
         ),
     },
     "temps_acces": {

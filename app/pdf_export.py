@@ -160,6 +160,7 @@ def generate_department_pdf(
     region     = str(r.get("Nom de la région", "N/D"))
     zone       = str(r.get("zone_short", "N/D"))
     score      = r.get("score_global")
+    nb_dims    = pd.to_numeric(pd.Series([r.get("nb_dimensions_ok")]), errors="coerce").iloc[0]
     zone_col   = _zone_color(zone)
     zone_bg    = _zone_soft(zone)
 
@@ -245,7 +246,11 @@ def generate_department_pdf(
                 f'{frag_str} / {total}</font>',
                 _s("rang", fontName="Helvetica", fontSize=9, alignment=TA_RIGHT, textColor=GRIS_SEC),
             ),
-        ],
+        ] + ([Paragraph(
+                f'<font size="8" color="#A51C30">Score calculé sur {int(nb_dims)} dimensions sur 6 : le temps d\'accès INSEE 2025 '
+                f'n\'est pas disponible pour ce département (hors champ de la base) ; son poids est redistribué.</font>',
+                _s("dims", fontName="Helvetica", fontSize=8, alignment=TA_RIGHT, textColor=ROUGE_CRIT))]
+             if pd.notna(nb_dims) and int(nb_dims) < 6 else []),
     ]], colWidths=[CONTENT_W * 0.42, CONTENT_W * 0.58])
     score_block.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, -1), zone_bg),

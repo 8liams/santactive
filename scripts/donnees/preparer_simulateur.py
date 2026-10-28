@@ -4,8 +4,9 @@ Pour chaque département présent dans les fichiers parquet INSEE « accès aux
 équipements » (millésime 2025, déjà téléchargés : voir calculer_acces_insee.py) :
 
 1. carreaux habités (généraliste, type BPE D265) → static/geo/carreaux_mg_<dept>.csv.gz
-   (code commune, centre du carreau en WGS84 arrondi à 1e-4°, population, durée
-   en minutes arrondie à 0,1, commune de l'équipement le plus proche) ;
+   (code commune, centre du carreau en WGS84 arrondi à 1e-4°, population et durée
+   en minutes arrondies à 0,01 — même base que les agrégats départementaux de
+   calculer_acces_insee.py —, commune de l'équipement le plus proche) ;
 2. zones continues par classe de temps (≤ 10, 10–15, 15–20, 20–30, > 30 min) :
    union des carrés de 200 m dans la projection métrique d'origine (EPSG:3035,
    4559 Martinique, 2975 La Réunion), parties et trous < 0,2 km² retirés,
@@ -141,7 +142,7 @@ def communes_api(dept: str, dest: Path, refresh: bool) -> dict | None:
 
 
 def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict, refresh_zones: bool = False,
-                   refresh_communes: bool = False) -> None:
+                   refresh_communes: bool = False, refresh_carreaux: bool = False) -> None:
     reg = re.search(r"reg(\d+)", path.name).group(1)
     crs = _CRS.get(reg, "EPSG:3035")
     con = duckdb.connect()
@@ -161,10 +162,10 @@ def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict
         f_car = GEO / f"carreaux_mg_{dept}.csv.gz"
         f_zon = GEO / f"zones_mg_{dept}.json"
         f_com = GEO / f"communes_{dept}.json"
-        if refresh or not f_car.exists():
+        if refresh or refresh_carreaux or not f_car.exists():
             lon, lat = tr.transform(d["X"].to_numpy(float) + 100, d["Y"].to_numpy(float) + 100)
             pd.DataFrame({"code_insee": d["code_insee"].values, "lon": np.round(lon, 4), "lat": np.round(lat, 4),
-                          "pop": d["pop"].round(1).values, "duree": d["duree"].round(1).values,
+                          "pop": d["pop"].round(2).values, "duree": d["duree"].round(2).values,
                           "commune_offre": d["commune_offre"].values}).to_csv(f_car, index=False, compression="gzip")
         if refresh or refresh_zones or not f_zon.exists():
             f_zon.write_text(json.dumps(zones_geojson(d, crs), separators=(",", ":")))
@@ -206,6 +207,7 @@ def main() -> None:
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--refresh-zones", action="store_true", help="recalculer seulement les zones (carreaux et communes conservés)")
     ap.add_argument("--refresh-communes", action="store_true", help="retélécharger seulement les communes (API Géo : centre, mairie, population)")
+    ap.add_argument("--refresh-carreaux", action="store_true", help="réécrire seulement les carreaux (durée et population à 2 décimales, même base que les agrégats départementaux)")
     args = ap.parse_args()
     GEO.mkdir(parents=True, exist_ok=True)
     f_index = GEO / "simulateur_index.json"
@@ -214,7 +216,7 @@ def main() -> None:
     files = sorted(Path(args.raw_dir).glob(f"donnees_{args.millesime}_reg*.parquet"))
     for f in files:
         print(f"→ {f.name}", flush=True)
-        traiter_region(f, only, args.refresh, index, args.refresh_zones, args.refresh_communes)
+        traiter_region(f, only, args.refresh, index, args.refresh_zones, args.refresh_communes, args.refresh_carreaux)
         f_index.write_text(json.dumps({"source": "Insee, BPE 2025, Metric-OSRM, Filosofi · API Géo · zones : union des carreaux par classe",
                                        "date": date.today().isoformat(), "departements": index}, indent=1, ensure_ascii=False))
     ok = [d for d, v in index.items() if v["ok"]]
