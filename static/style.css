@@ -3247,3 +3247,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .ref-block-links .sa-dim { font-size: 11.5px; color: #9C9A92; padding: 4px 2px; }
 .usage-grid--6 { grid-template-columns: repeat(3, 1fr); }
 @media screen and (max-width: 768px) { .usage-grid--6 { grid-template-columns: 1fr 1fr; } .ref-block-links { min-width: 100%; } }
+@media screen and (max-width: 768px) {
+    div[data-testid="stPills"] button, div[data-testid="stPills"] button[data-testid="stBaseButton-pills"],
+    div[data-testid="stPills"] button[data-testid="stBaseButton-pillsActive"] { border-radius: 6px !important; }
+}

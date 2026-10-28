@@ -95,7 +95,8 @@ Une ligne = **1 département** (~101 lignes). Colonnes issues de `app/data_loadi
 
 | Colonne | Signification | Source | Niveau | Type |
 |---------|---------------|--------|--------|------|
-| `temps_acces_median` | Temps trajet médian vers établissement le plus proche | Calcul interne FINESS + INSEE | Département (agrégé) | Nombre brut |
+| `temps_acces_median` | Médiane des communes du temps vers la commune équipée la plus proche (0 = généraliste présent) — dimension « temps » du score en mode `interne` | Fichier interne de l'équipe (présences par code postal), méthode non documentée | Département (agrégé) | Nombre brut |
+| `acces_mg_t_med`, `acces_mg_part_sup_15`, `acces_mg_pop_sup_15`, `acces_mg_nb_communes_sup_15`, `acces_mg_pop` | Temps en voiture vers le généraliste le plus proche (médiane pondérée), part et population à plus de 15 min, communes > 15 min en moyenne | Insee 2025 (BPE 2025, Metric-OSRM, Filosofi) — `scripts/donnees/calculer_acces_insee.py` | Département (carreaux 200 m agrégés) | Hors 971, 973, 976 |
 | `temps_acces_p90` | 90e percentile temps d'accès | Idem | Département | Nombre brut |
 | `temps_acces_max` | Temps max | Idem | Département | Nombre brut |
 | `nb_communes` | Nb communes dans le calcul | Idem | Département | Nombre brut |

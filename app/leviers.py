@@ -459,13 +459,15 @@ def _t_teleexpertise(p):
 
 
 def _t_sante_mentale(p):
+    dens_txt = (f", avec {_f(p['dens_psychiatrie'])} psychiatres pour 100\u202f000 hab. "
+                f"(médiane des départements\u202f: {_f(p['med']['dens_psychiatrie'])})."
+                if pd.notna(p.get("dens_psychiatrie")) else "\u202f; la densité de psychiatres n'est pas disponible.")
     return {
-        "probleme": f"La prévalence standardisée des troubles psychiatriques atteint {_f(p['prevstd_psy'], '.2f')} % "
-                    f"{p['nom_dans']} (médiane {_f(p['med']['prevstd_psy'], '.2f')} %) avec "
-                    f"{_f(p['dens_psychiatrie'])} psychiatres /100k (médiane {_f(p['med']['dens_psychiatrie'])}).",
-        "indicateurs": [f"{_n(p['patients_psy'])} patients suivis pour troubles psychiatriques (CNAM 2023)",
-                        f"{_f(p['dens_psychiatrie'])} psychiatres /100k",
-                        f"{int(p['nb_chs_psychiatrie'])} sites de centres hospitaliers spécialisés"],
+        "probleme": f"La prévalence standardisée des troubles psychiatriques atteint {_f(p['prevstd_psy'], '.2f')}\u202f% "
+                    f"{p['nom_dans']} (médiane {_f(p['med']['prevstd_psy'], '.2f')}\u202f%)" + dens_txt,
+        "indicateurs": [f"{_n(p['patients_psy'])} patients suivis pour troubles psychiatriques (CNAM 2023)"]
+                       + ([f"{_f(p['dens_psychiatrie'])} psychiatres /100k"] if pd.notna(p.get("dens_psychiatrie")) else [])
+                       + [f"{int(p['nb_chs_psychiatrie'])} sites de centres hospitaliers spécialisés"],
         "action": "Renforcer le premier recours en santé mentale : Mon soutien psy, infirmiers en "
                   "pratique avancée en psychiatrie, équipes mobiles (EMPP) et coordination CPTS–secteur.",
         "pourquoi": "Quand la demande est élevée et les psychiatres peu nombreux, l'enjeu est la "

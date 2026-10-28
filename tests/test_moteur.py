@@ -683,3 +683,102 @@ class TestNouvellesPages(unittest.TestCase):
         self.assertTrue((com.loc[com["statut"] == "calculé", "temps_ign_min"] > 0).all())
         cov = d["couverture_population"]
         self.assertTrue(cov["10"] <= cov["15"] <= cov["20"] <= cov["30"] <= cov["total"])
+
+
+class TestFiabilisationEtTerritoire(unittest.TestCase):
+    """Chantier du 28 octobre : indicateur INSEE, territoire de référence, simulateur v2, Comparer."""
+
+    def test_territoire_param(self):
+        from app.territoire import FRANCE, Territoire, parse
+
+        self.assertEqual(parse("fr"), FRANCE)
+        self.assertEqual(parse("d18"), Territoire("dept", "18"))
+        self.assertEqual(parse("d1"), Territoire("dept", "01"))
+        self.assertEqual(parse("r53"), Territoire("region", "53"))
+        self.assertIsNone(parse("xyz"))
+        self.assertEqual(Territoire("dept", "974").param, "d974")
+        self.assertTrue(FRANCE.is_national)
+
+    def test_acces_insee_departements(self):
+        import pandas as pd
+        from app.data_loading import load_acces_insee_dept
+
+        d = load_acces_insee_dept()
+        self.assertGreaterEqual(len(d), 95)
+        self.assertNotIn("973", set(d["dept"]))            # Guyane hors champ Filosofi
+        cher = d[d["dept"] == "18"].iloc[0]
+        self.assertTrue(0.02 < cher["acces_mg_part_sup_15"] < 0.04)   # 2,8 % en 2025
+        self.assertTrue(2 < cher["acces_mg_t_med"] < 10)   # médiane 2,95 min en 2025
+        # part nationale pondérée : 0,8 %
+        part = (d["acces_mg_pop_sup_15"].sum() / d["acces_mg_pop"].sum())
+        self.assertTrue(0.005 < part < 0.012)
+        self.assertTrue((d["acces_mg_part_sup_15"] >= d["acces_mg_part_sup_20"]).all())
+
+    def test_lecture_communale_insee(self):
+        import pandas as pd
+        from app.commune_opportunity import besoin_class, capacite_class, load_acces_insee_communes
+
+        c = load_acces_insee_communes()
+        self.assertGreater(len(c), 34000)
+        cher = c[c["dep"] == "18"]
+        self.assertEqual(int(cher["offre_sur_place"].sum()), 51)       # communes avec généraliste (BPE 2025)
+        # présence explicite : une commune équipée à 3 min est « offre dans la commune »,
+        # une commune non équipée à 3 min est « 10 min ou moins »
+        self.assertEqual(besoin_class(3.0, True)[0], "Offre dans la commune")
+        self.assertEqual(besoin_class(3.0, False)[0], "10 min ou moins")
+        self.assertEqual(besoin_class(0, None)[0], "Offre dans la commune")   # convention interne conservée
+        self.assertIn("capacité insuffisante", capacite_class(1.6, 4.0, True)[0])
+        self.assertEqual(capacite_class(2.0, 4.0, False)[0], "Sans offre sur place, APL < 2,5")
+
+    def test_pilotes_et_message_hors_pilote(self):
+        from app.pages.acces_ign import PILOTES_VALIDES, pilotes_disponibles
+
+        pil = pilotes_disponibles()
+        for d in ("18", "23", "93", "974"):
+            self.assertIn(d, pil)
+        self.assertTrue(set(pil) <= set(PILOTES_VALIDES))
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "acces"; at.query_params["dept_code"] = "75"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("pas disponible pour Paris", html)
+
+    def test_comparer_similaires_et_synthese(self):
+        from app.pages.comparer import _similar, build_regions_comparison_df
+
+        at_master = self._master()
+        sim = _similar("18", at_master, 3)
+        self.assertEqual(len(sim), 3); self.assertNotIn("18", sim)
+        contr = _similar("18", at_master, 3, contraste=True)
+        self.assertTrue(all(at_master.set_index("dept").loc[c, "zone_short"] == "Favorable" for c in contr))
+        reg = build_regions_comparison_df(at_master)
+        self.assertIn("acces_mg_part_sup_15_pct", reg.columns)
+        self.assertIn("nb_depts", reg.columns)
+
+    def test_leviers_region_en_clair(self):
+        lv = __import__("app.leviers", fromlist=["leviers_region"]).leviers_region(["22", "29", "35", "56"], self._data())
+        self.assertTrue(lv)
+        for l in lv:
+            self.assertNotIn("percentile", l["tension"])
+            self.assertNotIn("N/D psychiatres", l["tension"])
+            self.assertIn("conditions_catalogue", l)
+
+    @classmethod
+    def _data(cls):
+        if not hasattr(cls, "_cache"):
+            import warnings
+            warnings.filterwarnings("ignore")
+            from app.data_loading import load_all_data
+            from app.scoring import compute_scores
+            master, pros, immo, etabs, temps, env, patho, delais, presence = load_all_data()
+            master = compute_scores(master)
+            master["acces_mg_part_sup_15_pct"] = master["acces_mg_part_sup_15"] * 100
+            cls._cache = {"master": master, "pros": pros, "immo": immo, "etabs": etabs, "temps": temps,
+                          "env": env, "patho": patho, "delais": delais, "presence": presence}
+        return cls._cache
+
+    @classmethod
+    def _master(cls):
+        return cls._data()["master"]

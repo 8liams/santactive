@@ -198,3 +198,79 @@ département. Non intégré au score.
   « Problématiques de santé prioritaires » ; populations qualifiées.
 - Extension IGN : voir le bilan du 28 octobre (≈ 3 itinéraires par commune
   sans offre + 4 isochrones par commune d'offre ; Cher = 907 requêtes, 1,3 Mo).
+
+## 14. Fiabilisation des temps d'accès, territoire de référence, simulateur v2 (28 octobre 2026)
+
+### Audit de l'indicateur interne (`static/data/temps_acces.csv.gz`)
+- 34 863 communes, valeurs entières 0–84 min ; **25,5 % de communes à 0** (pas
+  98,8 % : ce chiffre d'un bilan antérieur était faux). Départements entièrement
+  à 0 : 75, 93, 94, 971, 974.
+- Les zéros sont une **présence**, pas un temps : parmi les communes appariées
+  à la BPE 2025, 2 581 des 2 642 communes à 0 ont un généraliste recensé (61
+  exceptions ; 45 communes équipées ne sont pas à 0). Le fichier
+  « professionnels » de l'équipe démultiplie les praticiens par commune du
+  code postal (Veaugues : 18 lignes de généralistes pour 600 habitants), ce qui
+  explique les écarts.
+- Pour les communes sans offre, la corrélation avec la mesure INSEE est de
+  0,87 (Spearman) mais l'indicateur sous-compte les communes éloignées
+  (Saône-et-Loire 5 contre 30, Nièvre 13 contre 31, Côte-d'Or 62 contre 71)
+  et ignore la population. Les docs parlaient de « FINESS + INSEE » : l'offre
+  est en réalité le fichier de présences de l'équipe.
+
+### Nouvelle source : Insee « localisation et accès de la population aux équipements » (2025)
+- 17 fichiers parquet régionaux (14,5 Go, BPE 2025, distancier Metric-OSRM,
+  population carroyée Filosofi, carreaux de 200 m) téléchargés et agrégés par
+  `scripts/donnees/calculer_acces_insee.py` (DuckDB) pour sept types
+  d'équipements de santé (généraliste D265, pharmacie D307, urgences D106,
+  maternité D107, centre de santé D108, MSP D113, infirmier D281).
+- Sorties : `static/data/acces_insee_mg_communes_2025.csv` (34 833 communes :
+  population localisée, temps moyen et médian pondérés, parts > 10/15/20/30 min,
+  présence d'un généraliste), `static/data/acces_insee_departements_2025.csv`
+  (par département et type), `data_corrections/references/insee_acces/`
+  (tous types, provenance avec sha256). Champ : métropole + Martinique +
+  La Réunion ; Guadeloupe, Guyane, Mayotte hors Filosofi.
+- Résultats nationaux : 0,8 % de la population à plus de 15 min en voiture d'un
+  généraliste (514 000 habitants), 0,18 % à plus de 20 min ; 8 838 communes
+  équipées (≈ les 8 873 zéros du fichier interne).
+- Intégration : `load_acces_insee_dept()` → colonnes `acces_mg_*` du master ;
+  option `SANTACTIVE_TEMPS_SOURCE=interne|insee` (`config.TEMPS_SOURCE`,
+  défaut **interne** : la dimension « temps » du score ne change pas sans
+  validation). Les diagnostics (accueil, phrase de la fiche, scorecard, Comparer,
+  PDF, infobulle) affichent le repère INSEE. Lecture communale (`commune_opportunity`) :
+  temps moyen INSEE par commune + présence BPE (`offre_sur_place`), repli sur
+  l'interne si le département n'est pas couvert (Guyane).
+- Analyse de sensibilité (`scripts/analyse/sensibilite_temps_acces.py`,
+  résultat dans `data_corrections/references/insee_acces/sensibilite_temps_acces.csv`) :
+  médiane INSEE → 20 départements bougent de ≥ 10 rangs, 14 changent de zone
+  (corr. 0,968) ; part > 15 min → 14 départements, 8 zones (corr. 0,979).
+  Décision de bascule laissée à William.
+
+### APL 2024
+- `calculer_apl_departemental.py --millesime 2024` → `apl_mg_departemental_2024.csv`
+  (national 3,72 ; 18,2 % sous 2,5 ; écart de rang médian 2 vs 2023, 4
+  départements ≥ 10 rangs, Spearman 0,99). Production : 2023 tant que non validé.
+
+### Territoire de référence (`app/territoire.py`)
+- Session + paramètre d'URL `t=` (`fr`, `r53`, `d18`) ; sélecteur dans la barre ;
+  `internal_href` ajoute `t=` à tous les liens (chaque lien recharge la page) ;
+  les fiches font suivre le territoire ; Prioriser (région pré-filtrée,
+  département mis en évidence), Comparer (premier territoire), Accès routier
+  (pilote ou message explicite), accueil (bloc de référence) le relisent.
+
+### Simulateur v2 (`app/pages/acces_ign.py`)
+- Situation actuelle = carreaux INSEE du département (`static/geo/carreaux_mg_<dept>.csv.gz`,
+  `communes_<dept>.json` via API Géo) ; scénario = isochrones IGN 10/15/20 min
+  depuis la commune ; gains calculés carreau par carreau (`shapely.contains_xy`).
+- Ancien calcul par itinéraires (Cher) : Spearman 0,43 avec l'INSEE, écart
+  médian +1,8 min, p90 +7,5 min, 21 700 hab. > 15 min contre 8 100 → conservé
+  uniquement dans le panneau de vérification. Le minimum « itinéraire /
+  isochrone » est abandonné.
+- Pilotes : Cher, Creuse, Seine-Saint-Denis, La Réunion, Martinique
+  (`PILOTES_VALIDES`) ; isochrones IGN testées dans les DOM.
+
+### Autres
+- Carte de la fiche région : invisible (hauteur 2 px) car initialisée dans un
+  panneau fermé avec `maxBounds` → sortie du panneau, cadrée sur la région.
+- Leviers régionaux : « Pourquoi maintenant ? » en français (constat rédigé),
+  conditions du catalogue conservées dans `conditions_catalogue`.
+- Contrôles : segments rectangulaires 6 px, intitulés de widgets non boutons.
