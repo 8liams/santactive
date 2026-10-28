@@ -15,6 +15,7 @@ from app.pages import (
     acces_ign,
     exploration,
     comparer,
+    diagnostic_national,
     enjeux,
     fiche_commune,
     fiche_departement,
@@ -145,6 +146,8 @@ elif view == "commune" and "|" in str(st.session_state.get("commune_code", "")):
     if (master["dept"] == _cd).any():
         _T.follow_dept(_cd)
 
+from app.pages.acces_ign import enregistrer_noms as _noms_pilotes
+_noms_pilotes(master)
 render_topnav(view, master, with_search=True)
 
 # ─── CONTEXTE PARTAGÉ ─────────────────────────────────────────────────────────
@@ -181,6 +184,16 @@ elif view == "about":
     about.render(data)
 elif view == "enjeux":
     enjeux.render(data)
+elif view == "diagnostic":
+    # Entrée « Diagnostic » : la fiche du territoire de référence, ou la synthèse nationale
+    from app import territoire as _T2
+    _t = _T2.get()
+    if _t.kind == "dept" and (master["dept"] == _t.code).any():
+        navigate("dept", dept_code=_t.code)
+    elif _t.kind == "region":
+        navigate("region", region_code=_t.code)
+    else:
+        diagnostic_national.render(data)
 elif view == "comparer":
     comparer.render(data)
 else:
