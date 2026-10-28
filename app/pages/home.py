@@ -32,14 +32,21 @@ def render(data: dict) -> None:
     _render_usages(master)
 
     # ── CARTE + REPÈRES ───────────────────────────────────────────────────────
+    from .. import territoire as T
+    t = T.get()
+    dom_ref = bool(set(T.dept_codes(t, master)) & _DOM) and not t.is_national
+    if dom_ref:
+        with st.container(key="home_dom"):
+            _render_dom_section(master)
     with st.container(key="home_map_kpi"):
         col_map, col_kpi = st.columns([2.1, 1], gap="large")
         with col_map:
             _render_national_map(master, geojson)
         with col_kpi:
             _render_national_kpis(master)
-    with st.container(key="home_dom"):
-        _render_dom_section(master)
+    if not dom_ref:
+        with st.container(key="home_dom"):
+            _render_dom_section(master)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -135,8 +142,9 @@ def _render_usages(master: pd.DataFrame) -> None:
          + (f" {ex_nom}." if ref else (f" Exemple : {ex_nom}." if ex is not None else "")),
          internal_href("dept", dept_code=ex_code) if ex_code else internal_href("comparer"),
          "Ouvrir le diagnostic →" if ref else "Ouvrir un exemple →"),
-        ("Simuler", ("Où une nouvelle offre de médecine générale rapprocherait des habitants. "
-                     f"Pilotes : {', '.join(pilotes.values())}.") if pilotes else "Simulation routière (pilote à venir).",
+        ("Simuler", ("Où une nouvelle offre de médecine générale rapprocherait des habitants, carreau par carreau. "
+                     + (f"Disponible pour {len(pilotes)} départements." if len(pilotes) > 6 else f"Pilotes : {', '.join(pilotes.values())}."))
+         if pilotes else "Simulation routière (pilote à venir).",
          internal_href("acces", dept_code=sim_code) if sim_code else internal_href("methodologie"), "Simuler une implantation →"),
     ]
     html_cards = "".join(
@@ -194,7 +202,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     ctx = ""
     if hl_codes:
         nom = html.escape(T.nom_court(t, master))
-        ctx = (f' · <strong>{nom}</strong> en évidence' + ("" if bounds else " (hors du fond métropolitain : voir les cartouches ci-dessous)")
+        ctx = (f' · <strong>{nom}</strong> en évidence' + ("" if bounds else " (hors du fond métropolitain : voir le cartouche ci-dessus)")
                + f' · <a href="{internal_href("home", t="fr")}" target="_self">France entière</a>')
     st.markdown(
         f'<div class="map-header"><div class="map-title">Accessibilité aux soins en France</div>'
@@ -243,12 +251,25 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)
 
 
+_DOM = {"971", "972", "973", "974", "976"}
+
+
 def _render_dom_section(master: pd.DataFrame) -> None:
+    """Cartouches ultramarins : tous en vue nationale ; seulement celui du territoire si
+    un département ou une région d'outre-mer est la référence ; rien sinon."""
+    from .. import territoire as T
     from ..components.maps import render_dom_cartouches
 
-    st.markdown('<div class="map-section-eyebrow">Départements et régions d’outre-mer</div>',
-                unsafe_allow_html=True)
-    render_dom_cartouches(master)
+    t = T.get()
+    if t.is_national:
+        st.markdown('<div class="map-section-eyebrow">Départements et régions d’outre-mer</div>', unsafe_allow_html=True)
+        render_dom_cartouches(master)
+        return
+    codes = [c for c in T.dept_codes(t, master) if c in _DOM]
+    if not codes:
+        return
+    st.markdown('<div class="map-section-eyebrow">Territoire ultramarin de référence</div>', unsafe_allow_html=True)
+    render_dom_cartouches(master, only=set(codes))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

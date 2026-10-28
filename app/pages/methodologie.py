@@ -222,7 +222,9 @@ def render(data: dict) -> None:
     # 5. SIMULATEUR D'IMPLANTATION
     # ══════════════════════════════════════════════════════════════════════════
     _section("SIMULATEUR D’IMPLANTATION", "Un gain de proximité <em>théorique.</em>",
-             lead="Pilotes : " + (", ".join(f"{n} ({c})" for c, n in pilotes.items()) if pilotes else "aucun") + ".")
+             lead=(f"{len(pilotes)} départements activés après validation automatique (fichiers carreaux et communes présents, "
+                   "population localisée cohérente avec la population municipale, communes appariées, au moins une commune équipée)."
+                   if len(pilotes) > 6 else "Pilotes : " + (", ".join(f"{n} ({c})" for c, n in pilotes.items()) if pilotes else "aucun") + "."))
     _prose(
         "<strong>Situation actuelle</strong> : carreaux INSEE 2025 du département (population, durée vers le généraliste le plus proche). "
         "<strong>Scénario</strong> : isochrones IGN Géoplateforme (BD TOPO, Valhalla, voiture, 10 / 15 / 20 min) calculées à la demande depuis "
@@ -232,9 +234,12 @@ def render(data: dict) -> None:
         "de Spearman 0,43, écart médian +1,8 min, 90ᵉ centile +7,5 min ; il surestimait la population éloignée (21 700 contre 8 100 habitants à plus "
         "de 15 min dans le Cher). Retenir « la plus favorable » de deux mesures IGN non comparables (itinéraire, isochrone) a été abandonné : la "
         "situation actuelle repose sur l’INSEE, les isochrones ne servent qu’au scénario.",
-        "<strong>Activation d’un pilote</strong> : extraction des carreaux (scripts/donnees/calculer_acces_insee.py --carreaux), communes API Géo, "
-        "test des isochrones IGN, contrôle de cohérence (population localisée / municipale, communes équipées / BPE), puis inscription dans "
-        "PILOTES_VALIDES. Guadeloupe, Guyane et Mayotte ne peuvent pas être pilotes (hors champ INSEE).",
+        "<strong>Couverture.</strong> Pipeline reproductible (scripts/donnees/preparer_simulateur.py) : carreaux, zones continues par classe de "
+        "temps (union des carreaux, fermeture 300 m, simplification 150 m), communes API Géo (arrondissements pour Paris, Lyon, Marseille), puis "
+        "contrôles automatiques (population localisée cohérente avec la population municipale, communes appariées, communes équipées) ; "
+        "un département n’est activé que si tous les contrôles passent (static/geo/simulateur_index.json). Guadeloupe, Guyane et Mayotte sont "
+        "hors champ de la source INSEE : le simulateur l’indique et ne produit aucun résultat pour eux. Les habitants des départements voisins "
+        "ne sont pas comptés dans les gains.",
         "<strong>Limites</strong> : deux distanciers différents (OSRM / Valhalla) ; centre de commune pour la nouvelle offre ; capacité, patientèle, "
         "rendez-vous, transports en commun et flux vers les départements voisins non pris en compte. La simulation estime un gain de proximité, "
         "pas un gain de prise en charge.",

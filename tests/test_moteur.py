@@ -412,12 +412,19 @@ class TestParcoursEtSimulation(unittest.TestCase):
         html = " ".join(m.value for m in at.markdown)
         self.assertIn("Territoire de travail", html)
         self.assertIn("Retour au diagnostic", html)
+        self.assertIn("Zones bien et mal desservies", html)      # vue départementale d'abord, sans commune
         from app.pages.acces_ign import pilotes_disponibles
         labels = [sb.label for sb in at.selectbox]
         self.assertIn("Commune d’implantation", labels)
         self.assertNotIn("Département pilote", labels, "pas de sélecteur géographique redondant : le territoire vient de la barre")
         self.assertGreater(len(pilotes_disponibles()), 1)
-        self.assertIn("Nouvellement couverts", html)
+        self.assertNotIn("Nouvellement couverts", html)        # pas de scénario tant qu'aucune commune n'est choisie
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=240)
+        at.query_params["view"] = "acces"; at.query_params["dept_code"] = "18"; at.query_params["commune"] = "Cuffy"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertTrue("Nouvellement couverts" in html or "isochrones IGN n’a pas répondu" in html)
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
         at.query_params["view"] = "exploration"
         at.run()
@@ -735,17 +742,29 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
     def test_pilotes_et_message_hors_pilote(self):
         from app.pages.acces_ign import PILOTES_VALIDES, pilotes_disponibles
 
+        import json
         pil = pilotes_disponibles()
-        for d in ("18", "23", "93", "974"):
+        for d in ("18", "23", "93", "974", "01", "75", "13"):
             self.assertIn(d, pil)
-        self.assertTrue(set(pil) <= set(PILOTES_VALIDES))
+        self.assertGreaterEqual(len(pil), 95)                      # généralisation nationale (hors 971, 973, 976)
+        self.assertTrue(set(PILOTES_VALIDES) <= set(pil))
+        idx = json.loads((ROOT / "static/geo/simulateur_index.json").read_text())["departements"]
+        self.assertTrue(all(idx[d]["ok"] for d in pil if d in idx))
+        for d in ("18", "01"):
+            self.assertTrue((ROOT / f"static/geo/zones_mg_{d}.json").exists())
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
-        at.query_params["view"] = "acces"; at.query_params["dept_code"] = "75"
+        at.query_params["view"] = "acces"; at.query_params["dept_code"] = "973"
         at.run()
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("pas encore disponible pour Paris", html)
+        self.assertIn("pas encore disponible pour Guyane", html)
+        # vue nationale « Diagnostic » et territoire porté par l'URL
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "diagnostic"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertIn("Diagnostic", " ".join(m.value for m in at.markdown))
 
     def test_comparer_similaires_et_synthese(self):
         from app.pages.comparer import _similar, build_regions_comparison_df

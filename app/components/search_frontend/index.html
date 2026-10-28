@@ -18,6 +18,19 @@
   .hero .field { height:54px; } .hero input { padding:0 44px 0 44px; font-size:16px; }
   .nav .field { height:38px; border-radius:5px; } .nav input { padding:0 36px 0 38px; font-size:13px; }
   .nav .field svg { left:12px; width:15px; height:15px; }
+  /* Variante « territoire » : contrôle unique recherche + sélection (barre de navigation) */
+  .territoire .field { height:40px; border:1.5px solid #1A3D8F; background:#F7F9FD; border-radius:6px; }
+  .territoire .field.national { border-color:#C9C6BA; background:#fff; }
+  .territoire input { padding:0 34px 0 38px; font-size:13px; font-weight:600; color:#0A1938; }
+  .territoire input::placeholder { color:#0A1938; opacity:1; font-weight:600; }
+  .territoire .field.national input::placeholder { color:#6B6B68; font-weight:500; }
+  .territoire .field svg { left:12px; width:15px; height:15px; color:#1A3D8F; }
+  .territoire .tag { position:absolute; left:8px; top:-7px; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#1A3D8F; background:#fff; padding:0 4px; line-height:1; }
+  .territoire .clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:24px; height:24px; border:0; background:transparent; color:#6B6B68; font-size:16px; line-height:1; cursor:pointer; border-radius:4px; display:none; }
+  .territoire .field:not(.national) .clear { display:block; }
+  .territoire .clear:hover { background:#E8EDF8; color:#0A1938; }
+  .territoire .hint { display:none; }
+  .item.fr .name { color:#1A3D8F; }
   .hint { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:11px; color:#9C9A92; border:1px solid #E8E6DD; border-radius:3px; padding:1px 6px; pointer-events:none; }
   .nav .hint { display:none; }
   .menu { position:absolute; left:0; right:0; top:calc(100% + 6px); background:#fff; border:1px solid #E8E6DD; border-radius:6px; box-shadow:0 12px 32px rgba(10,25,56,.14); overflow:hidden; display:none; }
@@ -41,6 +54,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Rechercher un territoire…" aria-label="Rechercher un territoire" aria-autocomplete="list" aria-expanded="false" aria-controls="menu">
     <span class="hint">↵</span>
+    <span class="tag" id="tag" hidden>Territoire</span>
+    <button class="clear" id="clear" type="button" title="Revenir à la France entière" aria-label="Revenir à la France entière">×</button>
   </div>
   <div id="menu" class="menu" role="listbox"></div>
 </div>
@@ -100,17 +115,29 @@
     return esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + s.length)) + '</b>' + esc(name.slice(i + s.length));
   }
 
+  let territoire = false, currentParam = 'fr';
   function render() {
     const raw = q.value;
-    if (norm(raw).length < 2) { close(); return; }
+    if (norm(raw).length < 2) {
+      if (territoire && document.activeElement === q && currentParam !== 'fr') {
+        items = [{ level: 'fr', code: 'fr', name: 'France entière', parent: 'vue nationale', sc: 100 }];
+        menu.innerHTML = `<div class="item fr active" role="option" data-i="0"><span class="name">France entière</span><span class="parent">vue nationale</span></div>` +
+          '<div class="foot">Tapez un nom de région, de département ou de commune</div>';
+        menu.classList.add('open'); active = 0;
+        menu.querySelectorAll('.item').forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); go(items[0]); }));
+        setHeight(true); return;
+      }
+      close(); return;
+    }
     items = search(raw);
+    if (territoire && currentParam !== 'fr' && 'france entiere'.includes(norm(raw))) items.unshift({ level: 'fr', code: 'fr', name: 'France entière', parent: 'vue nationale', sc: 100 });
     let html = '';
     if (!items.length) html = (loading || !index) ? '<div class="loading">Chargement de l’index…</div>' : '<div class="empty">Aucun territoire trouvé.</div>';
     else html = items.map((it, i) =>
       `<div class="item${i === active ? ' active' : ''}" role="option" data-i="${i}">` +
       `<span class="name">${highlight(it.name, raw)}</span>` +
       (it.parent ? `<span class="parent">${esc(it.parent)}</span>` : '') +
-      `<span class="lvl lvl-${it.level}">${LABEL[it.level]}</span></div>`).join('');
+      (LABEL[it.level] ? `<span class="lvl lvl-${it.level}">${LABEL[it.level]}</span>` : '') + `</div>`).join('');
     html += '<div class="foot">↑↓ pour naviguer · Entrée pour ouvrir · Échap pour fermer</div>';
     menu.innerHTML = html; menu.classList.add('open'); q.setAttribute('aria-expanded', 'true');
     menu.querySelectorAll('.item').forEach(el => {
@@ -131,7 +158,7 @@
 
   let t = null;
   q.addEventListener('input', () => { loadIndex(); active = -1; clearTimeout(t); t = setTimeout(render, 60); });
-  q.addEventListener('focus', () => { loadIndex(); if (norm(q.value).length >= 2) render(); });
+  q.addEventListener('focus', () => { loadIndex(); render(); });
   q.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (!menu.classList.contains('open')) render(); active = Math.min(active + 1, items.length - 1); paint(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paint(); }
@@ -139,6 +166,7 @@
     else if (e.key === 'Escape') { close(); q.blur(); }
   });
   q.addEventListener('blur', () => setTimeout(close, 120));
+  document.getElementById('clear').addEventListener('mousedown', e => { e.preventDefault(); go({ level: 'fr', code: 'fr' }); });
   document.addEventListener('mousedown', e => { if (!e.target.closest('.wrap')) close(); });
 
   window.addEventListener('message', e => {
@@ -149,9 +177,18 @@
       ready = true;
       document.body.className = a.variant || 'hero';
       closedHeight = a.closed || 56;
+      territoire = a.variant === 'territoire';
       if (a.placeholder) q.placeholder = a.placeholder;
       if (a.autofocus) q.focus();
       setHeight(false);
+    }
+    if (territoire) {   // valeur courante relue à chaque rendu : le contrôle suit le territoire
+      currentParam = a.current_param || 'fr';
+      const field = document.querySelector('.field');
+      field.classList.toggle('national', currentParam === 'fr');
+      document.getElementById('tag').hidden = false;
+      q.placeholder = a.current_label || 'France entière · rechercher un territoire';
+      q.title = currentParam === 'fr' ? 'Rechercher une région, un département ou une commune' : 'Territoire de référence : ' + (a.current_label || '');
     }
   });
   send('streamlit:componentReady', { apiVersion: 1 });

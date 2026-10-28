@@ -274,3 +274,32 @@ département. Non intégré au score.
 - Leviers régionaux : « Pourquoi maintenant ? » en français (constat rédigé),
   conditions du catalogue conservées dans `conditions_catalogue`.
 - Contrôles : segments rectangulaires 6 px, intitulés de widgets non boutons.
+
+## 15. Territoire unique, diagnostic national, simulateur généralisé (28 octobre 2026)
+
+- **Un seul contrôle territorial** dans la barre (`app/components/search_box.py`,
+  variante `territoire`) : affiche le territoire de référence, recherche (régions,
+  départements, communes, clavier), réinitialise (×, ou « France entière » dans la
+  liste). La sélection met à jour le territoire puis ouvre le diagnostic ; une
+  commune ouvre sa fiche et rattache son département en référence. Plus de
+  sélecteur déroulant.
+- **Entrée « Diagnostic »** : fiche du département ou de la région de référence,
+  sinon `app/pages/diagnostic_national.py` (repères officiels, zones critiques par
+  région, dix départements les moins bien placés avec leurs raisons, éloignement
+  INSEE). Pas de score national inventé.
+- **Accueil** : cartouches ultramarins seulement en vue nationale (ou celui du
+  territoire ultramarin de référence, placé avant la carte) ; carte cadrée et
+  territoire en évidence ; résumé compact.
+- **Prioriser** : bloc de contexte (position du territoire de référence, périmètre,
+  pourquoi les départements listés ressortent : critères du quadrant A, pas un
+  classement) ; étiquette « même région que votre territoire ».
+- **Simulateur** : vue départementale d'abord (zones continues par classe de temps,
+  communes équipées, communes éloignées, secteurs à potentiel avec lien
+  « Simuler ici »), puis scénario depuis une commune ; « Avec la nouvelle offre »
+  recolore les zones dont la classe change ; « Gain seulement » isole les zones
+  passant sous le seuil ; isochrones IGN en couche distincte (pointillés) ;
+  carroyage détaillé en couche facultative ; bouton de retour à la vue d'ensemble.
+- **Généralisation** : `scripts/donnees/preparer_simulateur.py` (carreaux, zones,
+  communes, contrôles → `static/geo/simulateur_index.json`) ; 98 départements
+  validés (métropole, Martinique, La Réunion), 42 Mo de données dérivées dans
+  `static/geo` ; Guadeloupe, Guyane, Mayotte hors champ INSEE.

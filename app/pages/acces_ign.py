@@ -50,10 +50,34 @@ _SOURCE_INSEE = ("Insee, base permanente des équipements 2025, distancier Metri
 
 # ── Chargement ────────────────────────────────────────────────────────────────
 
+_INDEX_PATH = GEO_DIR / "simulateur_index.json"
+_NOMS_DEPTS: dict[str, str] = {}
+
+
+def _index_simulateur() -> dict:
+    """Index produit par scripts/donnees/preparer_simulateur.py (contrôles par département)."""
+    try:
+        return json.loads(_INDEX_PATH.read_text()).get("departements", {})
+    except (OSError, ValueError):
+        return {}
+
+
 def pilotes_disponibles() -> dict[str, str]:
-    """Départements pilotes validés dont les fichiers (carreaux + communes) sont présents."""
-    return {d: n for d, n in PILOTES_VALIDES.items()
-            if (GEO_DIR / f"carreaux_mg_{d}.csv.gz").exists() and (GEO_DIR / f"communes_{d}.json").exists()}
+    """Départements activables : validés par le pipeline (clé « ok » de l'index) ou pilotes
+    historiques, avec fichiers carreaux + communes présents. Ordre : code départemental."""
+    idx = _index_simulateur()
+    codes = {d for d, v in idx.items() if v.get("ok")} | set(PILOTES_VALIDES)
+    out = {}
+    for d in sorted(codes, key=lambda c: (len(c), c)):
+        if (GEO_DIR / f"carreaux_mg_{d}.csv.gz").exists() and (GEO_DIR / f"communes_{d}.json").exists():
+            out[d] = _NOMS_DEPTS.get(d) or PILOTES_VALIDES.get(d) or d
+    return out
+
+
+def enregistrer_noms(master: pd.DataFrame) -> None:
+    """Noms des départements (une fois, depuis le master) pour les libellés des pilotes."""
+    if not _NOMS_DEPTS and master is not None:
+        _NOMS_DEPTS.update(master.set_index("dept")["Nom du département"].astype(str).to_dict())
 
 
 @st.cache_data(show_spinner=False)
@@ -252,18 +276,52 @@ def _urbain_note(dept: str, nom_dept: str, master: pd.DataFrame, part_sup: float
             f"<a href=\"{internal_href('dept', dept_code=dept)}\" target=\"_self\">diagnostic</a>.")
 
 
+@st.cache_data(show_spinner=False)
+def charger_zones(dept: str) -> dict | None:
+    """Zones continues par classe de temps (union des carreaux, préparées hors ligne)."""
+    p = GEO_DIR / f"zones_mg_{dept}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def _union_squares(df: pd.DataFrame):
+    """Union des carrés de 200 m (approximation WGS84) d'un sous-ensemble de carreaux → géométrie."""
+    import shapely
+    if df.empty:
+        return None
+    lat = df["lat"].to_numpy(float); lon = df["lon"].to_numpy(float)
+    dlat = 100 / 111_320
+    dlon = 100 / (111_320 * np.maximum(np.cos(np.radians(lat)), 0.2))
+    boxes = shapely.box(lon - dlon, lat - dlat, lon + dlon, lat + dlat)
+    g = shapely.union_all(boxes).buffer(0)
+    return g if not g.is_empty else None
+
+
+def _zones_layer(zones: dict | None, name: str, opacity: float, classes=None) -> folium.GeoJson | None:
+    if not zones:
+        return None
+    feats = [f for f in zones["features"] if classes is None or f["properties"]["classe"] in classes]
+    if not feats:
+        return None
+    return folium.GeoJson({"type": "FeatureCollection", "features": feats}, name=name,
+                          style_function=lambda f, o=opacity: {"fillColor": _COULEURS[int(f["properties"]["classe"])],
+                                                               "color": _COULEURS[int(f["properties"]["classe"])],
+                                                               "weight": 0.4, "fillOpacity": o},
+                          tooltip=folium.GeoJsonTooltip(fields=["classe"], aliases=["Aujourd’hui : trajet (classe, min ≤)"]))
+
+
 def render(data: dict) -> None:
+    enregistrer_noms(data["master"])
     pilotes = pilotes_disponibles()
     names = data["master"].set_index("dept")["Nom du département"].to_dict()
 
     render_breadcrumb([NavCrumb("Accueil", "home"), NavCrumb("Simuler une implantation")], key_prefix="ign_bc")
     st.markdown(
-        '<div class="fiche-header"><div class="fiche-eyebrow"><span class="code">PILOTE EXPÉRIMENTAL</span>'
+        '<div class="fiche-header"><div class="fiche-eyebrow"><span class="code">SIMULATEUR</span>'
         '<span class="dot"></span><span class="region">Carreaux INSEE 2025 · isochrones IGN · gain de proximité théorique</span></div>'
         '<div class="fiche-title-row"><h1 class="fiche-title">Simuler une implantation <em>de médecine générale</em></h1></div>'
         '</div>', unsafe_allow_html=True)
     if not pilotes:
-        st.info("Aucun département pilote calculé (fichiers static/geo/carreaux_mg_<dept>.csv.gz et communes_<dept>.json).")
+        st.info("Aucun département préparé (scripts/donnees/preparer_simulateur.py).")
         return
 
     dept, message = _resolve_dept(data, pilotes)
@@ -272,34 +330,29 @@ def render(data: dict) -> None:
     nom_dept = names.get(dept, pilotes.get(dept, dept))
     carreaux = charger_carreaux(dept)
     communes = charger_communes(dept)
+    zones = charger_zones(dept)
     sit = situation_communes(carreaux, communes)
     tot = float(carreaux["pop"].sum()) or 1.0
     nb_offre = int(sit["offre"].sum())
     loin = sit[sit["t_moy"] > 15]
 
-    # ── Territoire pilote et liens de parcours ───────────────────────────────
-    autres = " · ".join(f'<a href="{internal_href("acces", dept_code=c, t=f"d{c}")}" target="_self">{html.escape(n)}</a>'
-                        for c, n in pilotes.items() if c != dept) or "aucun autre pour l’instant"
+    # ── Territoire de travail ────────────────────────────────────────────────
     st.markdown(
-        f'<div class="ign-pilote"><div><span class="ign-pilote-lbl">Territoire de travail · pilote</span>'
+        f'<div class="ign-pilote"><div><span class="ign-pilote-lbl">Territoire de travail</span>'
         f'<span class="ign-pilote-nom">{html.escape(nom_dept)} ({dept})</span>'
         f'<span class="ign-pilote-ctx">{len(sit)} communes · {nb_offre} avec au moins un généraliste (BPE 2025) · '
-        f'{_fmt(tot)} habitants localisés · autres pilotes : {autres}</span></div>'
+        f'{_fmt(tot)} habitants localisés · {len(pilotes)} départements disponibles (changer de territoire dans la barre)</span></div>'
         f'<div class="ign-pilote-links"><a href="{internal_href("dept", dept_code=dept)}" target="_self">Diagnostic {html.escape(nom_dept)} →</a>'
         f'<a href="{internal_href("dept", dept_code=dept)}#communes" target="_self">Communes prioritaires →</a></div></div>',
         unsafe_allow_html=True)
 
-    # ── Scénario : contrôles (clés par département : changer de pilote réinitialise la commune) ──
-    st.markdown('<div class="section-header" style="margin-top:18px;"><div class="section-eyebrow">SIMULATION</div>'
-                '<h2 class="section-title">Si une offre s’installait <em>ici</em>, qui s’en rapprocherait ?</h2>'
-                '<p class="section-lead">Choisissez une commune et un seuil de trajet. Les isochrones IGN calculées depuis '
-                'le centre de la commune donnent les habitants qui passeraient sous le seuil, carreau par carreau '
-                '(population localisée INSEE).</p></div>', unsafe_allow_html=True)
+    # ── Étape 1 : explorer le département ; étape 2 : simuler depuis une commune ──
     s1, s2 = st.columns([2.2, 1])
     seuil = s2.radio("Seuil de trajet en voiture", SEUILS, index=1, horizontal=True, key=f"ign_seuil_{dept}",
                      format_func=lambda m: f"{m} min")
     cands = sit.assign(_pot=sit[f"pop_sup_{seuil}"]).sort_values(["_pot", "pop"], ascending=False)
-    labels = {}
+    VUE = "—"
+    labels = {VUE: "Vue d’ensemble du département (choisir une commune pour simuler)"}
     for _, r in cands.iterrows():
         pot = r[f"pop_sup_{seuil}"]
         labels[r["nom"]] = (f'{r["nom"]} · {_fmt(r["pop"])} hab. · {r["t_moy"]:.0f} min en moyenne'
@@ -309,101 +362,30 @@ def render(data: dict) -> None:
     key_sim = f"ign_sim_{dept}"
     qp_commune = str(st.query_params.get("commune") or "")
     if key_sim not in st.session_state or st.session_state[key_sim] not in options:
-        st.session_state[key_sim] = qp_commune if qp_commune in labels else options[0]
-    choix = s1.selectbox("Commune d’implantation", options, format_func=lambda n: labels.get(n, n), key=key_sim,
-                         help="Classées par population aujourd’hui au-delà du seuil choisi (plus grand potentiel en premier).")
+        st.session_state[key_sim] = qp_commune if qp_commune in labels else VUE
+    choix = s1.selectbox("Simuler une implantation dans la commune", options, format_func=lambda n: labels.get(n, n), key=key_sim,
+                         help="Les communes sont classées par population aujourd’hui au-delà du seuil (plus grand potentiel en premier).")
+    zone = st.empty()
+    if choix == VUE:
+        with zone.container():
+            _render_vue_departement(data, dept, nom_dept, carreaux, sit, zones, seuil, tot, loin, key_sim)
+        return
     row = cands[cands["nom"] == choix].iloc[0]
     part_sup = float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) / tot
-
-    # Tout ce qui dépend du département et du scénario est rendu dans un même conteneur :
-    # au changement de territoire, l'ancien contenu est remplacé par l'état de chargement
-    # avant tout appel réseau (aucun résultat du territoire précédent ne reste affiché).
-    zone = st.empty()
     with zone.container():
         st.markdown(f'<div class="sa-loading">Calcul du scénario pour <strong>{html.escape(nom_dept)}</strong> — '
                     f'isochrones IGN depuis {html.escape(choix)}…</div>', unsafe_allow_html=True)
     sim_geoms = {m: g for m in SEUILS if (g := _isochrone_live(float(row["lon"]), float(row["lat"]), m))}
     with zone.container():
-        _render_resultats(data, dept, nom_dept, carreaux, communes, sit, row, choix, seuil, sim_geoms, part_sup, tot, loin, nb_offre)
+        _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, seuil, sim_geoms, part_sup, tot, loin, key_sim)
 
 
-def _render_resultats(data, dept, nom_dept, carreaux, communes, sit, row, choix, seuil, sim_geoms, part_sup, tot, loin, nb_offre) -> None:
-    master = data["master"]
-    com = carreaux
-    gain = rapp = pd.DataFrame()
-    gpc = pd.DataFrame()
-    if not sim_geoms:
-        st.warning("Le service d’isochrones IGN n’a pas répondu (lenteur, erreur ou quota). Aucun scénario n’est affiché ; "
-                   "la situation actuelle ci-dessous reste valable.")
-        if st.button("Réessayer le calcul", key=f"ign_retry_{dept}"):
-            _isochrone_live.clear()
-            st.rerun()
-    else:
-        if len(sim_geoms) < len(SEUILS):
-            st.warning("Isochrone(s) manquante(s) : " + ", ".join(f"{m} min" for m in SEUILS if m not in sim_geoms)
-                       + " — le scénario est incomplet (service IGN). Réessayez dans quelques secondes.")
-        com = scenario(carreaux, sim_geoms)
-        gain, rapp = gains(com, seuil)
-        gpc = gains_par_commune(gain, sit)
-        avant = float(com.loc[com["duree"] > seuil, "pop"].sum())
-        apres = avant - float(gain["pop"].sum())
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.markdown(_kpi("Nouvellement couverts", f"+{_fmt(gain['pop'].sum())}",
-                         f"habitants qui passeraient sous {seuil} min, dans {len(gpc)} commune{'s' if len(gpc) != 1 else ''}", _NEUF),
-                    unsafe_allow_html=True)
-        m2.markdown(_kpi("Rapprochés", f"{_fmt(rapp['pop'].sum())}",
-                         f"habitants déjà sous {seuil} min dont le trajet raccourcirait", "#1B5E3F"), unsafe_allow_html=True)
-        m3.markdown(_kpi(f"Au-delà de {seuil} min aujourd’hui", f"{_fmt(avant)}",
-                         f"habitants ({avant / tot * 100:.1f}".replace(".", ",") + " % du département)", "#D9772B"), unsafe_allow_html=True)
-        m4.markdown(_kpi("Après le scénario", f"{_fmt(apres)}",
-                         f"habitants resteraient au-delà de {seuil} min ({apres / tot * 100:.1f}".replace(".", ",") + " %)", "#D9772B"), unsafe_allow_html=True)
-
-        situ = (f"<strong>{html.escape(choix)}</strong> ({_fmt(row['pop'])} habitants localisés) : temps moyen actuel "
-                f"{row['t_moy']:.0f} min vers un généraliste"
-                + (", un généraliste y est déjà recensé" if row["offre"] else ", aucun généraliste recensé dans la commune") + ".")
-        if len(gpc):
-            lst = ", ".join(f"{html.escape(str(r['nom']))} ({_fmt(r['pop_gain'])} hab., {r['t_avant']:.0f} min → ≤ {int(r['classe_apres'])} min)"
-                            for _, r in gpc.head(8).iterrows())
-            texte = (f"{situ} Une offre de médecine générale à {html.escape(choix)} placerait <strong>{_fmt(gain['pop'].sum())} habitants</strong> "
-                     f"de {len(gpc)} commune{'s' if len(gpc) != 1 else ''} à moins de {seuil} min : {lst}"
-                     + (" …" if len(gpc) > 8 else "") + ".")
-        else:
-            texte = (f"{situ} <strong>Personne ne passerait sous {seuil} min</strong> : les habitants situés à moins de "
-                     f"{seuil} min de {html.escape(choix)} le sont déjà d’un généraliste existant. Ce zéro ne signifie pas "
-                     f"qu’une implantation serait sans intérêt : elle raccourcirait des trajets, soulagerait les cabinets "
-                     f"voisins et pourrait répondre à un manque de capacité, que cette mesure géographique ne voit pas.")
-        if len(rapp):
-            texte += f" Par ailleurs {_fmt(rapp['pop'].sum())} habitants déjà sous le seuil verraient leur trajet raccourci."
-        texte += (" <span style='color:#6B6B68;'>Gain de proximité théorique : capacité du cabinet, rendez-vous disponibles, "
-                  "transports en commun et offres des départements voisins ne sont pas pris en compte.</span>")
-        st.markdown(f'<p class="dim-switch-note">{texte}</p>', unsafe_allow_html=True)
-        if part_sup < 0.01:
-            note = _urbain_note(dept, nom_dept, master, part_sup, seuil)
-            if note:
-                st.markdown(f'<div class="sa-notice sa-notice--info">{note}</div>', unsafe_allow_html=True)
-
-        if len(gpc):
-            rows = "".join(
-                f'<tr><td class="metric-label">{html.escape(str(r["nom"]))}</td><td data-label="Nouvellement couverts">{_fmt(r["pop_gain"])} hab.</td>'
-                f'<td data-label="Part de la commune">{r["part"] * 100:.0f}\u202f%</td><td data-label="Trajet moyen aujourd’hui">{r["t_avant"]:.0f} min</td>'
-                f'<td data-label="Avec la nouvelle offre">≤ {int(r["classe_apres"])} min</td></tr>'
-                for _, r in gpc.head(15).iterrows())
-            st.markdown('<div class="sa-tbl-scroll"><table class="comparison-table-v2 commune-action-table"><thead><tr>'
-                        '<th class="metric-col">Commune</th><th class="metric-col">Habitants nouvellement couverts</th>'
-                        '<th class="metric-col">Part de la commune</th><th class="metric-col">Trajet moyen aujourd’hui</th>'
-                        '<th class="metric-col">Avec la nouvelle offre</th></tr></thead>'
-                        f'<tbody>{rows}</tbody></table></div>'
-                        + (f'<p class="sa-couverture">{len(gpc) - 15} autres communes concernées, gains plus faibles.</p>' if len(gpc) > 15 else ""),
-                        unsafe_allow_html=True)
-
-    # ── Carte ─────────────────────────────────────────────────────────────────
-    v1, v2 = st.columns([2.2, 1])
-    mode = v1.radio("Affichage de la carte", ["Situation actuelle", "Avec la nouvelle offre", "Gain seulement"],
-                    index=1 if sim_geoms else 0, horizontal=True, key=f"ign_mode_{dept}")
-    cadrage = v2.toggle("Cadrer sur le scénario", value=True, key=f"ign_cadrage_{dept}") if sim_geoms else False
+def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *, estompe: bool = False,
+                detail: bool = True) -> folium.Map:
+    """Fond de carte : zones continues par classe (aujourd'hui), communes équipées, communes éloignées,
+    carroyage détaillé (> 10 min) en couche facultative."""
     m = folium.Map(location=[float(carreaux["lat"].mean()), float(carreaux["lon"].mean())], zoom_start=9,
-                   tiles=TILE_URL, attr=TILE_ATTR, scrollWheelZoom=False)
+                   tiles=TILE_URL, attr=TILE_ATTR, scrollWheelZoom=False, zoom_snap=0.25)
     m.get_root().header.add_child(folium.Element(
         "<style>.leaflet-container{background:#F4F3EE!important;}"
         ".sa-ign-legend{font-family:Marianne,Inter,sans-serif;font-size:11px;background:rgba(255,255,255,.95);"
@@ -412,67 +394,51 @@ def _render_resultats(data, dept, nom_dept, carreaux, communes, sit, row, choix,
         ".sa-ign-legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:middle;}"
         ".sa-ign-legend i.pt{border-radius:50%;width:10px;height:10px;}"
         ".sa-ign-star{font-size:26px;line-height:1;color:#1A3D8F;text-shadow:0 0 3px #fff,0 0 3px #fff;}</style>"))
-    faible = mode == "Gain seulement"
-    eloignes = carreaux[carreaux["duree"] > 10]
-    layer = _squares_layer(eloignes, "Aujourd’hui : carreaux à plus de 10 min",
-                           lambda r: _COULEURS[int(r["classe"])], 0.12 if faible else 0.55)
-    if layer is not None:
-        layer.add_to(m)
-    if sim_geoms and mode != "Situation actuelle":
-        for s_ in (20, 15, 10):
-            if s_ in sim_geoms and (s_ == seuil or mode == "Avec la nouvelle offre"):
-                folium.GeoJson({"type": "Feature", "geometry": sim_geoms[s_]}, name=f"Nouvelle offre ≤ {s_} min",
-                               style_function=lambda f, s2=s_: {"fillColor": _NEUF, "color": _NEUF, "weight": 2.2 if s2 == seuil else 1,
-                                                                "fillOpacity": 0.10 if s2 == seuil else 0.05, "dashArray": "6 4"}).add_to(m)
-        lg = _squares_layer(gain, "Carreaux nouvellement couverts", lambda r: _NEUF, 0.85)
-        if lg is not None:
-            lg.add_to(m)
-        lr = _squares_layer(rapp, "Carreaux rapprochés", lambda r: "#1B5E3F", 0.0, weight=1.2)
-        if lr is not None:
-            lr.add_to(m)
-    gain_codes = set(gpc["code_insee"]) if len(gpc) else set()
+    lz = _zones_layer(zones, "Aujourd’hui : zones par temps de trajet", 0.18 if estompe else 0.55)
+    if lz is not None:
+        lz.add_to(m)
+    if detail:
+        fg = folium.FeatureGroup(name="Carroyage détaillé (> 10 min)", show=False)
+        layer = _squares_layer(carreaux[carreaux["duree"] > 10], "carreaux", lambda r: _COULEURS[int(r["classe"])], 0.6)
+        if layer is not None:
+            layer.add_to(fg)
+        fg.add_to(m)
+    return m
+
+
+def _legende(m: folium.Map, seuil: int | None, scenario: bool) -> None:
+    legend = ('<div class="sa-ign-legend"><b>Aujourd’hui : trajet en voiture vers un généraliste</b>'
+              + "".join(f'<div><i style="background:{_COULEURS[s_]};opacity:.75;"></i>{_LIB_CLASSE[s_]}</div>' for s_ in (10, 15, 20, 30, 99))
+              + '<b style="margin-top:6px;">Communes</b>'
+              '<div><i class="pt" style="background:#0A1938;"></i>généraliste présent</div>'
+              '<div><i class="pt" style="background:#D9772B;"></i>temps moyen &gt; 15 min</div>'
+              + (f'<b style="margin-top:6px;">Scénario</b><div><span class="sa-ign-star" style="font-size:14px;">★</span> nouvelle offre simulée</div>'
+                 f'<div><i style="border:2px dashed {_NEUF};background:rgba(26,61,143,.12);"></i>isochrone ≤ {seuil} min (IGN)</div>'
+                 f'<div><i style="background:{_NEUF};"></i>zones passant sous {seuil} min</div>'
+                 '<div><i style="border:2px solid #1B5E3F;background:rgba(27,94,63,.25);"></i>zones rapprochées (déjà sous le seuil)</div>' if scenario else "")
+              + '</div>')
+    m.get_root().html.add_child(folium.Element(
+        '<div class="leaflet-bottom leaflet-left" style="pointer-events:none;">'
+        f'<div class="leaflet-control" style="margin:0 0 24px 12px;">{legend}</div></div>'))
+
+
+def _points_communes(m: folium.Map, sit: pd.DataFrame, gpc: pd.DataFrame | None = None, seuil: int | None = None, faible: bool = False) -> None:
+    gain_codes = set(gpc["code_insee"]) if gpc is not None and len(gpc) else set()
     for _, r in sit.iterrows():
         nom = html.escape(str(r["nom"]))
         if r["offre"]:
-            folium.CircleMarker([r["lat"], r["lon"]], radius=4, color="#FFFFFF", fill=True, fill_color="#0A1938",
-                                fill_opacity=1, weight=1.2,
+            folium.CircleMarker([r["lat"], r["lon"]], radius=4, color="#FFFFFF", fill=True, fill_color="#0A1938", fill_opacity=1, weight=1.2,
                                 tooltip=f"{nom} · généraliste présent · {r['t_moy']:.0f} min en moyenne").add_to(m)
         elif r["code_insee"] in gain_codes:
             g_ = gpc[gpc["code_insee"] == r["code_insee"]].iloc[0]
             folium.CircleMarker([r["lat"], r["lon"]], radius=7, color=_NEUF, fill=True, fill_color="#FFFFFF", fill_opacity=1, weight=3,
                                 tooltip=f"{nom} · +{_fmt(g_['pop_gain'])} hab. sous {seuil} min ({g_['part'] * 100:.0f} % de la commune)").add_to(m)
-        elif not faible:
-            cl = int(r["classe"])
-            folium.CircleMarker([r["lat"], r["lon"]], radius=3 if cl <= 15 else 5, color="#FFFFFF" if cl > 15 else _COULEURS[cl],
-                                fill=True, fill_color=_COULEURS[cl], fill_opacity=0.95, weight=1 if cl > 15 else 0.5,
+        elif not faible and r["t_moy"] > 15:
+            folium.CircleMarker([r["lat"], r["lon"]], radius=5, color="#FFFFFF", fill=True, fill_color="#D9772B", fill_opacity=0.95, weight=1,
                                 tooltip=f"{nom} · {r['t_moy']:.0f} min en moyenne · {_fmt(r['pop'])} hab.").add_to(m)
-    folium.Marker([float(row["lat"]), float(row["lon"])], tooltip=f"Nouvelle offre simulée : {html.escape(choix)}",
-                  icon=folium.DivIcon(html='<div class="sa-ign-star">★</div>', icon_size=(26, 26), icon_anchor=(13, 13))).add_to(m)
-    if cadrage and sim_geoms:
-        from shapely.geometry import shape as _shape
-        b = _shape(sim_geoms[max(sim_geoms)]).bounds
-        m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(20, 20))
-    else:
-        m.fit_bounds([[float(carreaux["lat"].min()), float(carreaux["lon"].min())],
-                      [float(carreaux["lat"].max()), float(carreaux["lon"].max())]], padding=(10, 10))
-    legend = ('<div class="sa-ign-legend"><b>Aujourd’hui : trajet vers un généraliste (carreaux 200 m)</b>'
-              + "".join(f'<div><i style="background:{_COULEURS[s_]};opacity:.75;"></i>{_LIB_CLASSE[s_]}</div>' for s_ in (15, 20, 30, 99))
-              + '<b style="margin-top:6px;">Communes</b>'
-              '<div><i class="pt" style="background:#0A1938;"></i>généraliste présent</div>'
-              '<div><i class="pt" style="background:#D9772B;"></i>temps moyen &gt; 15 min</div>'
-              + (f'<b style="margin-top:6px;">Scénario</b><div><span class="sa-ign-star" style="font-size:14px;">★</span> nouvelle offre simulée</div>'
-                 f'<div><i style="border:2px dashed {_NEUF};background:rgba(26,61,143,.15);"></i>zone ≤ {seuil} min depuis la nouvelle offre</div>'
-                 f'<div><i style="background:{_NEUF};"></i>habitants nouvellement couverts</div>'
-                 '<div><i style="border:2px solid #1B5E3F;background:#fff;"></i>habitants rapprochés</div>' if sim_geoms else "")
-              + '</div>')
-    m.get_root().html.add_child(folium.Element(
-        '<div class="leaflet-bottom leaflet-left" style="pointer-events:none;">'
-        f'<div class="leaflet-control" style="margin:0 0 24px 12px;">{legend}</div></div>'))
-    folium.LayerControl(collapsed=True).add_to(m)
-    st_folium(m, use_container_width=True, height=580, returned_objects=[],
-              key=f"ign_map_{dept}_{choix}_{seuil}_{mode}_{cadrage}")
 
-    # ── Situation actuelle ────────────────────────────────────────────────────
+
+def _render_situation(dept: str, nom_dept: str, carreaux: pd.DataFrame, sit: pd.DataFrame, tot: float, loin: pd.DataFrame, data: dict) -> None:
     st.markdown('<div class="section-header" style="margin-top:22px;"><div class="section-eyebrow">SITUATION ACTUELLE</div>'
                 f'<h2 class="section-title">Où vit-on loin d’un généraliste <em>en {html.escape(nom_dept)} ?</em></h2>'
                 '<p class="section-lead">Temps de trajet en voiture depuis chaque carreau habité de 200 m vers le médecin '
@@ -508,14 +474,165 @@ def _render_resultats(data, dept, nom_dept, carreaux, communes, sit, row, choix,
                           yaxis=dict(tickformat=".0%", range=[0, max(vals) * 1.25], gridcolor="#E8E6DD"),
                           xaxis_title="minutes de voiture vers le généraliste le plus proche", font=dict(size=11))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
     with st.expander("Méthode, vérifications et limites"):
         _render_verification(dept, nom_dept, sit, carreaux, data)
-
     st.markdown(
         f'<div class="ign-pilote-links" style="margin-top:14px;"><a href="{internal_href("dept", dept_code=dept)}" target="_self">← Retour au diagnostic {html.escape(nom_dept)}</a>'
         f'<a href="{internal_href("comparer")}&depts={dept}" target="_self">Comparer {html.escape(nom_dept)} →</a></div>',
         unsafe_allow_html=True)
+
+
+def _render_vue_departement(data, dept, nom_dept, carreaux, sit, zones, seuil, tot, loin, key_sim) -> None:
+    """Étape 1 : explorer le département avant de simuler."""
+    part_sup = float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) / tot
+    st.markdown('<div class="section-header" style="margin-top:14px;"><div class="section-eyebrow">EXPLORER</div>'
+                f'<h2 class="section-title">Zones bien et mal desservies <em>en {html.escape(nom_dept)}</em></h2>'
+                '<p class="section-lead">Les surfaces colorées montrent le temps de trajet en voiture des habitants vers le généraliste le plus '
+                'proche (INSEE 2025, zones construites à partir des carreaux de 200 m). Les secteurs orange et rouge sont ceux où une '
+                'implantation pourrait rapprocher des habitants ; choisissez ensuite une commune pour simuler.</p></div>', unsafe_allow_html=True)
+    if part_sup < 0.01 and float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) < 1000:
+        note = _urbain_note(dept, nom_dept, data["master"], part_sup, seuil)
+        if note:
+            st.markdown(f'<div class="sa-notice sa-notice--info">{note}</div>', unsafe_allow_html=True)
+    m = _carte_base(carreaux, zones, sit)
+    _points_communes(m, sit)
+    m.fit_bounds([[float(carreaux["lat"].min()), float(carreaux["lon"].min())], [float(carreaux["lat"].max()), float(carreaux["lon"].max())]], padding=(10, 10))
+    _legende(m, None, False)
+    folium.LayerControl(collapsed=True).add_to(m)
+    st_folium(m, use_container_width=True, height=640, returned_objects=[], key=f"ign_map_{dept}_vue")
+    # Secteurs pouvant bénéficier d'une intervention : communes avec le plus d'habitants au-delà du seuil
+    pot = sit[sit[f"pop_sup_{seuil}"] >= 50].sort_values(f"pop_sup_{seuil}", ascending=False).head(8)
+    if len(pot):
+        st.markdown(f'<h4 class="subsection-title" style="margin-top:14px;">Secteurs où une implantation pourrait rapprocher des habitants (seuil {seuil} min)</h4>', unsafe_allow_html=True)
+        cards = "".join(
+            f'<a class="usage-card" href="{internal_href("acces", dept_code=dept, commune=str(r["nom"]))}" target="_self">'
+            f'<div class="usage-title">{html.escape(str(r["nom"]))}</div>'
+            f'<div class="usage-txt">{_fmt(r[f"pop_sup_{seuil}"])} habitants à plus de {seuil} min · {r["t_moy"]:.0f} min en moyenne · {_fmt(r["pop"])} hab.'
+            + (" · généraliste présent" if r["offre"] else "") + '</div><div class="usage-link">Simuler ici →</div></a>'
+            for _, r in pot.iterrows())
+        st.markdown(f'<div class="usage-grid usage-grid--4">{cards}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<p class="sa-couverture">Aucune commune n’a 50 habitants ou plus au-delà de {seuil} min : une implantation n’y changerait pas la proximité mesurée.</p>', unsafe_allow_html=True)
+    _render_situation(dept, nom_dept, carreaux, sit, tot, loin, data)
+
+
+def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, seuil, sim_geoms, part_sup, tot, loin, key_sim) -> None:
+    """Étape 2 : scénario d'implantation (impact d'abord, puis la carte avant / après / gain)."""
+    master = data["master"]
+    com = carreaux
+    gain = rapp = pd.DataFrame()
+    gpc = pd.DataFrame()
+
+    def _retour():
+        st.session_state[key_sim] = "—"
+    st.button(f"← Vue d’ensemble de {nom_dept}", key=f"ign_back_{dept}", on_click=_retour)
+
+    if not sim_geoms:
+        st.warning("Le service d’isochrones IGN n’a pas répondu (lenteur, erreur ou quota). Aucun scénario n’est affiché ; "
+                   "la situation actuelle ci-dessous reste valable.")
+        if st.button("Réessayer le calcul", key=f"ign_retry_{dept}"):
+            _isochrone_live.clear()
+            st.rerun()
+    else:
+        if len(sim_geoms) < len(SEUILS):
+            st.warning("Isochrone(s) manquante(s) : " + ", ".join(f"{m} min" for m in SEUILS if m not in sim_geoms)
+                       + " — le scénario est incomplet (service IGN). Réessayez dans quelques secondes.")
+        com = scenario(carreaux, sim_geoms)
+        gain, rapp = gains(com, seuil)
+        gpc = gains_par_commune(gain, sit)
+        avant = float(com.loc[com["duree"] > seuil, "pop"].sum())
+        apres = avant - float(gain["pop"].sum())
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.markdown(_kpi("Nouvellement couverts", f"+{_fmt(gain['pop'].sum())}",
+                         f"habitants qui passeraient sous {seuil} min, dans {len(gpc)} commune{'s' if len(gpc) != 1 else ''}", _NEUF), unsafe_allow_html=True)
+        m2.markdown(_kpi("Rapprochés", f"{_fmt(rapp['pop'].sum())}", f"habitants déjà sous {seuil} min dont le trajet raccourcirait", "#1B5E3F"), unsafe_allow_html=True)
+        m3.markdown(_kpi(f"Au-delà de {seuil} min aujourd’hui", f"{_fmt(avant)}",
+                         f"habitants ({avant / tot * 100:.1f}".replace(".", ",") + " % du département)", "#D9772B"), unsafe_allow_html=True)
+        m4.markdown(_kpi("Après le scénario", f"{_fmt(apres)}",
+                         f"habitants resteraient au-delà de {seuil} min ({apres / tot * 100:.1f}".replace(".", ",") + " %)", "#D9772B"), unsafe_allow_html=True)
+
+        situ = (f"<strong>{html.escape(choix)}</strong> ({_fmt(row['pop'])} habitants localisés) : temps moyen actuel "
+                f"{row['t_moy']:.0f} min vers un généraliste"
+                + (", un généraliste y est déjà recensé" if row["offre"] else ", aucun généraliste recensé dans la commune") + ".")
+        if len(gpc):
+            lst = ", ".join(f"{html.escape(str(r['nom']))} ({_fmt(r['pop_gain'])} hab., {r['t_avant']:.0f} min → ≤ {int(r['classe_apres'])} min)"
+                            for _, r in gpc.head(8).iterrows())
+            texte = (f"{situ} Une offre de médecine générale à {html.escape(choix)} placerait <strong>{_fmt(gain['pop'].sum())} habitants</strong> "
+                     f"de {len(gpc)} commune{'s' if len(gpc) != 1 else ''} à moins de {seuil} min : {lst}" + (" …" if len(gpc) > 8 else "") + ".")
+        else:
+            texte = (f"{situ} <strong>Personne ne passerait sous {seuil} min</strong> : les habitants situés à moins de "
+                     f"{seuil} min de {html.escape(choix)} le sont déjà d’un généraliste existant. Ce zéro ne signifie pas "
+                     f"qu’une implantation serait sans intérêt : elle raccourcirait des trajets, soulagerait les cabinets "
+                     f"voisins et pourrait répondre à un manque de capacité, que cette mesure géographique ne voit pas.")
+        if len(rapp):
+            texte += f" Par ailleurs {_fmt(rapp['pop'].sum())} habitants déjà sous le seuil verraient leur trajet raccourci."
+        texte += (" <span style='color:#6B6B68;'>Estimation théorique de proximité : capacité du cabinet, rendez-vous disponibles, "
+                  "transports en commun et habitants des départements voisins ne sont pas pris en compte.</span>")
+        st.markdown(f'<p class="dim-switch-note">{texte}</p>', unsafe_allow_html=True)
+        if part_sup < 0.01 and float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) < 1000:
+            note = _urbain_note(dept, nom_dept, master, part_sup, seuil)
+            if note:
+                st.markdown(f'<div class="sa-notice sa-notice--info">{note}</div>', unsafe_allow_html=True)
+        if len(gpc):
+            rows = "".join(
+                f'<tr><td class="metric-label">{html.escape(str(r["nom"]))}</td><td data-label="Nouvellement couverts">{_fmt(r["pop_gain"])} hab.</td>'
+                f'<td data-label="Part de la commune">{r["part"] * 100:.0f} %</td><td data-label="Trajet moyen aujourd’hui">{r["t_avant"]:.0f} min</td>'
+                f'<td data-label="Avec la nouvelle offre">≤ {int(r["classe_apres"])} min</td></tr>'
+                for _, r in gpc.head(15).iterrows())
+            st.markdown('<div class="sa-tbl-scroll"><table class="comparison-table-v2 commune-action-table"><thead><tr>'
+                        '<th class="metric-col">Commune</th><th class="metric-col">Habitants nouvellement couverts</th>'
+                        '<th class="metric-col">Part de la commune</th><th class="metric-col">Trajet moyen aujourd’hui</th>'
+                        '<th class="metric-col">Avec la nouvelle offre</th></tr></thead>'
+                        f'<tbody>{rows}</tbody></table></div>'
+                        + (f'<p class="sa-couverture">{len(gpc) - 15} autres communes concernées, gains plus faibles.</p>' if len(gpc) > 15 else ""),
+                        unsafe_allow_html=True)
+
+    # ── Carte : situation actuelle / avec la nouvelle offre / gain seulement ─
+    v1, v2 = st.columns([2.2, 1])
+    mode = v1.radio("Affichage de la carte", ["Situation actuelle", "Avec la nouvelle offre", "Gain seulement"],
+                    index=1 if sim_geoms else 0, horizontal=True, key=f"ign_mode_{dept}")
+    cadrage = v2.toggle("Cadrer sur le scénario", value=True, key=f"ign_cadrage_{dept}") if sim_geoms else False
+    faible = mode == "Gain seulement"
+    m = _carte_base(carreaux, zones, sit, estompe=faible)
+    if sim_geoms and mode != "Situation actuelle":
+        from shapely.geometry import mapping as _mapping
+        for s_ in (20, 15, 10):
+            if s_ in sim_geoms and (s_ == seuil or mode == "Avec la nouvelle offre"):
+                folium.GeoJson({"type": "Feature", "geometry": sim_geoms[s_]}, name=f"Isochrone IGN ≤ {s_} min",
+                               style_function=lambda f, s2=s_: {"fillColor": _NEUF, "color": _NEUF, "weight": 2.2 if s2 == seuil else 1,
+                                                                "fillOpacity": 0.0, "dashArray": "6 4"}).add_to(m)
+        if mode == "Avec la nouvelle offre":
+            # Transformation visible : les zones dont la classe change prennent la couleur de leur nouvelle classe
+            change = com[com["classe_neuf"] < com["classe"]]
+            for cl in sorted(change["classe_neuf"].unique()):
+                g = _union_squares(change[change["classe_neuf"] == cl])
+                if g is not None:
+                    folium.GeoJson({"type": "Feature", "geometry": _mapping(g)}, name=f"Après : ≤ {int(cl)} min",
+                                   style_function=lambda f, c=_COULEURS[int(cl)]: {"fillColor": c, "color": c, "weight": 0.6, "fillOpacity": 0.75}).add_to(m)
+        g_gain = _union_squares(gain)
+        if g_gain is not None:
+            folium.GeoJson({"type": "Feature", "geometry": _mapping(g_gain)}, name=f"Passe sous {seuil} min",
+                           style_function=lambda f: {"fillColor": _NEUF, "color": _NEUF, "weight": 1.2, "fillOpacity": 0.55 if faible else 0.35}).add_to(m)
+        g_rapp = _union_squares(rapp)
+        if g_rapp is not None and faible:
+            folium.GeoJson({"type": "Feature", "geometry": _mapping(g_rapp)}, name="Rapprochés",
+                           style_function=lambda f: {"fillColor": "#1B5E3F", "color": "#1B5E3F", "weight": 1.2, "fillOpacity": 0.25}).add_to(m)
+    _points_communes(m, sit, gpc, seuil, faible)
+    folium.Marker([float(row["lat"]), float(row["lon"])], tooltip=f"Nouvelle offre simulée : {html.escape(choix)}",
+                  icon=folium.DivIcon(html='<div class="sa-ign-star">★</div>', icon_size=(26, 26), icon_anchor=(13, 13))).add_to(m)
+    if cadrage and sim_geoms:
+        from shapely.geometry import shape as _shape
+        b = _shape(sim_geoms[max(sim_geoms)]).bounds
+        m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(20, 20))
+    else:
+        m.fit_bounds([[float(carreaux["lat"].min()), float(carreaux["lon"].min())], [float(carreaux["lat"].max()), float(carreaux["lon"].max())]], padding=(10, 10))
+    _legende(m, seuil, bool(sim_geoms))
+    folium.LayerControl(collapsed=True).add_to(m)
+    st_folium(m, use_container_width=True, height=580, returned_objects=[], key=f"ign_map_{dept}_{choix}_{seuil}_{mode}_{cadrage}")
+    st.caption("Isochrones IGN (réseau routier BD TOPO) et zones INSEE (carreaux, distancier OSRM) sont deux calculs distincts : "
+               "les surfaces « après » sont les carreaux INSEE contenus dans l’isochrone, pas l’isochrone elle-même.")
+    _render_situation(dept, nom_dept, carreaux, sit, tot, loin, data)
 
 
 def _render_verification(dept: str, nom_dept: str, sit: pd.DataFrame, carreaux: pd.DataFrame, data: dict) -> None:

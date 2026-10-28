@@ -82,21 +82,34 @@ def _cur(active: bool) -> str:
     return ' aria-current="page"' if active else ""
 
 
-def render_topnav(current_view: View, master=None, *, with_search: bool = True) -> None:
-    """Navigation principale unique : logo, liens, recherche globale.
+def _diagnostic_href(master) -> str:
+    """Entrée « Diagnostic » de la barre : fiche du département ou de la région de
+    référence, synthèse nationale sinon."""
+    from .. import territoire as T
 
-    Ordinateur : barre horizontale (liens visibles, recherche à droite).
-    Mobile : logo + menu dépliable (<details>, sans JavaScript), recherche en
-    dessous. Les liens sont des URL internes (?view=…) : le routage et les
-    liens directs restent inchangés."""
-    if master is not None:
-        _sync_territory_selector(master)   # avant les liens : ils portent le territoire à jour
-    items = [("home", "Accueil"), ("exploration", "Prioriser"), ("comparer", "Comparer"),
-             ("acces", "Accès routier"), ("methodologie", "Méthodologie"), ("about", "À propos")]
+    t = T.get()
+    if t.kind == "dept":
+        return internal_href("dept", dept_code=t.code)
+    if t.kind == "region":
+        return internal_href("region", region_code=t.code)
+    return internal_href("diagnostic")
+
+
+def render_topnav(current_view: View, master=None, *, with_search: bool = True) -> None:
+    """Navigation principale unique : logo, liens, contrôle territorial (recherche + sélection).
+
+    Ordinateur : barre horizontale. Mobile : logo + menu dépliable (<details>),
+    contrôle territorial en dessous. Les liens sont des URL internes (?view=…)
+    qui portent le territoire de référence."""
+    items = [("home", "Accueil", internal_href("home")), ("exploration", "Prioriser", internal_href("exploration")),
+             ("diagnostic", "Diagnostic", _diagnostic_href(master)), ("comparer", "Comparer", internal_href("comparer")),
+             ("acces", "Simuler", internal_href("acces")), ("methodologie", "Méthodologie", internal_href("methodologie")),
+             ("about", "À propos", internal_href("about"))]
+    actif = "diagnostic" if current_view in ("dept", "region", "commune", "diagnostic") else current_view
     links = "".join(
-        f'<a class="sa-nav-link{" sa-nav-link--active" if v == current_view else ""}" '
-        f'href="{internal_href(v)}" target="_self"{_cur(v == current_view)}>{label}</a>'
-        for v, label in items
+        f'<a class="sa-nav-link{" sa-nav-link--active" if v == actif else ""}" '
+        f'href="{href}" target="_self"{_cur(v == actif)}>{label}</a>'
+        for v, label, href in items
     )
     brand = (
         f'<a class="sa-nav-brand" href="{internal_href("home")}" target="_self" aria-label="Sant\u2019active, accueil">'
@@ -105,9 +118,9 @@ def render_topnav(current_view: View, master=None, *, with_search: bool = True) 
     )
     with st.container(key="sa_topnav"):
         if with_search and master is not None:
-            c1, c3, c2 = st.columns([2.05, 0.95, 0.95], gap="small", vertical_alignment="center")
+            c1, c2 = st.columns([2.3, 1.2], gap="small", vertical_alignment="center")
         else:
-            c1, c2, c3 = st.container(), None, None
+            c1, c2 = st.container(), None
         with c1:
             st.markdown(
                 '<nav class="sa-nav" aria-label="Navigation principale">'
@@ -119,49 +132,8 @@ def render_topnav(current_view: View, master=None, *, with_search: bool = True) 
                 '</nav>',
                 unsafe_allow_html=True,
             )
-        if c3 is not None:
-            with c3:
-                render_territory_selector(master)
         if c2 is not None:
             from .search_box import render_search_box
             with c2:
-                render_search_box(master, key="sa_nav_search", variant="nav",
-                                  placeholder="Rechercher un territoire…")
-
-
-_SEL_KEY, _SEL_LAST = "sa_territoire_sel", "_sa_territoire_affiche"
-
-
-def _sync_territory_selector(master) -> None:
-    """Applique un changement du sélecteur (avant tout rendu) ou l'aligne sur le territoire."""
-    from .. import territoire as T
-
-    valid = {v for v, _ in T.options(master)}
-    current = T.get().param if T.get().param in valid else "fr"
-    widget_val = st.session_state.get(_SEL_KEY)
-    last = st.session_state.get(_SEL_LAST)
-    if widget_val is not None and last is not None and widget_val != last:
-        # L'utilisateur a changé le sélecteur : le territoire suit (page conservée)
-        T.set_territoire(T.parse(widget_val) or T.FRANCE)
-        current = T.get().param
-    elif widget_val != current:
-        # Le territoire a changé ailleurs (fiche ouverte, lien direct) : le sélecteur suit
-        st.session_state[_SEL_KEY] = current
-    st.session_state[_SEL_LAST] = current
-
-
-def render_territory_selector(master) -> None:
-    """Sélecteur du territoire de référence (France, région, département).
-
-    Un changement conserve la page courante : chaque page relit le territoire
-    (pré-sélection, mise en évidence). Ouvrir une fiche fait suivre le
-    sélecteur (voir app/territoire.py)."""
-    from .. import territoire as T
-
-    opts = T.options(master)
-    values = [v for v, _ in opts]
-    labels = dict(opts)
-    st.selectbox("Territoire de référence", values, format_func=lambda v: labels.get(v, v),
-                 key=_SEL_KEY, label_visibility="collapsed",
-                 help="Territoire de référence : conservé d'une page à l'autre (accueil, Prioriser, "
-                      "Comparer, Accès routier). France entière pour revenir au national.")
+                render_search_box(master, key="sa_territoire", variant="territoire",
+                                  placeholder="France entière · rechercher un territoire")

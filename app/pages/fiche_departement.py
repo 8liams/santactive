@@ -194,7 +194,7 @@ def _render_parcours(r: pd.Series) -> None:
         '<div class="sa-couverture">Couverture : <b>score et diagnostic</b> nationaux (100 départements) · '
         '<b>communes</b> : temps d\u2019accès et prix, partiels · <b>simulation routière</b> : pilote expérimental'
         + (" (disponible ici)" if dept in pilotes_disponibles() else
-           " (pilotes : " + ", ".join(pilotes_disponibles().values()) + ")") + '</div>',
+           f" (non disponible pour ce département ; {len(pilotes_disponibles())} départements couverts)") + '</div>',
         unsafe_allow_html=True,
     )
 

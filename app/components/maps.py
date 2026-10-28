@@ -339,15 +339,18 @@ def _outline_svg(dept_code: str, fill: str, w: int = 120, h: int = 72) -> str:
             f'<path d="{" ".join(paths)}" fill="{fill}" fill-opacity="0.85" stroke="#fff" stroke-width="0.8"/></svg>')
 
 
-def render_dom_cartouches(master: pd.DataFrame, **_ignored) -> None:
+def render_dom_cartouches(master: pd.DataFrame, only: set | None = None, **_ignored) -> None:
     """Cartouches homogènes des cinq DROM : nom, score ou absence de score,
-    catégorie, population, silhouette du territoire, lien vers la fiche."""
+    catégorie, population, silhouette du territoire, lien vers la fiche.
+    `only` : ne rendre que ces codes (territoire ultramarin de référence)."""
     import html as _html
 
     from .nav import internal_href
 
     cards = []
     for code, cfg in DOM_CONFIG.items():
+        if only is not None and code not in only:
+            continue
         row = master[master["dept"].astype(str) == code]
         r = row.iloc[0] if not row.empty else None
         zone = str(r.get("zone_short", "")) if r is not None else ""

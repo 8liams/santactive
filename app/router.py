@@ -6,7 +6,7 @@ from typing import Literal
 
 import streamlit as st
 
-View = Literal["home", "dept", "region", "commune", "comparer", "exploration", "acces", "methodologie", "about", "enjeux"]
+View = Literal["home", "dept", "region", "commune", "comparer", "exploration", "acces", "methodologie", "about", "enjeux", "diagnostic"]
 
 _TERRITORY_PARAMS = ("dept_code", "region_code", "commune_code")
 _NAV_LOCK_KEY = "_nav_programmatic"

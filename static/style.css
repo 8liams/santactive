@@ -3284,3 +3284,9 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .sa-loading::before { content: ""; width: 14px; height: 14px; border: 2px solid #C9D3EA; border-top-color: #1A3D8F; border-radius: 50%;
     animation: sa-spin .8s linear infinite; }
 @keyframes sa-spin { to { transform: rotate(360deg); } }
+.prio-intro--4 { grid-template-columns: repeat(4, 1fr); }
+@media screen and (max-width: 768px) { .prio-intro--4 { grid-template-columns: 1fr 1fr; } }
+.st-key-sa_territoire { margin: 0 !important; }
+.usage-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #1A3D8F; background: #E8EDF8; border-radius: 4px; padding: 2px 7px; margin: 4px 0 6px; }
+.usage-grid--4 { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
+@media screen and (max-width: 768px) { .usage-grid--4 { grid-template-columns: 1fr 1fr; } }
