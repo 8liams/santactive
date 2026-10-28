@@ -413,8 +413,8 @@ class TestParcoursEtSimulation(unittest.TestCase):
         from app.pages.acces_ign import pilotes_disponibles
         labels = [sb.label for sb in at.selectbox]
         self.assertIn("Commune d’implantation", labels)
-        self.assertEqual("Département pilote" in labels, len(pilotes_disponibles()) > 1,
-                         "le sélecteur de pilote n'apparaît que s'il y a plusieurs pilotes")
+        self.assertNotIn("Département pilote", labels, "pas de sélecteur géographique redondant : le territoire vient de la barre")
+        self.assertGreater(len(pilotes_disponibles()), 1)
         self.assertIn("Nouvellement couverts", html)
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
         at.query_params["view"] = "exploration"

@@ -27,7 +27,7 @@ APL_NATIONAL_REF = None  # référence = médiane des valeurs départementales (
 COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Score global",         "score_global",          ".1f", "/100"),
     ("APL (DREES)",          "apl_dept",       ".1f", "/hab."),
-    ("Temps d'accès médian", "temps_acces_median",    ".1f", " min"),
+    ("Temps d'accès médian (indicateur interne, score)", "temps_acces_median", ".1f", " min"),
     ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
     ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
     ("Prix médian m²",       "prix_m2_moyen",         ".0f", " €"),
@@ -352,7 +352,7 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
     communs = [e for e in ecarts if e[0] < 0.08 or (e[8] and len(set(e[8].values())) == 1 and "at" not in e[8].values())]
 
     lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score global", "apl_dept": "l’accessibilité aux généralistes (APL)",
-              "temps_acces_median": "le temps d’accès", "med_gen_pour_100k": "la densité de généralistes",
+              "temps_acces_median": "le temps d’accès (indicateur interne)", "med_gen_pour_100k": "la densité de généralistes",
               "structures_pour_100k": "l’offre hospitalière", "prix_m2_moyen": "le prix du foncier", "pct_plus_65": "la part des 65 ans et plus"}
     li = ""
     for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:

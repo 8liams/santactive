@@ -91,12 +91,14 @@ def init_from_url() -> None:
 
 
 def follow_dept(code: str) -> None:
-    """La fiche d'un département devient le territoire de référence."""
-    set_territoire(Territoire("dept", str(code).zfill(2)))
+    """La fiche d'un département devient le territoire de référence (session seulement :
+    l'URL de la fiche identifie déjà le département, et réécrire ``t`` ajouterait une
+    entrée d'historique « morte » au retour arrière du navigateur)."""
+    set_territoire(Territoire("dept", str(code).zfill(2)), sync_url=False)
 
 
 def follow_region(code: str) -> None:
-    set_territoire(Territoire("region", str(code)))
+    set_territoire(Territoire("region", str(code)), sync_url=False)
 
 
 # ── Lecture dans les données ──────────────────────────────────────────────────

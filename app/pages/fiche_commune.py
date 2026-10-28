@@ -88,6 +88,20 @@ def render(data: dict) -> None:
 
     prix_m2     = immo_c["prix_m2"].median() if not immo_c.empty else float("nan")
     temps_acces = temps_c["temps_acces"].mean() if not temps_c.empty else float("nan")
+    # Repère INSEE 2025 par commune (temps moyen en voiture vers le généraliste le plus proche),
+    # apparié par le libellé normalisé via le référentiel API Géo du département.
+    temps_insee, offre_insee = float("nan"), None
+    try:
+        from ..commune_opportunity import load_acces_insee_communes as _load_insee_communes
+        ref = pd.read_csv("static/data/communes_population_geoapi.csv", dtype={"code_insee": str, "dept": str})
+        ref = ref[ref["dept"].astype(str).str.zfill(2) == dept_code]
+        codes = ref.loc[ref["nom"].map(norm_commune_name) == norm_commune_name(commune_name), "code_insee"].str.zfill(5).tolist()
+        ins = _load_insee_communes()
+        hit = ins[ins["code_insee"].isin(codes)]
+        if len(hit) == 1:
+            temps_insee = float(hit.iloc[0]["temps_acces"]); offre_insee = bool(hit.iloc[0]["offre_sur_place"])
+    except Exception:
+        pass
     nb_trans    = len(immo_c)
     nb_etabs_c  = len(etabs_c)
 
@@ -110,11 +124,18 @@ def render(data: dict) -> None:
              if pd.notna(prix_m2) else "Non disponible"),
         )
     with c2:
-        render_kpi_card(
-            "Temps d'accès",
-            f"{temps_acces:.0f}\u202fmin" if pd.notna(temps_acces) else "N/D",
-            "Donnée communale (0 = sur place)" if pd.notna(temps_acces) else "Non disponible",
-        )
+        if pd.notna(temps_insee):
+            render_kpi_card(
+                "Temps vers un généraliste",
+                f"{temps_insee:.0f}\u202fmin",
+                ("généraliste présent dans la commune · " if offre_insee else "") + "moyenne des habitants, voiture · INSEE 2025",
+            )
+        else:
+            render_kpi_card(
+                "Temps d'accès (indicateur interne)",
+                f"{temps_acces:.0f}\u202fmin" if pd.notna(temps_acces) else "N/D",
+                "0 = généraliste présent dans la commune" if pd.notna(temps_acces) else "Non disponible",
+            )
     with c3:
         render_kpi_card(
             "Transactions 2025",

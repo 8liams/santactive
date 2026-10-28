@@ -1647,7 +1647,7 @@ div[data-testid="stPills"] {
     flex-wrap: wrap !important;
 }
 div[data-testid="stPills"] button {
-    border-radius: 100px !important;
+    border-radius: 6px !important;
     border: 1.5px solid #D8D6CE !important;
     background: white !important;
     color: #2B2B2B !important;
@@ -1677,7 +1677,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] {
 }
 div[data-testid="stRadio"] label {
     border: 1.5px solid #D8D6CE !important;
-    border-radius: 100px !important;
+    border-radius: 6px !important;
     padding: 6px 18px !important;
     cursor: pointer !important;
     font-size: 13px !important;
@@ -3251,3 +3251,36 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
     div[data-testid="stPills"] button, div[data-testid="stPills"] button[data-testid="stBaseButton-pills"],
     div[data-testid="stPills"] button[data-testid="stBaseButton-pillsActive"] { border-radius: 6px !important; }
 }
+
+/* ─── Accueil : résumé compact du territoire de référence ───────────────── */
+.ref-line { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;
+    border: 1.5px solid #1A3D8F; border-left-width: 5px; border-radius: 6px; background: #F7F9FD; padding: 10px 16px; margin: 0 0 14px; }
+.ref-line-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 420px; min-width: 0; }
+.ref-line-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #1A3D8F; }
+.ref-line-title { font-size: 17px; font-weight: 700; color: #0A1938; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ref-line-title span { font-weight: 400; font-size: 12.5px; color: #6B6B68; }
+.ref-line-title .fiche-zone-badge { font-style: normal; font-size: 10px; padding: 2px 7px; }
+.ref-line-txt { font-size: 13px; color: #2B2B2B; line-height: 1.45; }
+.ref-line-links { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ref-line-links a { font-size: 12.5px; font-weight: 600; color: #1A3D8F !important; text-decoration: none !important;
+    border: 1.5px solid #C9D3EA; border-radius: 6px; padding: 7px 10px; background: #fff; white-space: nowrap; }
+.ref-line-links a.primary { background: #1A3D8F; color: #fff !important; border-color: #1A3D8F; }
+.ref-line-links a:hover { border-color: #1A3D8F; background: #E8EDF8; }
+.ref-line-links a.primary:hover { background: #2E6BE6; border-color: #2E6BE6; }
+.ref-line-links a.ref-line-reset { border-color: transparent; background: transparent; color: #6B6B68 !important; font-weight: 500; }
+.ref-line-links a.ref-line-reset:hover { background: #F3F2EC; color: #0A1938 !important; }
+.map-sub a { color: #1A3D8F !important; font-weight: 600; text-decoration: none !important; }
+.map-sub a:hover { text-decoration: underline !important; }
+.st-key-home_map_kpi div[data-testid="stRadio"] { margin-bottom: 4px; }
+@media screen and (max-width: 768px) { .ref-line-links a.primary { flex: 1 1 100%; text-align: center; } }
+/* ─── Avis compacts et état de chargement (simulateur) ──────────────────── */
+.sa-notice { border: 1px solid #E5B04A; border-left: 4px solid #C8922A; background: #FDF8EC; border-radius: 6px;
+    padding: 10px 14px; font-size: 13px; line-height: 1.5; color: #2B2B2B; margin: 0 0 12px; }
+.sa-notice a { color: #1A3D8F !important; font-weight: 600; text-decoration: none !important; }
+.sa-notice a:hover { text-decoration: underline !important; }
+.sa-notice--info { border-color: #C9D3EA; border-left-color: #1A3D8F; background: #F7F9FD; margin-top: 4px; }
+.sa-loading { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px dashed #C9C6BA; border-radius: 6px;
+    color: #4B4B48; font-size: 13px; margin: 8px 0 16px; background: #FAFAF8; }
+.sa-loading::before { content: ""; width: 14px; height: 14px; border: 2px solid #C9D3EA; border-top-color: #1A3D8F; border-radius: 50%;
+    animation: sa-spin .8s linear infinite; }
+@keyframes sa-spin { to { transform: rotate(360deg); } }

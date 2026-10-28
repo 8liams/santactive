@@ -57,7 +57,7 @@ INDICATORS = [
 
 
 def _render_territoire_reference(master: pd.DataFrame) -> None:
-    """Territoire de référence (barre de navigation) : situation en un regard et entrées du parcours."""
+    """Résumé compact du territoire de référence : une phrase, une action principale, deux liens."""
     from .. import territoire as T
     from .acces_ign import pilotes_disponibles
 
@@ -74,55 +74,48 @@ def _render_territoire_reference(master: pd.DataFrame) -> None:
         score = r.get("score_global"); zone = str(r.get("zone_short", "N/D"))
         badge = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
         apl = pd.to_numeric(pd.Series([r.get("apl_dept")]), errors="coerce").iloc[0]
-        apl_nat = pd.to_numeric(master["apl_dept"], errors="coerce").median()
-        lecture = {
-            "Critique": "fait partie du tiers des départements les moins bien placés sur l’offre et l’accès aux soins",
-            "Intermédiaire": "se situe dans le tiers médian des départements",
-            "Favorable": "fait partie du tiers des départements les mieux placés",
-        }.get(zone, "n’a pas de score (données insuffisantes)")
-        apl_txt = ""
-        if pd.notna(apl) and pd.notna(apl_nat):
-            apl_txt = (f" Son accessibilité aux généralistes (APL {apl:.1f}) est "
-                       + ("sous le repère de sous-densité (2,5)." if apl < 2.5 else
-                          f"{'inférieure' if apl < apl_nat else 'supérieure'} à la médiane des départements ({apl_nat:.1f}).")).replace(".", ",", 0)
-            apl_txt = apl_txt.replace(f"{apl:.1f}", f"{apl:.1f}".replace(".", ",")).replace(f"{apl_nat:.1f}", f"{apl_nat:.1f}".replace(".", ","))
-        sim = (f'<a href="{internal_href("acces", dept_code=t.code)}" target="_self">Simuler une implantation →</a>' if t.code in pilotes
-               else '<span class="sa-dim">Simulation routière : pas encore disponible pour ce département</span>')
-        st.markdown(
-            f'<div class="ref-block"><div class="ref-block-main"><div class="ref-block-eyebrow">Territoire de référence</div>'
-            f'<div class="ref-block-title">{html.escape(str(r["Nom du département"]))} <span>({t.code}) · {html.escape(str(r.get("Nom de la région", "")))}</span>'
-            f'<i class="fiche-zone-badge {badge}">Zone {zone.lower()}</i></div>'
-            f'<p class="ref-block-txt">Score {float(score):.0f}/100, {fmt_classement_national(r.get("rang_national"), nb_total)} sur {nb_total} : '
-            f'{html.escape(str(r["Nom du département"]))} {lecture}.{apl_txt}</p></div>'
-            f'<div class="ref-block-links"><a class="primary" href="{internal_href("dept", dept_code=t.code)}" target="_self">Diagnostic →</a>'
-            f'<a href="{internal_href("dept", dept_code=t.code)}#leviers" target="_self">Leviers recommandés →</a>'
-            f'<a href="{internal_href("exploration")}" target="_self">Positionnement national →</a>'
-            f'<a href="{internal_href("comparer")}&depts={t.code}" target="_self">Comparer →</a>{sim}</div></div>',
-            unsafe_allow_html=True)
+        lecture = {"Critique": "parmi le tiers des départements les moins bien placés",
+                   "Intermédiaire": "dans le tiers médian des départements",
+                   "Favorable": "parmi le tiers des départements les mieux placés"}.get(zone, "sans score")
+        apl_txt = (f" · APL {f'{apl:.1f}'.replace('.', ',')}" + (" (sous le repère 2,5)" if apl < 2.5 else "")) if pd.notna(apl) else ""
+        score_txt = (f"score {float(score):.0f}/100, {fmt_classement_national(r.get('rang_national'), nb_total)} sur {nb_total}"
+                     if pd.notna(score) else "sans score")
+        titre = f'{html.escape(str(r["Nom du département"]))} <span>({t.code}) · {html.escape(str(r.get("Nom de la région", "")))}</span>'
+        texte = f"{score_txt}, {lecture}{apl_txt}."
+        primaire = (internal_href("dept", dept_code=t.code), "Ouvrir le diagnostic →")
+        secondaires = [(internal_href("comparer") + f"&depts={t.code}", "Comparer")]
+        secondaires.append((internal_href("acces", dept_code=t.code), "Simuler une implantation" if t.code in pilotes else "Simulation : voir un pilote"))
     else:
         depts = master[master["Code région"].astype(str) == t.code]
         if depts.empty:
             return
-        nb = len(depts); crit = depts[depts["zone_short"] == "Critique"]
-        noms_crit = ", ".join(crit.sort_values("score_global")["Nom du département"].astype(str).tolist()[:4])
+        crit = depts[depts["zone_short"] == "Critique"]
+        badge, zone = "", ""
+        titre = f'{html.escape(str(depts.iloc[0]["Nom de la région"]))} <span>· région · {len(depts)} départements</span>'
+        sc = pd.to_numeric(depts["score_global"], errors="coerce")
+        texte = (f"{len(crit)} département{'s' if len(crit) != 1 else ''} en zone critique"
+                 + (f" ({html.escape(', '.join(crit.sort_values('score_global')['Nom du département'].astype(str).tolist()[:3]))})" if len(crit) else "")
+                 + f", scores de {sc.min():.0f} à {sc.max():.0f} sur 100.")
+        primaire = (internal_href("region", region_code=t.code), "Ouvrir la fiche région →")
+        codes = (crit.sort_values("score_global")["dept"].astype(str).tolist() or depts["dept"].astype(str).tolist())[:4]
+        secondaires = [(internal_href("comparer") + "&depts=" + ",".join(codes), "Comparer ses départements")]
         pil = [d for d in depts["dept"].astype(str) if d in pilotes]
-        sim = (f'<a href="{internal_href("acces", dept_code=pil[0])}" target="_self">Simuler une implantation ({html.escape(pilotes[pil[0]])}) →</a>' if pil
-               else '<span class="sa-dim">Simulation routière : aucun pilote dans cette région</span>')
-        st.markdown(
-            f'<div class="ref-block"><div class="ref-block-main"><div class="ref-block-eyebrow">Territoire de référence</div>'
-            f'<div class="ref-block-title">{html.escape(str(depts.iloc[0]["Nom de la région"]))} <span>· région · {nb} départements</span></div>'
-            f'<p class="ref-block-txt">{len(crit)} département{"s" if len(crit) != 1 else ""} en zone critique'
-            + (f" ({html.escape(noms_crit)})" if noms_crit else "") + f', {int((depts["zone_short"] == "Favorable").sum())} en zone favorable. '
-            f'Scores de {pd.to_numeric(depts["score_global"], errors="coerce").min():.0f} à {pd.to_numeric(depts["score_global"], errors="coerce").max():.0f} sur 100.</p></div>'
-            f'<div class="ref-block-links"><a class="primary" href="{internal_href("region", region_code=t.code)}" target="_self">Fiche région →</a>'
-            f'<a href="{internal_href("exploration")}" target="_self">Prioriser ses départements →</a>'
-            f'<a href="{internal_href("comparer")}&depts={",".join(crit.sort_values("score_global")["dept"].astype(str).tolist()[:4] or depts["dept"].astype(str).tolist()[:4])}" target="_self">Comparer ses départements →</a>{sim}</div></div>',
-            unsafe_allow_html=True)
+        if pil:
+            secondaires.append((internal_href("acces", dept_code=pil[0]), f"Simuler ({html.escape(pilotes[pil[0]])})"))
+    st.markdown(
+        f'<div class="ref-line"><div class="ref-line-main"><span class="ref-line-eyebrow">Territoire de référence</span>'
+        f'<span class="ref-line-title">{titre}'
+        + (f'<i class="fiche-zone-badge {badge}">Zone {zone.lower()}</i>' if zone and zone != "N/D" else "") + '</span>'
+        f'<span class="ref-line-txt">{texte}</span></div>'
+        f'<div class="ref-line-links"><a class="primary" href="{primaire[0]}" target="_self">{primaire[1]}</a>'
+        + "".join(f'<a href="{h}" target="_self">{l} →</a>' for h, l in secondaires)
+        + f'<a class="ref-line-reset" href="{internal_href("home", t="fr")}" target="_self">France entière</a></div></div>',
+        unsafe_allow_html=True)
 
 
 def _render_usages(master: pd.DataFrame) -> None:
-    """Six entrées par usage : trouver, prioriser, diagnostiquer, leviers, comparer, simuler.
-    Avec un département de référence, les entrées s'ouvrent directement sur lui."""
+    """Trois entrées métier : prioriser, diagnostiquer, simuler. Avec un département de
+    référence, elles s'ouvrent directement sur lui. La recherche reste dans la barre."""
     from .. import territoire as T
     from .acces_ign import pilotes_disponibles
 
@@ -136,37 +129,43 @@ def _render_usages(master: pd.DataFrame) -> None:
     ex_nom = T.nom_court(t, master) if ref else (str(ex["Nom du département"]) if ex is not None else "")
     sim_code = ref if ref in pilotes else pilote
     cards = [
-        ("Trouver un territoire", "Département, région ou commune : recherche en haut de page, sélecteur de territoire, ou clic sur la carte.",
-         None, "Carte ci-dessous ↓", "#home_carte"),
-        ("Identifier les priorités", "Matrice offre × besoins : les départements où l\u2019offre est faible et les besoins forts.",
-         internal_href("exploration"), "Prioriser →", None),
-        ("Consulter un diagnostic", "Situation, scorecard et communes fragiles d\u2019un département."
+        ("Prioriser", "Où l\u2019offre est faible et les besoins forts : les départements à examiner en premier, par région.",
+         internal_href("exploration"), "Prioriser les territoires →"),
+        ("Diagnostiquer", "Situation, scorecard, leviers recommandés et communes fragiles d\u2019un département."
          + (f" {ex_nom}." if ref else (f" Exemple : {ex_nom}." if ex is not None else "")),
          internal_href("dept", dept_code=ex_code) if ex_code else internal_href("comparer"),
-         "Ouvrir le diagnostic →" if ref else "Ouvrir un exemple →", None),
-        ("Examiner les leviers", "Actions recommandées par le moteur de règles : publics ciblés, conditions de déploiement, justification territoriale.",
-         (internal_href("dept", dept_code=ex_code) + "#leviers") if ex_code else internal_href("methodologie"), "Voir les leviers →", None),
-        ("Comparer", "Deux à quatre territoires côte à côte : écarts majeurs, meilleur et moins bon par dimension, référence nationale.",
-         internal_href("comparer") + (f"&depts={ref}" if ref else ""), "Comparer →", None),
-        ("Simuler une implantation", (f"Où une nouvelle offre de médecine générale rapprocherait des habitants (carreaux INSEE, isochrones IGN). "
-                                      f"Pilotes : {', '.join(pilotes.values())}.") if pilotes else "Simulation routière (pilote à venir).",
-         internal_href("acces", dept_code=sim_code) if sim_code else None, "Simuler →", None),
+         "Ouvrir le diagnostic →" if ref else "Ouvrir un exemple →"),
+        ("Simuler", ("Où une nouvelle offre de médecine générale rapprocherait des habitants. "
+                     f"Pilotes : {', '.join(pilotes.values())}.") if pilotes else "Simulation routière (pilote à venir).",
+         internal_href("acces", dept_code=sim_code) if sim_code else internal_href("methodologie"), "Simuler une implantation →"),
     ]
-    html_cards = ""
-    for titre, txt, href, lab, anchor in cards:
-        link = anchor or href
-        tgt = ' target="_self"' if href else ""
-        html_cards += (f'<a class="usage-card" href="{link}"{tgt}>'
-                       f'<div class="usage-title">{titre}</div><div class="usage-txt">{txt}</div>'
-                       f'<div class="usage-link">{lab}</div></a>')
-    st.markdown(f'<div class="usage-grid usage-grid--6">{html_cards}</div>', unsafe_allow_html=True)
+    html_cards = "".join(
+        f'<a class="usage-card" href="{href}" target="_self"><div class="usage-title">{titre}</div>'
+        f'<div class="usage-txt">{txt}</div><div class="usage-link">{lab}</div></a>'
+        for titre, txt, href, lab in cards)
+    st.markdown(f'<div class="usage-grid usage-grid--3">{html_cards}</div>', unsafe_allow_html=True)
 
 
-# Indicateurs de la carte : lecture principale (accès aux soins) et lecture détaillée
+# Indicateurs de la carte : un seul contrôle, un seul état (clé home_indicateur)
 INDICATEURS_PRINCIPAUX = ["Score global", "APL", "Temps d'accès"]
 
 
+def _bounds_for(geojson: dict, codes: set[str]) -> list | None:
+    pts = []
+    for f in geojson.get("features", []):
+        if str(f["properties"].get("code")) not in codes:
+            continue
+        g = f["geometry"]
+        rings = g["coordinates"] if g["type"] == "Polygon" else [r for poly in g["coordinates"] for r in poly]
+        for ring in rings:
+            pts.extend(ring)
+    if not pts:
+        return None
+    return [[min(p[1] for p in pts), min(p[0] for p in pts)], [max(p[1] for p in pts), max(p[0] for p in pts)]]
+
+
 def _render_national_map(master: pd.DataFrame, geojson) -> None:
+    from .. import territoire as T
     from ..components import render_national_choropleth
     from ..components.maps import COLORMAPS
 
@@ -176,36 +175,37 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
 
     labels = [l for _, l, _, _ in INDICATORS]
     st.markdown('<div id="home_carte"></div>', unsafe_allow_html=True)
-    p1, p2 = st.columns([1.6, 1], vertical_alignment="center")
-    with p1:
-        principal = st.pills("Accès aux soins", options=INDICATEURS_PRINCIPAUX, default=INDICATEURS_PRINCIPAUX[0],
-                             key="map_indicator_pills", label_visibility="collapsed")
-    with p2:
-        autres = ["—"] + [l for l in labels if l not in INDICATEURS_PRINCIPAUX]
-        detail = st.selectbox("Autres indicateurs", autres, key="map_indicator_detail", label_visibility="collapsed",
-                              format_func=lambda v: "Autres indicateurs (offre, contexte)…" if v == "—" else v)
-    selected_label = detail if detail != "—" else (principal or INDICATEURS_PRINCIPAUX[0])
+    selected_label = st.radio("Indicateur affiché", labels, horizontal=True, key="home_indicateur")
     idx = labels.index(selected_label) if selected_label in labels else 0
     col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
         st.caption(f"Indicateur « {selected_label} » non disponible, affichage du score global.")
         col_key, cmap_name, reverse_scale = "score_global", "score", False
 
+    t = T.get()
+    hl_codes = set(T.dept_codes(t, master)) if not t.is_national else set()
+    bounds = _bounds_for(geojson, hl_codes) if hl_codes else None
     sub = {"score_global": "Score Sant’active · 100 départements · cliquez sur un département pour ouvrir sa fiche",
            "apl_dept": f"{APL_LABEL_COURT} · DREES 2023",
-           "temps_acces_median": "Temps d'accès médian · minutes (indicateur interne, dimension du score)",
+           "temps_acces_median": "Temps d’accès médian · minutes · indicateur interne (dimension du score)",
            "med_gen_pour_100k": "Généralistes pour 100 000 habitants · DREES 2026",
            "prix_m2_moyen": "Prix médian au m² · DVF 2025",
            "pct_plus_65": "Part des 65 ans et plus · INSEE 2021"}.get(col_key, "")
+    ctx = ""
+    if hl_codes:
+        nom = html.escape(T.nom_court(t, master))
+        ctx = (f' · <strong>{nom}</strong> en évidence' + ("" if bounds else " (hors du fond métropolitain : voir les cartouches ci-dessous)")
+               + f' · <a href="{internal_href("home", t="fr")}" target="_self">France entière</a>')
     st.markdown(
         f'<div class="map-header"><div class="map-title">Accessibilité aux soins en France</div>'
-        f'<div class="map-sub">{sub} {info_tooltip("score_global") if col_key == "score_global" else ""}</div></div>',
+        f'<div class="map-sub">{sub} {info_tooltip("score_global") if col_key == "score_global" else ""}{ctx}</div></div>',
         unsafe_allow_html=True,
     )
 
     event = render_national_choropleth(
         master=master, geojson=geojson, metric=col_key, colormap_name=cmap_name,
-        reverse=reverse_scale, height=600, key=f"home_national_map_{col_key}",
+        reverse=reverse_scale, height=600, key=f"home_national_map_{col_key}_{t.param}",
+        bounds=bounds, highlight_codes=hl_codes or None,
     )
     if event:
         clicked = event.get("last_active_drawing")
@@ -235,9 +235,9 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
         if not vals.empty:
             st.markdown(
                 '<div class="map-legend map-legend--gradient">'
-                f'<span class="count">{vals.min():,.0f} {unit}</span>'
+                f'<span class="count">{vals.min():,.0f} {unit}</span>'
                 f'<span class="gradient" style="background:linear-gradient(90deg,{stops});"></span>'
-                f'<span class="count">{vals.max():,.0f} {unit}</span></div>'.replace(",", " "),
+                f'<span class="count">{vals.max():,.0f} {unit}</span></div>'.replace(",", " "),
                 unsafe_allow_html=True,
             )
     st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)

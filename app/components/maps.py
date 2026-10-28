@@ -124,6 +124,7 @@ def render_national_choropleth(
     height: int = 560,
     key: str = "national_map",
     bounds: list | None = None,
+    highlight_codes: set | None = None,
 ) -> dict | None:
     """Carte choroplèthe nationale avec tooltip adaptatif à l'indicateur."""
     st.markdown(_tooltip_style(), unsafe_allow_html=True)
@@ -222,14 +223,18 @@ def render_national_choropleth(
                 score_global_display="N/D", main_display="N/D",
             )
 
+    hl = {str(c).zfill(2) for c in (highlight_codes or set())}
+
     def _style(feature: dict) -> dict:
         code = feature["properties"]["code"]
         val = data_map.get(code)
+        dans_hl = code in hl
+        # Territoire de référence : contour marqué, le reste de la France estompé
         if val is None or pd.isna(val):
-            return {"fillColor": "#E8E6DD", "color": BORDER_COLOR,
-                    "weight": 0.6, "fillOpacity": 0.35}
-        return {"fillColor": cmap(val), "color": BORDER_COLOR,
-                "weight": BORDER_WIDTH, "fillOpacity": 0.92}
+            return {"fillColor": "#E8E6DD", "color": "#0A1938" if dans_hl else BORDER_COLOR,
+                    "weight": 2.2 if dans_hl else 0.6, "fillOpacity": 0.35 if not hl or dans_hl else 0.15}
+        return {"fillColor": cmap(val), "color": "#0A1938" if dans_hl else BORDER_COLOR,
+                "weight": 2.2 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.92 if not hl or dans_hl else 0.45}
 
     def _highlight(feature: dict) -> dict:
         return {"fillColor": HOVER_COLOR, "color": HOVER_COLOR,

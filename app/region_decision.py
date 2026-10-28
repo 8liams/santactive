@@ -116,11 +116,11 @@ def _generate_justification_prioritaire(
     if pd.notna(temps) and pd.notna(temps_reg) and temps > temps_reg * 1.08:
         if pd.notna(pct65) and pct65 > 22:
             clauses.append(
-                "temps d'accès supérieur à la médiane régionale "
+                "temps d'accès (indicateur interne) supérieur à la médiane régionale "
                 "et vieillissement marqué de la population"
             )
         else:
-            clauses.append("temps d'accès supérieur à la médiane régionale")
+            clauses.append("temps d'accès (indicateur interne) supérieur à la médiane régionale")
 
     nb_crit = _num(row.get("nb_communes_critiques"))
     if pd.notna(pct65) and pct65 > 23 and pd.notna(nb_crit) and nb_crit > 0:
