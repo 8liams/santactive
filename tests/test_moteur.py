@@ -403,7 +403,8 @@ class TestParcoursEtSimulation(unittest.TestCase):
         at.run()
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("Simuler une implantation (pilote IGN)", html)
+        self.assertIn("Simuler une implantation →", html)
+        self.assertNotIn("pilote IGN", html)          # mention obsolète supprimée (98 départements couverts)
         self.assertIn('id="communes"', html)
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
         at.query_params["view"] = "acces"; at.query_params["dept_code"] = "18"
@@ -544,7 +545,9 @@ class TestSimulationCapacite(unittest.TestCase):
             at.run()
             self.assertEqual(len(at.exception), 0)
             html = " ".join(m.value for m in at.markdown)
-            self.assertIn("ETP", html); self.assertIn("Simulation, pas mesure", html)
+            self.assertIn("équivalents temps plein", html)
+            self.assertTrue("Déficit théorique détecté" in html or "Aucun déficit théorique" in html)
+            self.assertIn("Hypothèses, seuils et détail du calcul", " ".join(e.label for e in at.expander))
         finally:
             sc.APL_DEPT_PATH = orig; sc.load_apl_departemental.clear()
 
@@ -707,6 +710,12 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
         self.assertIsNone(parse("xyz"))
         self.assertEqual(Territoire("dept", "974").param, "d974")
         self.assertTrue(FRANCE.is_national)
+        # commune : territoire exact (barre, Diagnostic, simulateur), département pour les pages
+        c = parse("cVierzon|18")
+        self.assertEqual(c, Territoire("commune", "Vierzon|18"))
+        self.assertEqual(c.dept_code, "18"); self.assertEqual(c.commune_nom, "Vierzon")
+        self.assertEqual(c.as_dept(), Territoire("dept", "18")); self.assertEqual(c.param, "cVierzon|18")
+        self.assertIsNone(parse("c|18")); self.assertIsNone(parse("cVierzon"))
 
     def test_acces_insee_departements(self):
         import pandas as pd
@@ -758,7 +767,8 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
         at.run()
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("pas encore disponible pour Guyane", html)
+        self.assertIn("non disponible pour Guyane", html)
+        self.assertIn("Aucun autre territoire n’est substitué", html)
         # vue nationale « Diagnostic » et territoire porté par l'URL
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
         at.query_params["view"] = "diagnostic"
@@ -785,6 +795,87 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
             self.assertNotIn("percentile", l["tension"])
             self.assertNotIn("N/D psychiatres", l["tension"])
             self.assertIn("conditions_catalogue", l)
+
+    # ── Audit Plédéliac (28 octobre 2026) : point d'implantation et isochrones dégénérées ──
+    def test_pledeliac_point_implantation_et_gain(self):
+        """Depuis le centroïde API Géo (forêt), l'isochrone IGN est dégénérée (0,5 km²) et le gain
+        serait zéro ; depuis la mairie, 1 205 des 1 214 habitants de la commune au-delà de 15 min
+        passent sous le seuil. Fixtures enregistrées le 28 octobre 2026 (IGN bdtopo-valhalla)."""
+        import json
+        from app.pages.acces_ign import (aire_km2, charger_carreaux, charger_communes, gains, isochrone_degeneree,
+                                         point_implantation, scenario, situation_communes, ISO_MIN_KM2)
+
+        car = charger_carreaux("22"); com = charger_communes("22")
+        row = com[com["nom"] == "Plédéliac"].iloc[0]
+        cc = car[car["code_insee"] == "22175"]
+        self.assertAlmostEqual(float(cc["pop"].sum()), 1556, delta=5)
+        self.assertAlmostEqual(float(cc.loc[cc["duree"] > 15, "pop"].sum()), 1214, delta=5)
+        lon, lat, lib = point_implantation(row, cc)
+        self.assertEqual(lib, "mairie"); self.assertAlmostEqual(lat, 48.4489, places=3)
+        cen = json.loads((ROOT / "tests/fixtures/isochrones_pledeliac_centroide.json").read_text())["isochrones"]
+        cen = {int(k): v for k, v in cen.items()}
+        self.assertLess(aire_km2(cen[10]), ISO_MIN_KM2)
+        self.assertIsNotNone(isochrone_degeneree(cen, cc))
+        mai = json.loads((ROOT / "tests/fixtures/isochrones_pledeliac_mairie.json").read_text())["isochrones"]
+        mai = {int(k): v for k, v in mai.items()}
+        self.assertGreater(aire_km2(mai[10]), 50)
+        self.assertIsNone(isochrone_degeneree(mai, cc))
+        sc = scenario(car, mai)
+        for seuil, attendu in ((10, 2650), (15, 1640), (20, 46)):
+            g, _ = gains(sc, seuil)
+            self.assertAlmostEqual(float(g["pop"].sum()), attendu, delta=attendu * 0.1 + 5, msg=f"seuil {seuil}")
+        g15, _ = gains(sc, 15)
+        self.assertAlmostEqual(float(g15.loc[g15["code_insee"] == "22175", "pop"].sum()), 1205, delta=60)
+        # un carreau > seuil contenu dans l'isochrone est compté, un carreau ≤ seuil ne l'est jamais
+        self.assertTrue((g15["duree"] > 15).all()); self.assertTrue((g15["classe_neuf"] <= 15).all())
+        # repli : isochrones dégénérées depuis la mairie → carreau le plus peuplé proposé
+        sit = situation_communes(car, com)
+        self.assertEqual(int(sit.loc[sit["code_insee"] == "22175", "offre"].iloc[0]), 0)
+
+    def test_pct_bornes_et_mairies(self):
+        import json
+        from app.pages.acces_ign import _pct, charger_communes
+        self.assertEqual(_pct(0.99997), "> 99,9\u202f%"); self.assertEqual(_pct(0.0002), "< 0,1\u202f%")
+        self.assertEqual(_pct(1.0), "100\u202f%"); self.assertEqual(_pct(0.0), "0\u202f%"); self.assertEqual(_pct(0.1234, 1), "12,3\u202f%")
+        for d in ("18", "75", "974"):
+            c = charger_communes(d)
+            self.assertGreaterEqual(c["lat_mairie"].notna().mean(), 0.9, d)
+        idx = json.loads((ROOT / "static/geo/simulateur_index.json").read_text())["departements"]
+        self.assertTrue(all(v["checks"].get("mairies") for v in idx.values()))
+
+    def test_capacite_conclusion(self):
+        from app.simulation_capacite import conclusion_capacite, simuler
+        for d in ("75", "23"):
+            sim = simuler(d)
+            if sim is None:
+                continue
+            c = conclusion_capacite(sim, "x", 1_000_000)
+            self.assertIn("deficit", c)
+            self.assertEqual(c["deficit"], sim["deficit_2,5"] > 0 and sim["etp_2,5"][1] >= 0.5)
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "dept"; at.query_params["dept_code"] = "75"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("équivalents temps plein", html)
+        self.assertTrue("Aucun déficit théorique" in html or "Déficit théorique détecté" in html)
+
+    def test_simulateur_region_choix_et_commune_territoire(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "acces"; at.query_params["t"] = "r53"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("Choisir un département de Bretagne", html)
+        self.assertNotIn("Territoire de travail", html)      # aucun département choisi à la place de l'utilisateur
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "home"; at.query_params["t"] = "cVierzon|18"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        from app import territoire as T
+        self.assertEqual(at.session_state["territoire"], T.Territoire("commune", "Vierzon|18"))
 
     @classmethod
     def _data(cls):

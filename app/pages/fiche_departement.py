@@ -176,25 +176,25 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
 
 
 def _render_parcours(r: pd.Series) -> None:
-    """Liens de parcours : communes fragiles, simulation IGN (si pilote), région, comparaison."""
+    """Liens de parcours : communes fragiles, simulation d'implantation (si le département est couvert), région, comparaison."""
     from .acces_ign import pilotes_disponibles
 
     dept = str(r.get("dept", "")).zfill(2)
     region_code = str(r.get("Code région", ""))
     links = [f'<a href="#communes">Communes fragiles ↓</a>']
     if dept in pilotes_disponibles():
-        links.append(f'<a class="primary" href="{internal_href("acces", dept_code=dept)}" target="_self">Simuler une implantation (pilote IGN) →</a>')
+        links.append(f'<a class="primary" href="{internal_href("acces", dept_code=dept)}" target="_self">Simuler une implantation →</a>')
     else:
-        links.append(f'<a href="{internal_href("acces", dept_code=dept)}" target="_self">Simulation routière : voir un pilote →</a>')
+        links.append(f'<a href="{internal_href("acces", dept_code=dept)}" target="_self">Simulation : non disponible ici →</a>')
     links.append(f'<a href="{internal_href("comparer")}&depts={dept}" target="_self">Comparer →</a>')
     if region_code:
         links.append(f'<a href="{internal_href("region", region_code=region_code)}" target="_self">Région →</a>')
     st.markdown(
         '<div class="sa-parcours">' + "".join(links) + '</div>'
         '<div class="sa-couverture">Couverture : <b>score et diagnostic</b> nationaux (100 départements) · '
-        '<b>communes</b> : temps d\u2019accès et prix, partiels · <b>simulation routière</b> : pilote expérimental'
-        + (" (disponible ici)" if dept in pilotes_disponibles() else
-           f" (non disponible pour ce département ; {len(pilotes_disponibles())} départements couverts)") + '</div>',
+        '<b>communes</b> : temps d\u2019accès et prix, partiels · <b>simulation d\u2019implantation</b> : '
+        + (f"disponible ({len(pilotes_disponibles())} départements couverts)" if dept in pilotes_disponibles() else
+           f"non disponible pour ce département ({len(pilotes_disponibles())} départements couverts : métropole, Martinique, La Réunion)") + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -969,7 +969,7 @@ def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
     dept = str(r.get("dept", "")).zfill(2)
     if reco.get("kind") in ("antennes", "navettes", "telemedecine", "msp", "attractivite_mg") and dept in pilotes_disponibles():
         meta += (f'<div class="reco-meta-item wide"><a class="reco-link" href="{internal_href("acces", dept_code=dept)}" target="_self">'
-                 f'Simuler une implantation sur ce territoire (pilote IGN) →</a></div>')
+                 f'Simuler une implantation sur ce territoire →</a></div>')
 
     st.html(
         '<div class="reco-card reco-card-neutral">'

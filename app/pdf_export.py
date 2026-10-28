@@ -358,7 +358,7 @@ def generate_department_pdf(
             f'population vivant sous le repère 2,5 : <b>{sim["part_pop_apl_inf_2_5"]:.0%}</b> '
             f'({sim["nb_communes_inf_2_5"]} communes sur {sim["nb_communes"]}). Pour amener chaque commune '
             f'sous le seuil 2,5 au niveau du seuil, il manquerait environ {sim["deficit_2,5"]:,.0f} '
-            f'consultations accessibles par an, soit <b>environ {mid:.0f} ETP</b> (fourchette {lo:.0f} à {hi:.0f} ETP '
+            f'consultations accessibles par an, soit <b>environ {mid:.0f} ETP</b> (équivalents temps plein ; fourchette {lo:.0f} à {hi:.0f} ETP '
             f'pour 6 000 à 3 600 actes/an ; 1 ETP = 5 400 actes, convention DREES).'
         ).replace(",", "\u202f")
         story.append(Paragraph(f'<font size="9">{txt}</font>', _s("sim", fontSize=9, textColor=NOIR, leading=13)))

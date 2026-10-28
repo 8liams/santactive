@@ -31,10 +31,14 @@ html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] *,
 .stApp { background: #FFFFFF; color: #161616; }
 
 html,
-body,
+body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+/* clip (et non hidden) : ne crée pas de conteneur de défilement, la barre sticky fonctionne */
 .main,
 .block-container {
-    overflow-x: hidden;
+    overflow-x: clip;
     max-width: 100vw;
 }
 
@@ -2911,8 +2915,14 @@ img[alt="ESData, ESD Paris"] {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ─── Navigation principale ──────────────────────────────────────────────── */
+/* Sticky : Streamlit enveloppe chaque élément dans un stLayoutWrapper de la hauteur de la barre ;
+   un sticky posé sur la barre elle-même n'aurait aucune marge de déplacement. C'est donc
+   l'enveloppe qui est collante (le bloc vertical parent fait toute la hauteur de la page). */
+[data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav) {
+    position: sticky; top: 0; z-index: 80; background: #FFFFFF;
+}
 .st-key-sa_topnav {
-    position: sticky; top: 0; z-index: 80;
+    position: relative; z-index: 80;
     background: #FFFFFF;
     border-bottom: 1px solid #E8E6DD;
     margin: 0 0 16px; padding: 6px 0;
@@ -3193,18 +3203,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 /* Infobulles d'aide des widgets : lisibles */
 [data-testid="stTooltipContent"], [data-baseweb="tooltip"] { font-family: Marianne, Inter, sans-serif !important; font-size: 12px !important; max-width: 320px !important; }
 
-/* ─── Sélecteur du territoire de référence (barre de navigation) ───────── */
-.st-key-sa_topnav [data-testid="stSelectbox"] { margin: 0 !important; }
-.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-    min-height: 38px !important; border: 1.5px solid #1A3D8F !important; background: #F7F9FD !important;
-    border-radius: 6px !important; font-weight: 600 !important; color: #0A1938 !important;
-}
-.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] > div::before {
-    content: "Territoire"; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-    color: #1A3D8F; position: absolute; top: -7px; left: 8px; background: #fff; padding: 0 4px; line-height: 1;
-}
-.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] { position: relative; }
-.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] input { font-weight: 600 !important; }
+/* ─── Barre de navigation : disposition mobile ──────────────────────────── */
 @media screen and (max-width: 768px) {
     .st-key-sa_topnav [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
     .st-key-sa_topnav [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:not(#_) { flex: 1 1 100% !important; min-width: 100% !important; }
@@ -3290,3 +3289,29 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .usage-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #1A3D8F; background: #E8EDF8; border-radius: 4px; padding: 2px 7px; margin: 4px 0 6px; }
 .usage-grid--4 { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
 @media screen and (max-width: 768px) { .usage-grid--4 { grid-template-columns: 1fr 1fr; } }
+
+/* ─── Barre sticky : hauteur compacte et constante, contrôle territorial aligné ─ */
+.st-key-sa_topnav { padding: 5px 0; margin-bottom: 14px; }
+.st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center; min-height: 48px; }
+.st-key-sa_topnav [data-testid="stColumn"] { min-width: 0; }
+.st-key-sa_topnav [data-testid="stVerticalBlock"] { gap: 0 !important; }
+.st-key-sa_topnav [data-testid="element-container"], .st-key-sa_topnav .element-container { margin: 0 !important; }
+.sa-nav { min-height: 48px; }
+.st-key-sa_territoire { margin: 0 !important; }
+@media screen and (max-width: 768px) {
+    .st-key-sa_topnav { padding: 4px 0; }
+    .st-key-sa_topnav [data-testid="stHorizontalBlock"] { min-height: 0; row-gap: 6px !important; }
+    .sa-nav { min-height: 44px; }
+}
+/* ─── Simulateur : définition de la nouvelle offre ──────────────────────── */
+.ign-def { border: 1px solid #C9D3EA; border-left: 4px solid #1A3D8F; background: #F7F9FD; border-radius: 6px;
+    padding: 9px 14px; font-size: 13px; line-height: 1.5; color: #2B2B2B; margin: 6px 0 12px; }
+.ign-def-lbl { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: #1A3D8F; margin-right: 8px; }
+/* ─── Renforcement théorique de capacité : conclusion ───────────────────── */
+.cap-conclusion { border: 1px solid #E8E6DD; border-left: 4px solid #1A3D8F; border-radius: 6px; background: #FAFAF8;
+    padding: 12px 16px; margin: 4px 0 10px; font-size: 14px; line-height: 1.55; color: #2B2B2B; }
+.cap-conclusion.none { border-left-color: #1B5E3F; }
+.cap-conclusion strong { color: #0A1938; }
+.cap-conclusion p { margin: 0 0 6px; } .cap-conclusion p:last-child { margin: 0; }
+.cap-conclusion .cap-ssq { font-size: 12.5px; color: #6B6B68; }

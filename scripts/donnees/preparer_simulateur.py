@@ -11,8 +11,9 @@ Pour chaque département présent dans les fichiers parquet INSEE « accès aux
    4559 Martinique, 2975 La Réunion), parties et trous < 0,2 km² retirés,
    simplification 150 m, reprojection WGS84 (4 décimales)
    → static/geo/zones_mg_<dept>.json (GeoJSON, propriété « classe ») ;
-3. communes du département (API Géo : code, nom, centre, population)
-   → static/geo/communes_<dept>.json ;
+3. communes du département (API Géo : code, nom, centre, mairie, population)
+   → static/geo/communes_<dept>.json ; la mairie est le point d'implantation du
+   scénario (le centroïde peut tomber loin du bourg, hors réseau routier) ;
 4. contrôles de validation → static/geo/simulateur_index.json : nombre de
    carreaux, population localisée vs population municipale, communes équipées
    (BPE) vs communes, fichiers présents ; un département n'est activé dans
@@ -93,6 +94,20 @@ def zones_geojson(df: pd.DataFrame, crs_src: str) -> dict:
     return {"type": "FeatureCollection", "features": feats}
 
 
+def _commune_api(c: dict) -> dict:
+    """Centre géométrique (centroïde) et mairie. Le point d'implantation du simulateur est la
+    mairie : le centroïde d'une commune étendue peut tomber en forêt ou en zone agricole, loin
+    du bourg, et l'isochrone IGN y est raccordée à un chemin (cas de Plédéliac, Côtes-d'Armor :
+    0,5 km² à 10 min depuis le centroïde contre 73 km² depuis la mairie)."""
+    out = {"code_insee": c["code"], "nom": c["nom"], "lon": round(c["centre"]["coordinates"][0], 5),
+           "lat": round(c["centre"]["coordinates"][1], 5), "population": int(c.get("population") or 0)}
+    m = c.get("mairie") or {}
+    if m.get("coordinates"):
+        out["lon_mairie"] = round(m["coordinates"][0], 5)
+        out["lat_mairie"] = round(m["coordinates"][1], 5)
+    return out
+
+
 def communes_api(dept: str, dest: Path, refresh: bool) -> dict | None:
     if dest.exists() and not refresh:
         return json.loads(dest.read_text())
@@ -101,19 +116,15 @@ def communes_api(dept: str, dest: Path, refresh: bool) -> dict | None:
     for tentative in range(3):
         try:
             r = requests.get(f"https://geo.api.gouv.fr/departements/{dept}/communes",
-                             params={"fields": "code,nom,centre,population"}, timeout=60)
+                             params={"fields": "code,nom,centre,mairie,population"}, timeout=60)
             if r.status_code == 200:
-                communes = [{"code_insee": c["code"], "nom": c["nom"], "lon": round(c["centre"]["coordinates"][0], 5),
-                             "lat": round(c["centre"]["coordinates"][1], 5), "population": int(c.get("population") or 0)}
-                            for c in r.json()]
+                communes = [_commune_api(c) for c in r.json()]
                 # Paris, Lyon, Marseille : l'INSEE rattache les carreaux aux arrondissements municipaux
                 if dept in ("75", "69", "13"):
                     r2 = requests.get("https://geo.api.gouv.fr/communes", params={"codeDepartement": dept, "type": "arrondissement-municipal",
-                                                                                   "fields": "code,nom,centre,population"}, timeout=60)
+                                                                                   "fields": "code,nom,centre,mairie,population"}, timeout=60)
                     if r2.status_code == 200:
-                        arr = [{"code_insee": c["code"], "nom": c["nom"], "lon": round(c["centre"]["coordinates"][0], 5),
-                                "lat": round(c["centre"]["coordinates"][1], 5), "population": int(c.get("population") or 0)}
-                               for c in r2.json()]
+                        arr = [_commune_api(c) for c in r2.json()]
                         parents = {"75": "75056", "69": "69123", "13": "13055"}
                         communes = [c for c in communes if c["code_insee"] != parents[dept]] + arr
                 payload = {"dept": dept, "source": "API Géo (geo.api.gouv.fr), Licence Ouverte",
@@ -129,7 +140,8 @@ def communes_api(dept: str, dest: Path, refresh: bool) -> dict | None:
     return None
 
 
-def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict, refresh_zones: bool = False) -> None:
+def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict, refresh_zones: bool = False,
+                   refresh_communes: bool = False) -> None:
     reg = re.search(r"reg(\d+)", path.name).group(1)
     crs = _CRS.get(reg, "EPSG:3035")
     con = duckdb.connect()
@@ -156,7 +168,7 @@ def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict
                           "commune_offre": d["commune_offre"].values}).to_csv(f_car, index=False, compression="gzip")
         if refresh or refresh_zones or not f_zon.exists():
             f_zon.write_text(json.dumps(zones_geojson(d, crs), separators=(",", ":")))
-        com = communes_api(dept, f_com, refresh)
+        com = communes_api(dept, f_com, refresh or refresh_communes)
         # ── Contrôles ───────────────────────────────────────────────────────
         pop_loc = float(d["pop"].sum())
         pop_mun = float(sum(c["population"] for c in com["communes"])) if com else float("nan")
@@ -170,6 +182,8 @@ def traiter_region(path: Path, only: set[str] | None, refresh: bool, index: dict
             "communes_appariees": bool(codes_com) and len(set(d["code_insee"]) & codes_com) / max(1, nb_com_carreaux) >= 0.9,
             "communes_equipees": len(equipees) >= 1,
             "zones": f_zon.exists() and f_zon.stat().st_size > 200,
+            # point d'implantation : mairie connue pour l'essentiel des communes (repli : carreau le plus peuplé)
+            "mairies": bool(com) and sum("lat_mairie" in c for c in com["communes"]) / max(1, len(com["communes"])) >= 0.9,
         }
         index[dept] = {
             "ok": all(checks.values()), "checks": checks, "region_fichier": reg,
@@ -191,6 +205,7 @@ def main() -> None:
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--refresh-zones", action="store_true", help="recalculer seulement les zones (carreaux et communes conservés)")
+    ap.add_argument("--refresh-communes", action="store_true", help="retélécharger seulement les communes (API Géo : centre, mairie, population)")
     args = ap.parse_args()
     GEO.mkdir(parents=True, exist_ok=True)
     f_index = GEO / "simulateur_index.json"
@@ -199,7 +214,7 @@ def main() -> None:
     files = sorted(Path(args.raw_dir).glob(f"donnees_{args.millesime}_reg*.parquet"))
     for f in files:
         print(f"→ {f.name}", flush=True)
-        traiter_region(f, only, args.refresh, index, args.refresh_zones)
+        traiter_region(f, only, args.refresh, index, args.refresh_zones, args.refresh_communes)
         f_index.write_text(json.dumps({"source": "Insee, BPE 2025, Metric-OSRM, Filosofi · API Géo · zones : union des carreaux par classe",
                                        "date": date.today().isoformat(), "departements": index}, indent=1, ensure_ascii=False))
     ok = [d for d, v in index.items() if v["ok"]]

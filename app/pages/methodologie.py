@@ -227,9 +227,18 @@ def render(data: dict) -> None:
                    if len(pilotes) > 6 else "Pilotes : " + (", ".join(f"{n} ({c})" for c, n in pilotes.items()) if pilotes else "aucun") + "."))
     _prose(
         "<strong>Situation actuelle</strong> : carreaux INSEE 2025 du département (population, durée vers le généraliste le plus proche). "
-        "<strong>Scénario</strong> : isochrones IGN Géoplateforme (BD TOPO, Valhalla, voiture, 10 / 15 / 20 min) calculées à la demande depuis "
-        "le centre de la commune choisie ; un carreau contenu dans l’isochrone S passe à ≤ S min. Le simulateur compte les habitants "
-        "« nouvellement couverts » (au-delà du seuil aujourd’hui, sous le seuil après) et « rapprochés » (déjà sous le seuil, trajet raccourci).",
+        "<strong>Scénario</strong> : la nouvelle offre est un point hypothétique de consultation de médecine générale (aucune hypothèse de capacité, "
+        "de nombre de médecins ni de rendez-vous), placé à la <strong>mairie</strong> de la commune choisie (API Géo), à défaut au carreau habité le plus "
+        "peuplé. Isochrones IGN Géoplateforme (BD TOPO, Valhalla, voiture, 10 / 15 / 20 min) calculées à la demande depuis ce point ; un carreau "
+        "contenu dans l’isochrone S passe à ≤ S min. Le simulateur compte les habitants « nouvellement couverts » (au-delà du seuil aujourd’hui, "
+        "sous le seuil après) et « rapprochés » (déjà sous le seuil, trajet raccourci).",
+        "<strong>Pourquoi la mairie et non le centre géométrique.</strong> Audit du 28 octobre 2026 à Plédéliac (Côtes-d’Armor) : le centroïde "
+        "de la commune tombe dans la forêt de la Hunaudaye ; l’isochrone IGN y est raccordée à un chemin et ne couvre que 0,5 km² à 10 min, d’où "
+        "un gain affiché à zéro alors que 1 214 habitants de la commune sont à plus de 15 min. Depuis la mairie, l’isochrone 10 min couvre 73 km² "
+        "et 1 205 de ces habitants passent sous 15 min. Sur dix communes testées, le point retenu change les gains du simple au décuple "
+        "(Lamballe-Armor : 412 ou 29 habitants à 10 min) : la mairie est le choix le plus défendable (dans le bourg, sur le réseau routier). "
+        "Une isochrone dégénérée (moins de 2 km² à 10 min, ou aucun carreau de la commune contenu à 15 min) est détectée ; le point de repli "
+        "est essayé et, à défaut, le scénario est déclaré indisponible plutôt qu’affiché à zéro.",
         "<strong>Vérification.</strong> L’ancien calcul par itinéraires entre centres de communes (Cher) a été comparé à la mesure INSEE : corrélation "
         "de Spearman 0,43, écart médian +1,8 min, 90ᵉ centile +7,5 min ; il surestimait la population éloignée (21 700 contre 8 100 habitants à plus "
         "de 15 min dans le Cher). Retenir « la plus favorable » de deux mesures IGN non comparables (itinéraire, isochrone) a été abandonné : la "
@@ -240,7 +249,8 @@ def render(data: dict) -> None:
         "un département n’est activé que si tous les contrôles passent (static/geo/simulateur_index.json). Guadeloupe, Guyane et Mayotte sont "
         "hors champ de la source INSEE : le simulateur l’indique et ne produit aucun résultat pour eux. Les habitants des départements voisins "
         "ne sont pas comptés dans les gains.",
-        "<strong>Limites</strong> : deux distanciers différents (OSRM / Valhalla) ; centre de commune pour la nouvelle offre ; capacité, patientèle, "
+        "<strong>Limites</strong> : deux distanciers différents (OSRM pour l’existant, Valhalla pour le scénario : à la limite d’une isochrone un carreau "
+        "peut basculer à une minute près) ; un seul point par commune pour la nouvelle offre (la mairie) ; capacité, patientèle, "
         "rendez-vous, transports en commun et flux vers les départements voisins non pris en compte. La simulation estime un gain de proximité, "
         "pas un gain de prise en charge.",
     )
@@ -262,7 +272,7 @@ def render(data: dict) -> None:
         ["Transactions immobilières (DVF)", "DGFiP", "2025", "Commune, département", "Contexte foncier (5 %), proxy de déploiement communal", "Zones peu denses mal couvertes"],
         ["Délais d’attente (enquête)", "DREES", "2016-2017", "France entière", "Délais indicatifs par spécialité (modulés par l’APL)", "Estimation, pas mesure"],
         ["Isochrones routières", "IGN Géoplateforme (BD TOPO, Valhalla)", "temps réel, cache 24 h", "Point", "Scénario du simulateur", "Centre de commune ; quotas du service"],
-        ["Contours et population des communes", "API Géo (Etalab)", "2026", "Commune", "Cartes communales, pilotes", "—"],
+        ["Contours et population des communes", "API Géo (Etalab)", "2026", "Commune", "Cartes communales, simulateur (centre, mairie = point d’implantation)", "—"],
         ["Temps d’accès interne", "Équipe Sant’active", "2026", "Commune", "Dimension « temps » du score (mode interne)", "Méthode non documentée ; 0 = présence"],
         ["Professionnels (fichier équipe)", "Équipe Sant’active", "2026", "Code postal", "Présence locale d’une spécialité", "Pas d’effectifs ; lignes démultipliées par code postal"],
         ["Score environnemental", "SPF / DREAL", "variable", "Région", "Information seule", "Hors score"],
@@ -315,12 +325,12 @@ def render(data: dict) -> None:
     _section("COUVERTURE ET LIMITES", "Ce que Sant’active <em>ne fait pas.</em>")
     limites = [
         ("01", "Couverture", f"Score et diagnostic : {nb_scores} départements (Mayotte hors score). Régions : 17 (Mayotte exclue). Communes : "
-                             "lecture partielle (temps INSEE, APL DREES, prix DVF ; pas de données de santé communales). Simulateur : départements pilotes."),
+                             "lecture partielle (temps INSEE, APL DREES, prix DVF ; pas de données de santé communales). Simulateur : 98 départements (métropole, Martinique, La Réunion)."),
         ("02", "Accès effectif non mesuré", "Ni le temps de trajet, ni l’APL ne disent si un rendez-vous est possible. Les délais affichés sont des estimations."),
         ("03", "Score = offre et accès", "70 % du score mesure l’offre de médecine générale ; les besoins pèsent 10 %. Les indices offre × besoins corrigent cette lecture sans remplacer le score."),
         ("04", "Décalages temporels", "INSEE RP 2021, CNAM 2023, APL 2023 (2024 disponible), BPE 2025, RPPS 2026, FINESS 2026, DVF 2025, délais 2016-2017."),
         ("05", "Outre-mer", "Mayotte hors score ; Guadeloupe, Guyane et Mayotte hors champ de la base INSEE d’accès (repli sur l’indicateur interne) ; "
-                            "La Réunion et la Martinique couvertes et pilotes du simulateur."),
+                            "La Réunion et la Martinique couvertes, y compris par le simulateur."),
         ("06", "Indicateur interne de temps d’accès", "Méthode de production non documentée ; sa bascule vers l’INSEE dans le score est préparée et soumise à validation."),
         ("07", "Simulation", "Gain de proximité théorique : pas de capacité, pas de rendez-vous, pas de flux interdépartementaux ; deux distanciers."),
         ("08", "Priorités et leviers", "Aides à la décision fondées sur des règles transparentes ; elles ne remplacent ni l’expertise locale ni une évaluation de politique publique."),

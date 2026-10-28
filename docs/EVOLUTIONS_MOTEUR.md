@@ -303,3 +303,50 @@ département. Non intégré au score.
   communes, contrôles → `static/geo/simulateur_index.json`) ; 98 départements
   validés (métropole, Martinique, La Réunion), 42 Mo de données dérivées dans
   `static/geo` ; Guadeloupe, Guyane, Mayotte hors champ INSEE.
+
+## 16. Passe de finition : audit Plédéliac, contrôle territorial, header, capacité (28 octobre 2026)
+
+- **Audit Plédéliac (Côtes-d'Armor)** : 1 556 habitants localisés, 1 214 à plus de
+  15 min, et pourtant zéro gain simulé. Cause : le point d'implantation était le
+  « centre » API Géo (centroïde), qui tombe dans la forêt de la Hunaudaye ; le
+  service IGN y raccorde l'isochrone à un chemin forestier (0,5 km² à 10 min,
+  2,0 km² à 20 min, aucun carreau contenu). Projections, croisement spatial,
+  seuils et intersections vérifiés carreau par carreau : corrects. Depuis la
+  mairie : 73 km² à 10 min, 188 km² à 15 min ; 1 205 des 1 214 habitants de la
+  commune passent sous 15 min (gain départemental : +2 652 à 10 min, +1 647 à
+  15 min, +46 à 20 min). Sur dix communes (rurales, montagne, urbaines, outre-mer)
+  le point retenu change les gains du simple au décuple (Lamballe-Armor : 412 ou
+  29 habitants à 10 min selon centroïde ou mairie).
+- **Correction** : point d'implantation = mairie (API Géo, champ `mairie`,
+  34 846 communes couvertes), à défaut carreau habité le plus peuplé, à défaut
+  centroïde ; détection d'isochrone dégénérée (surface 10 min < 2 km² ou aucun
+  carreau de la commune contenu à 15 min) → point de repli, sinon « scénario
+  indisponible » explicite (jamais un zéro trompeur). Fixtures enregistrées
+  (`tests/fixtures/isochrones_pledeliac_*.json`) et tests de non-régression.
+- **Petits volumes** : pourcentages honnêtes aux bornes (« > 99,9 % », « < 0,1 % »)
+  au lieu de 100 % / 0 % lorsque des habitants existent de l'autre côté (Paris :
+  104 habitants à plus de 15 min).
+- **Nouvelle offre** : définie à l'écran (point hypothétique de consultation, sans
+  hypothèse de capacité), marqueur épingle marine avec étiquette, légende par mode,
+  seule l'isochrone du seuil affichée par défaut (les autres en couches), mention
+  explicite des deux distanciers (OSRM / Valhalla) et de leurs conséquences.
+- **Contrôle territorial** (`search_frontend/index.html`, `search_box.py`) :
+  étiquette supprimable (« Bretagne × »), menu ouvert au clic sans saisie
+  (France entière, régions, départements, communes rendues par tranches de 40),
+  filtrage en direct, clavier. Sélectionner un territoire change la référence
+  **sans quitter la page** ; seule une fiche (Diagnostic) suit le territoire.
+  Territoire exact de niveau commune (`Territoire("commune", "Nom|dept")`,
+  paramètre `t=cNom|dept`) : la barre affiche la commune, Diagnostic ouvre sa
+  fiche, le simulateur la présélectionne ; les pages travaillent au département
+  (`T.get()` = `as_dept()`, `T.get_exact()` = commune).
+- **Header** : Streamlit enveloppe la barre dans un `stLayoutWrapper` de sa propre
+  hauteur ; le sticky est posé sur cette enveloppe (`:has(> .st-key-sa_topnav)`),
+  `overflow-x: clip` au lieu de `hidden` sur `.block-container` (sinon pas de sticky).
+- **Capacité (ETP)** : conclusion lisible (déficit détecté ou non, population et
+  communes concernées, ordre de grandeur), « équivalents temps plein » explicité,
+  zéro ETP expliqué (ce que cela ne permet pas de conclure), hypothèses et
+  conversions dans un panneau dépliable ; calculs inchangés.
+- **Parcours** : accueil contextualisé par région (Diagnostiquer → fiche région,
+  Simuler → choix explicite du département) ; entrée régionale ou nationale du
+  simulateur = choix du département (aucune substitution) ; mentions « pilote »
+  retirées.

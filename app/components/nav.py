@@ -28,7 +28,7 @@ def internal_href(view: View, **params: str) -> str:
     if "t" not in qp:
         try:
             from .. import territoire as T
-            t = T.get()
+            t = T.get_exact()
             if not t.is_national:
                 qp["t"] = t.param
         except Exception:
@@ -87,7 +87,9 @@ def _diagnostic_href(master) -> str:
     référence, synthèse nationale sinon."""
     from .. import territoire as T
 
-    t = T.get()
+    t = T.get_exact()
+    if t.kind == "commune":
+        return internal_href("commune", commune_code=t.code)
     if t.kind == "dept":
         return internal_href("dept", dept_code=t.code)
     if t.kind == "region":
@@ -118,7 +120,7 @@ def render_topnav(current_view: View, master=None, *, with_search: bool = True) 
     )
     with st.container(key="sa_topnav"):
         if with_search and master is not None:
-            c1, c2 = st.columns([2.3, 1.2], gap="small", vertical_alignment="center")
+            c1, c2 = st.columns([2.1, 1.4], gap="small", vertical_alignment="center")
         else:
             c1, c2 = st.container(), None
         with c1:

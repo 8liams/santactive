@@ -26,8 +26,8 @@ PARAM = "t"
 
 @dataclass(frozen=True)
 class Territoire:
-    kind: str            # "fr" | "region" | "dept"
-    code: str = ""       # code région ou code département (vide pour "fr")
+    kind: str            # "fr" | "region" | "dept" | "commune"
+    code: str = ""       # code région, code département, ou « Nom|dept » pour une commune
 
     @property
     def param(self) -> str:
@@ -35,18 +35,39 @@ class Territoire:
             return f"r{self.code}"
         if self.kind == "dept":
             return f"d{self.code}"
+        if self.kind == "commune":
+            return f"c{self.code}"
         return "fr"
 
     @property
     def is_national(self) -> bool:
         return self.kind == "fr"
 
+    @property
+    def dept_code(self) -> str:
+        """Code du département porteur (département lui-même ou département de la commune)."""
+        if self.kind == "dept":
+            return self.code
+        if self.kind == "commune" and "|" in self.code:
+            return self.code.split("|", 1)[1].zfill(2)
+        return ""
+
+    @property
+    def commune_nom(self) -> str:
+        return self.code.split("|", 1)[0] if self.kind == "commune" else ""
+
+    def as_dept(self) -> "Territoire":
+        """Niveau départemental d'une commune (les pages raisonnent au département, à la
+        région ou à la France ; la commune n'ajoute que son contexte, pas d'indicateurs)."""
+        return Territoire("dept", self.dept_code) if self.kind == "commune" else self
+
 
 FRANCE = Territoire("fr")
 
 
 def parse(value: str | None) -> Territoire | None:
-    """``fr`` → France ; ``r53`` → région 53 ; ``d18`` → département 18."""
+    """``fr`` → France ; ``r53`` → région 53 ; ``d18`` → département 18 ;
+    ``cVierzon|18`` → commune Vierzon (Cher)."""
     if not value:
         return None
     v = str(value).strip()
@@ -57,17 +78,27 @@ def parse(value: str | None) -> Territoire | None:
         if v[0] == "d":
             code = code.zfill(2) if len(code) < 2 else code
         return Territoire("region" if v[0] == "r" else "dept", code)
+    if len(v) >= 4 and v[0] == "c" and "|" in v:
+        nom, dept = v[1:].split("|", 1)
+        return Territoire("commune", f"{nom}|{dept.zfill(2)}") if nom and dept else None
     return None
 
 
-def get() -> Territoire:
+def get_exact() -> Territoire:
+    """Territoire tel que choisi (peut être une commune) : barre, entrée Diagnostic, simulateur."""
     t = st.session_state.get(SESSION_KEY)
     return t if isinstance(t, Territoire) else FRANCE
 
 
+def get() -> Territoire:
+    """Territoire de travail des pages : France, région ou département (une commune
+    choisie dans la barre est ramenée à son département)."""
+    return get_exact().as_dept()
+
+
 def set_territoire(t: Territoire, *, sync_url: bool = True) -> bool:
     """Enregistre le territoire ; retourne True s'il a changé."""
-    changed = get() != t
+    changed = get_exact() != t
     st.session_state[SESSION_KEY] = t
     if sync_url:
         try:
@@ -93,17 +124,31 @@ def init_from_url() -> None:
 def follow_dept(code: str) -> None:
     """La fiche d'un département devient le territoire de référence (session seulement :
     l'URL de la fiche identifie déjà le département, et réécrire ``t`` ajouterait une
-    entrée d'historique « morte » au retour arrière du navigateur)."""
-    set_territoire(Territoire("dept", str(code).zfill(2)), sync_url=False)
+    entrée d'historique « morte » au retour arrière du navigateur). Une commune de ce
+    département déjà choisie dans la barre est conservée."""
+    code = str(code).zfill(2)
+    if get_exact().kind == "commune" and get_exact().dept_code == code:
+        return
+    set_territoire(Territoire("dept", code), sync_url=False)
 
 
 def follow_region(code: str) -> None:
     set_territoire(Territoire("region", str(code)), sync_url=False)
 
 
+def follow_commune(commune_code: str) -> None:
+    """Fiche commune (« Nom|dept ») : la commune devient le territoire exact, son
+    département le territoire de travail."""
+    if "|" in str(commune_code):
+        nom, dept = str(commune_code).split("|", 1)
+        set_territoire(Territoire("commune", f"{nom}|{dept.zfill(2)}"), sync_url=False)
+
+
 # ── Lecture dans les données ──────────────────────────────────────────────────
 
 def label(t: Territoire, master: pd.DataFrame) -> str:
+    if t.kind == "commune":
+        return f"{t.commune_nom} · {nom_court(t.as_dept(), master)} ({t.dept_code})"
     if t.kind == "dept":
         row = master[master["dept"] == t.code]
         return f"{row.iloc[0]['Nom du département']} ({t.code})" if not row.empty else f"Département {t.code}"
@@ -114,6 +159,8 @@ def label(t: Territoire, master: pd.DataFrame) -> str:
 
 
 def nom_court(t: Territoire, master: pd.DataFrame) -> str:
+    if t.kind == "commune":
+        return t.commune_nom
     if t.kind == "dept":
         row = master[master["dept"] == t.code]
         return str(row.iloc[0]["Nom du département"]) if not row.empty else t.code

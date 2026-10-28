@@ -1,78 +1,88 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
 <!--
-  Recherche territoriale — composant Streamlit (protocole v1, sans dépendance).
-  Suggestions flottantes, 7 résultats, clavier, aucun rerun pendant la frappe ;
-  la sélection renvoie {level, code, t} à Python qui navigue (?view=…).
+  Contrôle territorial — composant Streamlit (protocole v1, sans dépendance).
+  - Variante « territoire » (barre) : étiquette du territoire choisi (« Bretagne × »),
+    menu ouvert au clic même sans saisie (France entière, régions, départements,
+    communes rendues progressivement), filtrage en direct, clavier, Échap.
+  - Variantes « hero » / « nav » : recherche simple (mêmes règles de classement).
+  La sélection renvoie {level, code, t} à Python ; aucun rerun pendant la frappe.
   Index : /app/static/data/index_recherche.json (servi par Streamlit, chargé une fois).
 -->
 <style>
   html, body { margin:0; padding:0; background:transparent; font-family: Marianne, Inter, -apple-system, BlinkMacSystemFont, sans-serif; }
   * { box-sizing:border-box; }
-  .wrap { position:relative; }
-  .field { position:relative; display:flex; align-items:center; background:#fff; border:1px solid #C9C6BA; border-radius:6px; transition:border-color .15s, box-shadow .15s; }
+  .wrap { position:relative; padding:4px 0 0; }
+  .field { position:relative; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #C9C6BA; border-radius:6px; transition:border-color .15s, box-shadow .15s; padding-left:36px; }
   .field:focus-within { border-color:#1A3D8F; box-shadow:0 0 0 3px #E8EDF8; }
-  .field svg { position:absolute; left:14px; width:18px; height:18px; color:#6B6B68; pointer-events:none; }
-  input { width:100%; border:0; outline:0; background:transparent; color:#0A1938; font-family:inherit; }
+  .field > svg { position:absolute; left:12px; width:16px; height:16px; color:#6B6B68; pointer-events:none; }
+  input { flex:1 1 60px; min-width:40px; width:100%; border:0; outline:0; background:transparent; color:#0A1938; font-family:inherit; height:100%; }
   input::placeholder { color:#8E8C84; }
-  .hero .field { height:54px; } .hero input { padding:0 44px 0 44px; font-size:16px; }
-  .nav .field { height:38px; border-radius:5px; } .nav input { padding:0 36px 0 38px; font-size:13px; }
-  .nav .field svg { left:12px; width:15px; height:15px; }
-  /* Variante « territoire » : contrôle unique recherche + sélection (barre de navigation) */
-  .territoire .field { height:40px; border:1.5px solid #1A3D8F; background:#F7F9FD; border-radius:6px; }
+  .hero .wrap { padding:0; } .hero .field { height:54px; padding-left:44px; } .hero input { font-size:16px; padding-right:44px; }
+  .hero .field > svg { left:14px; width:18px; height:18px; }
+  .nav .wrap { padding:0; } .nav .field { height:38px; border-radius:5px; } .nav input { font-size:13px; }
+  /* Variante « territoire » : contrôle unique de la barre */
+  .territoire .field { height:40px; border:1.5px solid #1A3D8F; background:#F7F9FD; padding-right:30px; }
   .territoire .field.national { border-color:#C9C6BA; background:#fff; }
-  .territoire input { padding:0 34px 0 38px; font-size:13px; font-weight:600; color:#0A1938; }
-  .territoire input::placeholder { color:#0A1938; opacity:1; font-weight:600; }
-  .territoire .field.national input::placeholder { color:#6B6B68; font-weight:500; }
-  .territoire .field svg { left:12px; width:15px; height:15px; color:#1A3D8F; }
-  .territoire .tag { position:absolute; left:8px; top:-7px; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#1A3D8F; background:#fff; padding:0 4px; line-height:1; }
-  .territoire .clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:24px; height:24px; border:0; background:transparent; color:#6B6B68; font-size:16px; line-height:1; cursor:pointer; border-radius:4px; display:none; }
-  .territoire .field:not(.national) .clear { display:block; }
-  .territoire .clear:hover { background:#E8EDF8; color:#0A1938; }
-  .territoire .hint { display:none; }
-  .item.fr .name { color:#1A3D8F; }
+  .territoire .field > svg { color:#1A3D8F; }
+  .territoire input { font-size:13px; font-weight:500; }
+  .territoire .field.national input::placeholder { color:#6B6B68; }
+  .chip { display:none; align-items:center; gap:4px; max-width:62%; height:28px; padding:0 2px 0 9px; border-radius:6px; background:#1A3D8F; color:#fff; font-size:12.5px; font-weight:700; white-space:nowrap; flex:0 1 auto; }
+  .field:not(.national) .chip { display:inline-flex; }
+  .chip span { overflow:hidden; text-overflow:ellipsis; }
+  .chip button { width:22px; height:22px; border:0; border-radius:4px; background:transparent; color:#fff; font-size:17px; line-height:1; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; opacity:.85; }
+  .chip button:hover, .chip button:focus-visible { background:rgba(255,255,255,.22); opacity:1; outline:0; }
+  .caret { position:absolute; right:10px; top:50%; width:10px; height:10px; transform:translateY(-70%) rotate(45deg); border-right:1.8px solid #6B6B68; border-bottom:1.8px solid #6B6B68; pointer-events:none; }
+  .hero .caret, .nav .caret { display:none; }
   .hint { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:11px; color:#9C9A92; border:1px solid #E8E6DD; border-radius:3px; padding:1px 6px; pointer-events:none; }
-  .nav .hint { display:none; }
-  .menu { position:absolute; left:0; right:0; top:calc(100% + 6px); background:#fff; border:1px solid #E8E6DD; border-radius:6px; box-shadow:0 12px 32px rgba(10,25,56,.14); overflow:hidden; display:none; }
+  .nav .hint, .territoire .hint { display:none; }
+  /* Menu */
+  .menu { position:absolute; left:0; right:0; top:calc(100% + 6px); background:#fff; border:1px solid #E8E6DD; border-radius:6px; box-shadow:0 12px 32px rgba(10,25,56,.16); display:none; overflow:hidden; }
   .menu.open { display:block; }
-  .item { display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; border-bottom:1px solid #F3F2EC; }
+  .scroll { max-height:380px; overflow-y:auto; overscroll-behavior:contain; }
+  .sect { position:sticky; top:0; z-index:1; padding:6px 14px 4px; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6B6B68; background:#F3F2EC; border-bottom:1px solid #E8E6DD; display:flex; justify-content:space-between; }
+  .sect small { font-weight:500; letter-spacing:0; text-transform:none; color:#9C9A92; }
+  .item { display:flex; align-items:center; gap:12px; padding:8px 14px; cursor:pointer; border-bottom:1px solid #F3F2EC; }
   .item:last-child { border-bottom:0; }
-  .item.active, .item:hover { background:#F3F6FC; }
-  .name { font-size:14px; color:#0A1938; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item.active { background:#E8EDF8; }
+  .item:hover { background:#F3F6FC; }
+  .name { font-size:13.5px; color:#0A1938; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .name b { font-weight:700; color:#1A3D8F; }
+  .item.fr .name { color:#1A3D8F; font-weight:700; }
   .parent { font-size:12px; color:#6B6B68; white-space:nowrap; }
   .lvl { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; border-radius:3px; padding:2px 7px; white-space:nowrap; }
   .lvl-region { background:#0A1938; color:#fff; } .lvl-departement { background:#E8EDF8; color:#1A3D8F; } .lvl-commune { background:#F3F2EC; color:#4B4B48; }
-  .nav .item { padding:8px 12px; } .nav .name { font-size:13px; } .nav .parent { font-size:11px; }
+  .more { padding:8px 14px; font-size:12px; color:#1A3D8F; font-weight:600; cursor:pointer; background:#FAFAF8; }
+  .more:hover { background:#F3F6FC; }
   .empty, .loading { padding:12px 14px; font-size:13px; color:#6B6B68; }
-  .foot { padding:6px 14px; font-size:11px; color:#9C9A92; background:#FAFAF8; border-top:1px solid #F3F2EC; }
-  @media (max-width: 480px) { .parent { display:none; } .foot { display:none; } }
+  .foot { padding:5px 14px; font-size:11px; color:#9C9A92; background:#FAFAF8; border-top:1px solid #F3F2EC; }
+  @media (max-width: 480px) { .parent { display:none; } .foot { display:none; } .scroll { max-height:300px; } .chip { max-width:55%; } }
 </style></head>
 <body class="hero">
 <div class="wrap">
   <div class="field">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-    <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Rechercher un territoire…" aria-label="Rechercher un territoire" aria-autocomplete="list" aria-expanded="false" aria-controls="menu">
+    <span class="chip" id="chip"><span id="chipName"></span><button id="clear" type="button" title="Revenir à la France entière" aria-label="Revenir à la France entière">×</button></span>
+    <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Rechercher un territoire…" aria-label="Rechercher ou choisir un territoire" aria-autocomplete="list" aria-expanded="false" aria-controls="menu">
     <span class="hint">↵</span>
-    <span class="tag" id="tag" hidden>Territoire</span>
-    <button class="clear" id="clear" type="button" title="Revenir à la France entière" aria-label="Revenir à la France entière">×</button>
+    <span class="caret"></span>
   </div>
-  <div id="menu" class="menu" role="listbox"></div>
+  <div id="menu" class="menu" role="listbox"><div class="scroll" id="scroll"></div><div class="foot" id="foot"></div></div>
 </div>
 <script>
 (function () {
-  const MAX = 7;
-  const q = document.getElementById('q');
-  const menu = document.getElementById('menu');
-  let index = null, loading = false, items = [], active = -1, closedHeight = 56, ready = false;
+  const PAGE = 40;          // communes rendues par tranche (exploration et recherche)
+  const q = document.getElementById('q'), menu = document.getElementById('menu'), scroll = document.getElementById('scroll'), foot = document.getElementById('foot');
+  const chip = document.getElementById('chip'), chipName = document.getElementById('chipName');
+  let index = null, loading = false, items = [], active = -1, closedHeight = 56, ready = false, overMenu = false;
+  let territoire = false, simple = true, currentParam = 'fr', currentLabel = '';
+  let shownCommunes = 0, communePool = [];
 
   const send = (type, extra) => window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), '*');
   const norm = s => (s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’\s]+/g, ' ').trim();
   const score = (n, s) => n === s ? 100 : n.startsWith(s) ? 95 : n.split(' ').some(w => w.startsWith(s)) ? 85 : 70;
-  const LVL = { region: 0, departement: 1, commune: 2 };
   const LABEL = { region: 'Région', departement: 'Département', commune: 'Commune' };
   const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
   const base = (() => { try { const p = window.parent.location.pathname; return p.endsWith('/') ? p.slice(0, -1) : p; } catch (e) { return ''; } })();
 
   function loadIndex() {
@@ -81,10 +91,11 @@
     fetch(base + '/app/static/data/index_recherche.json', { cache: 'force-cache' })
       .then(r => r.json())
       .then(d => {
+        const coll = new Intl.Collator('fr');
         index = {
-          regions: d.regions.map(r => ({ n: r.n, c: r.c, k: norm(r.n) })),
-          departements: d.departements.map(x => ({ n: x.n, c: x.c, pn: x.pn, k: norm(x.n) })),
-          communes: d.communes.map(c => ({ n: c[0], d: c[1], k: norm(c[0]) })),
+          regions: d.regions.map(r => ({ n: r.n, c: r.c, k: norm(r.n) })).sort((a, b) => coll.compare(a.n, b.n)),
+          departements: d.departements.map(x => ({ n: x.n, c: x.c, pn: x.pn, k: norm(x.n) })).sort((a, b) => a.c.localeCompare(b.c)),
+          communes: d.communes.map(c => ({ n: c[0], d: c[1], k: norm(c[0]) })).sort((a, b) => coll.compare(a.n, b.n)),
           noms: d.noms_departements || {},
         };
         loading = false; render();
@@ -92,81 +103,108 @@
       .catch(() => { loading = false; });
   }
 
-  function search(raw) {
-    const s = norm(raw);
-    if (s.length < 2 || !index) return [];
-    const out = [];
-    for (const r of index.regions) if (r.k.includes(s)) out.push({ level: 'region', code: r.c, name: r.n, parent: '', sc: score(r.k, s) });
-    for (const d of index.departements) {
-      const codeOk = s.toUpperCase() === d.c || s.padStart(2, '0') === d.c;
-      if (d.k.includes(s) || codeOk) out.push({ level: 'departement', code: d.c, name: d.n, parent: d.pn, sc: codeOk ? 100 : score(d.k, s) });
-    }
-    let n = 0;
-    for (const c of index.communes) if (c.k.includes(s)) { out.push({ level: 'commune', code: c.n + '|' + c.d, name: c.n, parent: index.noms[c.d] || c.d, sc: score(c.k, s) - 10 }); if (++n > 80) break; }
-    out.sort((a, b) => (b.sc - a.sc) || (LVL[a.level] - LVL[b.level]) || a.name.localeCompare(b.name, 'fr'));
-    return out.slice(0, MAX);
-  }
-
-  function setHeight(open) { send('streamlit:setFrameHeight', { height: open ? closedHeight + 8 + menu.offsetHeight + 8 : closedHeight }); }
-
   function highlight(name, raw) {
     const s = norm(raw), k = norm(name), i = k.indexOf(s);
     if (i < 0 || !s) return esc(name);
     return esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + s.length)) + '</b>' + esc(name.slice(i + s.length));
   }
+  const itemHtml = (it, i, raw) =>
+    `<div class="item${it.level === 'fr' ? ' fr' : ''}${i === active ? ' active' : ''}" role="option" data-i="${i}">` +
+    `<span class="name">${highlight(it.name, raw)}</span>` +
+    (it.parent ? `<span class="parent">${esc(it.parent)}</span>` : '') +
+    (LABEL[it.level] ? `<span class="lvl lvl-${it.level}">${LABEL[it.level]}</span>` : '') + `</div>`;
+  const sect = (lbl, n, total) => `<div class="sect">${lbl}<small>${total > n ? n + ' sur ' + total : n}</small></div>`;
 
-  let territoire = false, currentParam = 'fr';
-  function render() {
-    const raw = q.value;
-    if (norm(raw).length < 2) {
-      if (territoire && document.activeElement === q && currentParam !== 'fr') {
-        items = [{ level: 'fr', code: 'fr', name: 'France entière', parent: 'vue nationale', sc: 100 }];
-        menu.innerHTML = `<div class="item fr active" role="option" data-i="0"><span class="name">France entière</span><span class="parent">vue nationale</span></div>` +
-          '<div class="foot">Tapez un nom de région, de département ou de commune</div>';
-        menu.classList.add('open'); active = 0;
-        menu.querySelectorAll('.item').forEach(el => el.addEventListener('mousedown', e => { e.preventDefault(); go(items[0]); }));
-        setHeight(true); return;
-      }
-      close(); return;
+  /* Construit les sections : France entière, régions, départements, communes (progressif). */
+  function build(raw) {
+    const s = norm(raw);
+    const searching = s.length >= 1;
+    let regions = index.regions, departements = index.departements;
+    if (searching) {
+      regions = regions.filter(r => r.k.includes(s)).map(r => Object.assign({ sc: score(r.k, s) }, r)).sort((a, b) => b.sc - a.sc);
+      departements = departements.filter(d => d.k.includes(s) || s.toUpperCase() === d.c || s.padStart(2, '0') === d.c)
+        .map(d => Object.assign({ sc: (s.toUpperCase() === d.c || s.padStart(2, '0') === d.c) ? 100 : score(d.k, s) }, d)).sort((a, b) => b.sc - a.sc);
+      communePool = [];
+      for (const c of index.communes) if (c.k.includes(s)) { communePool.push(Object.assign({ sc: score(c.k, s) }, c)); if (communePool.length >= 400) break; }
+      communePool.sort((a, b) => (b.sc - a.sc) || a.n.localeCompare(b.n, 'fr'));
+    } else {
+      communePool = index.communes;
     }
-    items = search(raw);
-    if (territoire && currentParam !== 'fr' && 'france entiere'.includes(norm(raw))) items.unshift({ level: 'fr', code: 'fr', name: 'France entière', parent: 'vue nationale', sc: 100 });
-    let html = '';
-    if (!items.length) html = (loading || !index) ? '<div class="loading">Chargement de l’index…</div>' : '<div class="empty">Aucun territoire trouvé.</div>';
-    else html = items.map((it, i) =>
-      `<div class="item${i === active ? ' active' : ''}" role="option" data-i="${i}">` +
-      `<span class="name">${highlight(it.name, raw)}</span>` +
-      (it.parent ? `<span class="parent">${esc(it.parent)}</span>` : '') +
-      (LABEL[it.level] ? `<span class="lvl lvl-${it.level}">${LABEL[it.level]}</span>` : '') + `</div>`).join('');
-    html += '<div class="foot">↑↓ pour naviguer · Entrée pour ouvrir · Échap pour fermer</div>';
-    menu.innerHTML = html; menu.classList.add('open'); q.setAttribute('aria-expanded', 'true');
-    menu.querySelectorAll('.item').forEach(el => {
-      el.addEventListener('mousedown', e => { e.preventDefault(); go(items[+el.dataset.i]); });
-      el.addEventListener('mousemove', () => { active = +el.dataset.i; paint(); });
-    });
-    setHeight(true);
+    const fr = (territoire && currentParam !== 'fr' && (!searching || 'france entiere'.includes(s)))
+      ? [{ level: 'fr', code: 'fr', name: 'France entière', parent: 'vue nationale' }] : [];
+    const regs = regions.map(r => ({ level: 'region', code: r.c, name: r.n, parent: '' }));
+    const deps = departements.map(d => ({ level: 'departement', code: d.c, name: d.n, parent: d.pn + ' · ' + d.c }));
+    return { fr, regs, deps, searching };
   }
-  function paint() { menu.querySelectorAll('.item').forEach((el, i) => el.classList.toggle('active', i === active)); }
-  function close() { menu.classList.remove('open'); menu.innerHTML = ''; active = -1; q.setAttribute('aria-expanded', 'false'); setHeight(false); }
+
+  function render(keepScroll) {
+    const raw = q.value;
+    if (!index) {
+      loadIndex();
+      scroll.innerHTML = '<div class="loading">Chargement de l’index des territoires…</div>'; foot.textContent = '';
+      open(); return;
+    }
+    if (simple && norm(raw).length < 2) { close(); return; }
+    const b = build(raw);
+    if (!keepScroll) shownCommunes = Math.min(PAGE, communePool.length);
+    const coms = communePool.slice(0, shownCommunes).map(c => ({ level: 'commune', code: c.n + '|' + c.d, name: c.n, parent: index.noms[c.d] || c.d }));
+    items = b.fr.concat(b.regs, b.deps, coms);
+    if (!items.length) { scroll.innerHTML = '<div class="empty">Aucun territoire trouvé.</div>'; foot.textContent = ''; open(); return; }
+    let html = '', i = 0;
+    const part = (lbl, arr, total) => { if (!arr.length) return; if (lbl) html += sect(lbl, arr.length, total); for (const it of arr) html += itemHtml(it, i++, raw); };
+    part('', b.fr, b.fr.length);
+    part('Régions', b.regs, b.regs.length);
+    part('Départements', b.deps, b.deps.length);
+    part('Communes', coms, communePool.length);
+    if (communePool.length > shownCommunes) html += `<div class="more" id="more">Afficher plus de communes (${communePool.length - shownCommunes} restantes)</div>`;
+    const top = scroll.scrollTop;
+    scroll.innerHTML = html;
+    if (keepScroll) scroll.scrollTop = top;
+    foot.textContent = b.searching ? '↑↓ pour naviguer · Entrée pour choisir · Échap pour fermer' : 'Tapez pour filtrer · ↑↓ Entrée pour choisir · Échap pour fermer';
+    scroll.querySelectorAll('.item').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); go(items[+el.dataset.i]); });
+      el.addEventListener('mousemove', () => { if (active !== +el.dataset.i) { active = +el.dataset.i; paint(); } });
+    });
+    const more = document.getElementById('more');
+    if (more) more.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); loadMore(); });
+    open();
+  }
+  function loadMore() {
+    if (shownCommunes >= communePool.length) return;
+    shownCommunes = Math.min(shownCommunes + PAGE, communePool.length);
+    render(true);
+  }
+  scroll.addEventListener('scroll', () => { if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 60) loadMore(); });
+
+  function setHeight(isOpen) { send('streamlit:setFrameHeight', { height: isOpen ? closedHeight + 8 + menu.offsetHeight + 8 : closedHeight }); }
+  function open() { menu.classList.add('open'); q.setAttribute('aria-expanded', 'true'); setHeight(true); }
+  function paint() {
+    scroll.querySelectorAll('.item').forEach((el, i) => el.classList.toggle('active', i === active));
+    const el = scroll.querySelector('.item.active'); if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+  function close() { menu.classList.remove('open'); scroll.innerHTML = ''; active = -1; q.setAttribute('aria-expanded', 'false'); setHeight(false); }
 
   function go(it) {
     if (!it) return;
-    close();
-    q.value = '';
+    close(); q.value = ''; q.blur();
     send('streamlit:setComponentValue', { value: { level: it.level, code: it.code, t: Date.now() }, dataType: 'json' });
   }
 
   let t = null;
-  q.addEventListener('input', () => { loadIndex(); active = -1; clearTimeout(t); t = setTimeout(render, 60); });
-  q.addEventListener('focus', () => { loadIndex(); render(); });
+  q.addEventListener('input', () => { loadIndex(); active = -1; clearTimeout(t); t = setTimeout(() => render(false), 50); });
+  q.addEventListener('focus', () => { loadIndex(); render(false); });
+  q.addEventListener('mousedown', () => { if (document.activeElement === q && !menu.classList.contains('open')) render(false); });
   q.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (!menu.classList.contains('open')) render(); active = Math.min(active + 1, items.length - 1); paint(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!menu.classList.contains('open')) render(false); active = Math.min(active + 1, items.length - 1); paint(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paint(); }
-    else if (e.key === 'Enter') { e.preventDefault(); go(items[active >= 0 ? active : 0]); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (items.length) go(items[active >= 0 ? active : 0]); }
     else if (e.key === 'Escape') { close(); q.blur(); }
   });
-  q.addEventListener('blur', () => setTimeout(close, 120));
-  document.getElementById('clear').addEventListener('mousedown', e => { e.preventDefault(); go({ level: 'fr', code: 'fr' }); });
+  q.addEventListener('blur', () => setTimeout(() => { if (!overMenu) close(); }, 120));
+  menu.addEventListener('mouseenter', () => { overMenu = true; });
+  menu.addEventListener('mouseleave', () => { overMenu = false; if (document.activeElement !== q) close(); });
+  document.getElementById('clear').addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); go({ level: 'fr', code: 'fr' }); });
+  document.getElementById('clear').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
   document.addEventListener('mousedown', e => { if (!e.target.closest('.wrap')) close(); });
 
   window.addEventListener('message', e => {
@@ -178,17 +216,20 @@
       document.body.className = a.variant || 'hero';
       closedHeight = a.closed || 56;
       territoire = a.variant === 'territoire';
+      simple = !territoire;
       if (a.placeholder) q.placeholder = a.placeholder;
       if (a.autofocus) q.focus();
       setHeight(false);
     }
     if (territoire) {   // valeur courante relue à chaque rendu : le contrôle suit le territoire
       currentParam = a.current_param || 'fr';
+      currentLabel = a.current_label || '';
       const field = document.querySelector('.field');
       field.classList.toggle('national', currentParam === 'fr');
-      document.getElementById('tag').hidden = false;
-      q.placeholder = a.current_label || 'France entière · rechercher un territoire';
-      q.title = currentParam === 'fr' ? 'Rechercher une région, un département ou une commune' : 'Territoire de référence : ' + (a.current_label || '');
+      chipName.textContent = currentLabel;
+      chip.title = 'Territoire de référence : ' + currentLabel;
+      q.placeholder = currentParam === 'fr' ? 'France entière · rechercher ou choisir un territoire' : 'Changer de territoire…';
+      q.title = currentParam === 'fr' ? 'Rechercher ou choisir une région, un département ou une commune' : 'Territoire de référence : ' + currentLabel;
     }
   });
   send('streamlit:componentReady', { apiVersion: 1 });

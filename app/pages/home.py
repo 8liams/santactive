@@ -91,7 +91,8 @@ def _render_territoire_reference(master: pd.DataFrame) -> None:
         texte = f"{score_txt}, {lecture}{apl_txt}."
         primaire = (internal_href("dept", dept_code=t.code), "Ouvrir le diagnostic →")
         secondaires = [(internal_href("comparer") + f"&depts={t.code}", "Comparer")]
-        secondaires.append((internal_href("acces", dept_code=t.code), "Simuler une implantation" if t.code in pilotes else "Simulation : voir un pilote"))
+        if t.code in pilotes:
+            secondaires.append((internal_href("acces", dept_code=t.code), "Simuler une implantation"))
     else:
         depts = master[master["Code région"].astype(str) == t.code]
         if depts.empty:
@@ -108,7 +109,7 @@ def _render_territoire_reference(master: pd.DataFrame) -> None:
         secondaires = [(internal_href("comparer") + "&depts=" + ",".join(codes), "Comparer ses départements")]
         pil = [d for d in depts["dept"].astype(str) if d in pilotes]
         if pil:
-            secondaires.append((internal_href("acces", dept_code=pil[0]), f"Simuler ({html.escape(pilotes[pil[0]])})"))
+            secondaires.append((internal_href("acces"), f"Simuler ({len(pil)} département{'s' if len(pil) != 1 else ''} couverts)"))
     st.markdown(
         f'<div class="ref-line"><div class="ref-line-main"><span class="ref-line-eyebrow">Territoire de référence</span>'
         f'<span class="ref-line-title">{titre}'
@@ -128,24 +129,38 @@ def _render_usages(master: pd.DataFrame) -> None:
 
     t = T.get()
     pilotes = pilotes_disponibles()
-    pilote = next(iter(pilotes), None)
     crit = master[master["zone_short"] == "Critique"].sort_values("score_global") if "zone_short" in master.columns else master.head(0)
     ex = crit.iloc[0] if not crit.empty else None
-    ref = t.code if t.kind == "dept" else None
-    ex_code = ref or (str(ex["dept"]) if ex is not None else None)
-    ex_nom = T.nom_court(t, master) if ref else (str(ex["Nom du département"]) if ex is not None else "")
-    sim_code = ref if ref in pilotes else pilote
+    nom_t = html.escape(T.nom_court(t, master)) if not t.is_national else ""
+    # Diagnostiquer : le territoire de référence (département ou région), sinon un exemple national
+    if t.kind == "dept":
+        diag = (f"Situation, scorecard, leviers recommandés et communes fragiles. {nom_t}.", internal_href("dept", dept_code=t.code), "Ouvrir le diagnostic →")
+    elif t.kind == "region":
+        diag = (f"Situation régionale, départements critiques, leviers et communes fragiles. {nom_t}.",
+                internal_href("region", region_code=t.code), "Ouvrir le diagnostic →")
+    else:
+        diag = ("Situation, scorecard, leviers recommandés et communes fragiles d\u2019un département."
+                + (f" Exemple : {html.escape(str(ex['Nom du département']))}." if ex is not None else ""),
+                internal_href("dept", dept_code=str(ex["dept"])) if ex is not None else internal_href("diagnostic"), "Ouvrir un exemple →")
+    # Simuler : le département de référence s'il est couvert ; une région propose le choix du département
+    if t.kind == "dept" and t.code in pilotes:
+        sim = (f"Où une nouvelle offre de médecine générale rapprocherait des habitants, carreau par carreau. {nom_t}.",
+               internal_href("acces", dept_code=t.code), "Simuler une implantation →")
+    elif t.kind == "dept":
+        sim = (f"Non disponible pour {nom_t} (hors champ de la base Insee). {len(pilotes)} départements couverts : métropole, Martinique, La Réunion.",
+               internal_href("acces"), "Voir les départements couverts →")
+    elif t.kind == "region":
+        pil = [d for d in T.dept_codes(t, master) if d in pilotes]
+        sim = (f"Où une nouvelle offre rapprocherait des habitants, carreau par carreau. {nom_t} : {len(pil)} département{'s' if len(pil) != 1 else ''} "
+               f"couvert{'s' if len(pil) != 1 else ''}, à choisir.", internal_href("acces"), "Choisir un département →")
+    else:
+        sim = (f"Où une nouvelle offre de médecine générale rapprocherait des habitants, carreau par carreau. Disponible pour {len(pilotes)} départements.",
+               internal_href("acces"), "Choisir un département →")
     cards = [
         ("Prioriser", "Où l\u2019offre est faible et les besoins forts : les départements à examiner en premier, par région.",
          internal_href("exploration"), "Prioriser les territoires →"),
-        ("Diagnostiquer", "Situation, scorecard, leviers recommandés et communes fragiles d\u2019un département."
-         + (f" {ex_nom}." if ref else (f" Exemple : {ex_nom}." if ex is not None else "")),
-         internal_href("dept", dept_code=ex_code) if ex_code else internal_href("comparer"),
-         "Ouvrir le diagnostic →" if ref else "Ouvrir un exemple →"),
-        ("Simuler", ("Où une nouvelle offre de médecine générale rapprocherait des habitants, carreau par carreau. "
-                     + (f"Disponible pour {len(pilotes)} départements." if len(pilotes) > 6 else f"Pilotes : {', '.join(pilotes.values())}."))
-         if pilotes else "Simulation routière (pilote à venir).",
-         internal_href("acces", dept_code=sim_code) if sim_code else internal_href("methodologie"), "Simuler une implantation →"),
+        ("Diagnostiquer",) + diag,
+        ("Simuler",) + sim,
     ]
     html_cards = "".join(
         f'<a class="usage-card" href="{href}" target="_self"><div class="usage-title">{titre}</div>'

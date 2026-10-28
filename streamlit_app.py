@@ -144,7 +144,7 @@ elif view == "region" and st.session_state.get("region_code"):
 elif view == "commune" and "|" in str(st.session_state.get("commune_code", "")):
     _cd = str(st.session_state["commune_code"]).split("|", 1)[1].zfill(2)
     if (master["dept"] == _cd).any():
-        _T.follow_dept(_cd)
+        _T.follow_commune(str(st.session_state["commune_code"]))
 
 from app.pages.acces_ign import enregistrer_noms as _noms_pilotes
 _noms_pilotes(master)
@@ -187,8 +187,10 @@ elif view == "enjeux":
 elif view == "diagnostic":
     # Entrée « Diagnostic » : la fiche du territoire de référence, ou la synthèse nationale
     from app import territoire as _T2
-    _t = _T2.get()
-    if _t.kind == "dept" and (master["dept"] == _t.code).any():
+    _t = _T2.get_exact()
+    if _t.kind == "commune" and (master["dept"] == _t.dept_code).any():
+        navigate("commune", commune_code=_t.code)
+    elif _t.kind == "dept" and (master["dept"] == _t.code).any():
         navigate("dept", dept_code=_t.code)
     elif _t.kind == "region":
         navigate("region", region_code=_t.code)

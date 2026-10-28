@@ -64,23 +64,73 @@ def _fmt(v: float, spec: str = ".1f") -> str:
     return f"{v:{spec}}".replace(",", " ")
 
 
+def _fr_int(v: float) -> str:
+    return f"{int(round(v)):,}".replace(",", "\u202f")
+
+
+def conclusion_capacite(sim: dict, nom: str, population: float | None) -> dict:
+    """Lecture principale du renforcement théorique : déficit détecté ou non, population concernée,
+    ordre de grandeur. Les nombres restent ceux du calcul ; seule la présentation change."""
+    lo, mid, hi = sim["etp_2,5"]
+    lo3, mid3, hi3 = sim["etp_3,0"]
+    part = sim["part_pop_apl_inf_2_5"]
+    pop_concernee = part * population if population else None
+    deficit = sim["deficit_2,5"] > 0 and mid >= 0.5
+    return {"deficit": deficit, "part": part, "pop_concernee": pop_concernee, "communes": sim["nb_communes_inf_2_5"],
+            "nb_communes": sim["nb_communes"], "etp": (lo, mid, hi), "etp3": (lo3, mid3, hi3),
+            "consult": sim["deficit_2,5"], "consult3": sim["deficit_3,0"]}
+
+
 def render_simulation_capacite(r: pd.Series) -> bool:
     dept = str(r.get("dept", "")).zfill(2)
     sim = simuler(dept)
     if sim is None:
         return False
     nom = html.escape(str(r.get("Nom du département", "")))
+    pop = pd.to_numeric(pd.Series([r.get("population_num")]), errors="coerce").iloc[0]
+    c = conclusion_capacite(sim, nom, float(pop) if pd.notna(pop) else None)
+    lo, mid, hi = c["etp"]
+    lo3, mid3, hi3 = c["etp3"]
     st.markdown(
         '<div class="section-header">'
         '<div class="section-eyebrow">RENFORCEMENT THÉORIQUE DE CAPACITÉ MÉDICALE</div>'
         '<h2 class="section-title">Combien d\'offre de <em>médecine générale</em> manquerait-il\u00a0?</h2>'
-        '<p class="section-lead">Simulation statique à partir de l\'APL communal DREES 2023\u202f: '
-        'volume de consultations accessibles qui manque, commune par commune, pour atteindre un seuil, '
-        'converti en équivalents temps plein. Ce n\'est pas un effectif officiel de médecins manquants.</p>'
+        '<p class="section-lead">Lecture fondée sur l\'APL communal DREES 2023 (accessibilité potentielle localisée, en '
+        'consultations par habitant et par an). Le renforcement est exprimé en ETP, c\'est-à-dire en '
+        '<strong>équivalents temps plein</strong> de médecine générale\u202f: un ordre de grandeur théorique, '
+        'pas un effectif officiel de médecins manquants.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
-    c1, c2, c3, c4 = st.columns(4)
+    pop_txt = (f"<strong>{_fr_int(c['pop_concernee'])} habitants</strong> ({c['part']:.0%})" if c["pop_concernee"] is not None
+               else f"<strong>{c['part']:.0%} de la population</strong>")
+    if c["deficit"]:
+        conclusion = (
+            f'<p><strong>Déficit théorique détecté.</strong> Dans {nom}, {pop_txt} vivent dans {c["communes"]} commune{"s" if c["communes"] != 1 else ""} '
+            f'sur {c["nb_communes"]} où l\u2019APL est sous le repère de sous-densité 2,5.</p>'
+            f'<p>Pour ramener chacune de ces communes au repère 2,5, il manquerait environ <strong>{_fr_int(c["consult"])} consultations par an</strong>, '
+            f'soit un renforcement de l\u2019ordre de <strong>{mid:.0f} ETP</strong> (équivalents temps plein) de médecine générale, '
+            f'entre {lo:.0f} et {hi:.0f} selon l\u2019activité retenue par médecin.</p>'
+            f'<p class="cap-ssq">Avec un repère plus exigeant (APL 3,0)\u202f: environ {mid3:.0f} ETP ({lo3:.0f} à {hi3:.0f}). '
+            f'Le total surestime plutôt le besoin réel (un médecin installé relève aussi l\u2019APL des communes voisines).</p>')
+        cls = ""
+    else:
+        conclusion = (
+            f'<p><strong>Aucun déficit théorique au repère APL 2,5.</strong> Aucune commune de {nom} '
+            + (f'(sur {c["nb_communes"]}) ' if c["communes"] == 0 else f'({c["communes"]} sur {c["nb_communes"]}, poids négligeable) ')
+            + 'n\u2019a une accessibilité potentielle inférieure au repère national de sous-densité\u202f: '
+            f'le volume de consultations accessibles dépasse partout 2,5 par habitant et par an, le renforcement calculé est donc de 0 ETP '
+            f'(équivalent temps plein).</p>'
+            f'<p><strong>Ce que cela ne permet pas de conclure</strong>\u202f: que l\u2019offre est suffisante. L\u2019APL ne mesure ni les délais de '
+            f'rendez-vous, ni la saturation des patientèles, ni les départs à venir (âge des médecins), ni les écarts à l\u2019intérieur d\u2019une commune. '
+            f'Pour {nom}, les difficultés éventuelles se lisent dans la démographie médicale, les délais et les besoins, pas dans ce calcul.</p>'
+            + (f'<p class="cap-ssq">Avec un repère plus exigeant (APL 3,0)\u202f: environ {mid3:.0f} ETP ({lo3:.0f} à {hi3:.0f}) '
+               f'pour les communes sous 3,0.</p>' if mid3 >= 0.5 else
+               '<p class="cap-ssq">Au repère 3,0 également, aucun renforcement théorique notable.</p>'))
+        cls = " none"
+    st.markdown(f'<div class="cap-conclusion{cls}">{conclusion}</div>', unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
     kpi = lambda col, lab, val, sub: col.markdown(
         f'<div class="diagnostic-kpi" style="padding:14px;">'
         f'<div class="diagnostic-kpi-label">{lab}</div>'
@@ -88,31 +138,24 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         f'<div class="diagnostic-kpi-context"><span style="font-size:11px;color:#6B6B68;">{sub}</span></div>'
         f'</div>', unsafe_allow_html=True)
     kpi(c1, "APL moyen pondéré", _fmt(sim["apl_moyen_pondere"], ".2f"),
-        "consult./an/hab. standardisé · méthode DREES")
-    kpi(c2, "Population sous 2,5", f"{sim['part_pop_apl_inf_2_5']:.0%}",
-        f"{sim['nb_communes_inf_2_5']} communes sur {sim['nb_communes']}")
-    kpi(c3, "Disparités communales", f"{_fmt(sim['apl_p25'], '.1f')} – {_fmt(sim['apl_p75'], '.1f')}",
-        "quartiles communaux pondérés par la population")
-    lo, mid, hi = sim["etp_2,5"]
-    kpi(c4, "Renforcement théorique · seuil 2,5", f"≈ {mid:.0f} ETP", f"fourchette {lo:.0f} – {hi:.0f} ETP")
-    lo3, mid3, hi3 = sim["etp_3,0"]
-    st.markdown(
-        '<div style="margin-top:10px;padding:12px 16px;background:#F3F2EC;border-radius:4px;'
-        'font-size:12px;color:#6B6B68;line-height:1.6;">'
-        f'<strong style="color:#2B2B2B;">Simulation, pas mesure.</strong> Pour porter chaque '
-        f'commune de {nom} située sous le seuil au niveau de ce seuil, il manquerait environ '
-        f'{_fmt(sim["deficit_2,5"], ",.0f")} consultations accessibles par an (seuil 2,5), soit '
-        f'<strong>{mid:.0f} ETP</strong> de médecine générale à 5 400 actes/an par ETP '
-        f'(convention DREES ; fourchette {lo:.0f}–{hi:.0f} ETP pour 6 000–3 600 actes). '
-        f'Au seuil 3,0\u202f: ≈ {mid3:.0f} ETP ({lo3:.0f}–{hi3:.0f}). '
-        '<strong>Limites.</strong> Simulation statique\u202f: offre existante supposée inchangée\u202f; '
-        'déficit calculé commune par commune alors qu\u2019un médecin installé relève aussi '
-        'l\u2019APL des communes voisines (rayon 20 min, méthode DREES)\u202f: le total tend à '
-        'surestimer. Les ETP ne sont pas des médecins physiques (activité libérale de 3\u202f600 à '
-        '6\u202f000 actes/an selon les bornes DREES\u202f; 1 ETP = 5\u202f400 actes, convention de '
-        'l\u2019indicateur APL). APL 2023, population standardisée 2021. Source\u202f: DREES, APL aux '
-        'médecins généralistes 2023 (Licence Ouverte).'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        "consultations par habitant et par an · DREES 2023 · repère de sous-densité 2,5")
+    kpi(c2, "Population sous le repère 2,5", f"{sim['part_pop_apl_inf_2_5']:.0%}",
+        f"{sim['nb_communes_inf_2_5']} commune{'s' if sim['nb_communes_inf_2_5'] != 1 else ''} sur {sim['nb_communes']}")
+    kpi(c3, "Renforcement théorique étudié", f"≈ {mid:.0f} ETP" if c["deficit"] else "0 ETP",
+        f"équivalents temps plein · fourchette {lo:.0f} – {hi:.0f}" if c["deficit"] else "équivalent temps plein · aucun déficit au repère 2,5")
+    with st.expander("Hypothèses, seuils et détail du calcul"):
+        fr = lambda v, d=1: f"{v:.{d}f}".replace(".", ",")
+        st.markdown(
+            f"**Formule.** Pour chaque commune sous le seuil\u202f: déficit = population standardisée × (seuil − APL de la commune). "
+            f"Somme départementale\u202f: {_fr_int(c['consult'])} consultations par an au seuil 2,5 ; {_fr_int(c['consult3'])} au seuil 3,0.\n\n"
+            f"**Conversion en ETP (équivalents temps plein).** 1 ETP = {_fr_int(ETP_CONSULTATIONS)} consultations, visites et téléconsultations par an "
+            f"(convention DREES de l\u2019indicateur APL). Fourchette\u202f: {_fr_int(ETP_BORNES[0])} actes par an (médecin très actif, borne basse) à "
+            f"{_fr_int(ETP_BORNES[1])} actes (borne haute), d\u2019où {fr(lo)} – {fr(hi)} ETP au seuil 2,5 et {fr(lo3)} – {fr(hi3)} au seuil 3,0.\n\n"
+            f"**Seuils.** 2,5 consultations par habitant et par an\u202f: repère national de sous-densité du zonage. 3,0\u202f: repère plus exigeant, "
+            f"proche de la moyenne nationale.\n\n"
+            f"**Disparités communales.** APL pondéré du premier au troisième quartile\u202f: {fr(sim['apl_p25'])} – {fr(sim['apl_p75'])}.\n\n"
+            f"**Limites.** Simulation statique\u202f: offre existante supposée inchangée\u202f; déficit calculé commune par commune alors qu\u2019un "
+            f"médecin installé relève aussi l\u2019APL des communes voisines (rayon de 20 min dans la méthode DREES)\u202f: le total tend à surestimer. "
+            f"Les ETP ne sont pas des médecins physiques. APL 2023, population standardisée 2021. Source\u202f: DREES, APL aux médecins "
+            f"généralistes 2023 (Licence Ouverte).")
     return True
