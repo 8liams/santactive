@@ -55,12 +55,12 @@ def render(data: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 INDICATORS = [
-    ("score_global",       "Score Sant’active",   "score", False),
-    ("apl_dept",           "APL",            "score", False),
-    ("acces_mg_part_sup_10_pct", "Éloignement (> 10 min)", "temps", False),
-    ("med_gen_pour_100k",  "Médecins /100k", "score", False),
-    ("prix_m2_moyen",      "Prix immo",      "prix",  False),
-    ("pct_plus_65",        "Part 65+",       "age",   False),
+    ("score_global",       "Score Sant’active",   "score_dsfr",  False),
+    ("apl_dept",           "APL",            "apl",         False),
+    ("acces_mg_part_sup_10_pct", "Éloignement (> 10 min)", "eloignement", False),
+    ("med_gen_pour_100k",  "Médecins /100k", "medecins",    False),
+    ("prix_m2_moyen",      "Prix immo",      "prix_dsfr",   False),
+    ("pct_plus_65",        "Part 65+",       "age_dsfr",    False),
 ]
 
 

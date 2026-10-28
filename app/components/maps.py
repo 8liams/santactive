@@ -65,22 +65,26 @@ BORDER_WIDTH = 0.55
 HOVER_COLOR  = "#0A1938"
 
 # Dégradés par type d'indicateur
-# Palettes de la carte nationale (révision du 29 octobre 2026) : teintes désaturées à la manière des
-# publications statistiques, progression régulière de clarté entre classes (lisible aussi en niveaux de gris),
-# vert = favorable, teintes chaudes = défavorable. Les classes et leurs bornes ne changent pas.
+# Palettes de la carte nationale (29 octobre 2026) : une seule famille chromatique par indicateur, séquentielle,
+# du plus clair (valeurs faibles) au plus foncé (valeurs élevées), style institutionnel (DSFR). Classes discrètes :
+# terciles pour le score (les trois zones), cinq classes pour les autres indicateurs. Les clés historiques
+# (« score », « prix », « temps », « age ») restent disponibles pour les autres cartes de l'application.
 COLORMAPS: dict[str, list[str]] = {
-    # divergente : bordeaux doux → abricot → sable → sauge → vert profond (score, APL, médecins)
+    "score_dsfr":  ["#DCE8F6", "#739BCB", "#173B78"],                        # bleu institutionnel, 3 terciles
+    "apl":         ["#E7F3EC", "#B6DCC5", "#77B695", "#3F8A68", "#176448"],  # vert profond
+    "eloignement": ["#FBEFEE", "#F4CBC7", "#E99E96", "#D56A65", "#A52E3A"],  # rouge progressif
+    "medecins":    ["#E9F4F5", "#BBDDE1", "#80BDC5", "#428E9B", "#206475"],  # bleu turquoise
+    "prix_dsfr":   ["#F3F0F8", "#DDD3EC", "#BCA6D7", "#9175B8", "#62488D"],  # violet institutionnel
+    "age_dsfr":    ["#FCF2E8", "#F3DABD", "#E4BA8A", "#CA8D56", "#975B31"],  # orange cuivré
+    # clés historiques (fiches, région) — inchangées
     "score": ["#B9474A", "#DE9A6E", "#EBD9A8", "#9CBF93", "#3C7D63"],
-    # séquentielle chaude : sable → ocre → terre cuite → brun (prix immobilier, le plus cher = le plus foncé)
     "prix":  ["#F6EAD2", "#E8C58C", "#D5955B", "#B6683C", "#7E3F24"],
-    # éloignement : vert d'eau → sauge → sable → abricot → bordeaux doux (plus d'habitants éloignés = plus chaud)
     "temps": ["#DCEBDF", "#A9CDB2", "#EBD9A8", "#DE9A6E", "#B9474A"],
     "pros":  ["#B9474A", "#EBD9A8", "#9CBF93", "#3C7D63"],
-    # séquentielle bleue : part des 65 ans et plus (plus âgée = plus foncé), quatre classes
     "age":   ["#E7EDF7", "#BCCBE6", "#7F9BD0", "#3A5DA8"],
 }
-# Couleurs de la légende des zones (terciles) : extrémités et milieu de la palette « score »
-ZONE_COLORS = {"Critique": "#B9474A", "Intermédiaire": "#DDB36A", "Favorable": "#3C7D63"}
+# Légende des zones de la carte nationale : les trois terciles du score, dans le bleu institutionnel
+ZONE_COLORS = {"Critique": "#DCE8F6", "Intermédiaire": "#739BCB", "Favorable": "#173B78"}
 
 
 def quantile_bins(values, n_classes: int) -> list[float]:
@@ -198,9 +202,9 @@ def render_national_choropleth(
     if bins:
         bins = [float(b) for b in bins]
         cmap = StepColormap(colors=colors[:len(bins) - 1], index=bins, vmin=bins[0], vmax=bins[-1])
-    elif metric == "score_global":
-        cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
     else:
+        # Classes discrètes de quantiles : pour le score, trois classes = les terciles (zones critique,
+        # intermédiaire, favorable) ; pour les autres indicateurs, autant de classes que de couleurs.
         # Classes de quantiles : chaque couleur couvre le même nombre de départements, les valeurs
         # extrêmes (Paris pour l'immobilier) n'écrasent plus l'échelle ; la légende reprend ces bornes.
         bins = quantile_bins(clean_values, len(colors))
