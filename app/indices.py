@@ -1,4 +1,4 @@
-"""Deux indices complémentaires (prototype) : offre / accès et besoins sanitaires.
+"""Deux indices complémentaires (analyse exploratoire) : offre / accès et besoins sanitaires.
 
 Indice OFFRE / ACCÈS (0-100, 100 = offre la plus favorable) : rangs
 percentiles de l'APL pondérée (30), des généralistes /100k (20), des

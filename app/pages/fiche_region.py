@@ -365,7 +365,7 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
         '<p class="diagnostic-prose" style="font-size:14px;max-width:900px;'
         'margin:-8px 0 24px;line-height:1.6;">'
         'Score de priorité = moyenne à poids égaux du <strong>besoin</strong> '
-        '(fragilité et score global, rangs nationaux) et du <strong>volume</strong> '
+        '(fragilité et score Sant’active, rangs nationaux) et du <strong>volume</strong> '
         '(population et publics concernés, rangs nationaux). La '
         '<strong>faisabilité</strong> est affichée à part et n\u2019entre pas dans le '
         'score\u202f: un département très fragile reste prioritaire même lorsqu\u2019y '
@@ -622,7 +622,6 @@ def render_donnees_detaillees(
     with st.expander("Données détaillées : diagnostic chiffré, classement, priorisation", expanded=False):
         render_diagnostic_region(region_depts, region_name)
         render_ranking_depts(region_depts)
-        render_delais_detail(delais_region, region_name)
         render_priorisation_technique(priorities)
         st.markdown(
             '<div style="margin-top:24px;padding:14px 18px;background:#F3F2EC;'

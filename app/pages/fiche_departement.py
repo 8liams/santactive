@@ -61,7 +61,7 @@ def render(data: dict) -> None:
     render_contexte(r, data)
     render_simulation_capacite(r)   # APL pondéré + simulation ETP (si fichier DREES présent)
     render_offre_medicale(r, data)
-    render_delais_rdv(r, data)
+    # Délais DREES 2016-2017 : retirés de la fiche (décision du 28 octobre 2026) ; documentés dans la Méthodologie.
     render_suggestions_comparaison(r, master)
 
 
@@ -210,7 +210,7 @@ def _render_parcours(r: pd.Series) -> None:
 def _get_situation_label(r: pd.Series) -> tuple[str, str]:
     """Retourne (label_css, label_texte) aligné sur le badge de zone.
 
-    La zone (terciles du score global) est la seule qualification de la
+    La zone (terciles du score Sant’active) est la seule qualification de la
     situation d'ensemble : la phrase ne doit pas contredire le badge.
     """
     zone = str(r.get("zone_short", "")).strip()
@@ -397,7 +397,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
         concl = f"{nom} se situe dans la moyenne nationale sur l’ensemble des dimensions."
     st.markdown(f'<p class="diagnostic-prose" style="font-size:15px;margin:0 0 10px;">{concl} '
                 f'<span style="color:#6B6B68;font-size:13px;">Chaque dimension est un rang parmi les 100 départements '
-                f'(50 = médiane) ; le poids indique sa part dans le score global.</span></p>', unsafe_allow_html=True)
+                f'(50 = médiane) ; le poids indique sa part dans le score Sant’active.</span></p>', unsafe_allow_html=True)
     st.markdown(f'<div class="sc-tiles">{tiles}</div>', unsafe_allow_html=True)
     with st.expander("Comprendre le diagnostic : valeurs, sources et calcul des six dimensions"):
         _render_scorecard_detail(r, master)
@@ -516,7 +516,7 @@ def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
             f'<div style="text-align:right;font-size:20px;color:#9C9A92;">N/D</div>'
             f'</div>'
             f'<div style="font-size:11px;color:#9C9A92;">'
-            f'Donnée non disponible · dimension exclue du score global '
+            f'Donnée non disponible · dimension exclue du score Sant’active '
             f'(poids redistribué)</div>'
             f'</div>',
             unsafe_allow_html=True,
@@ -561,7 +561,7 @@ def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
         '<div style="border-top:1px solid #E8E6DD;margin:8px 0 20px;"></div>'
         '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
         'text-transform:uppercase;color:#9C9A92;margin-bottom:16px;">'
-        'FACTEURS DE CONTEXTE · poids dans le score global'
+        'FACTEURS DE CONTEXTE · poids dans le score Sant’active'
         '</div>',
         unsafe_allow_html=True,
     )

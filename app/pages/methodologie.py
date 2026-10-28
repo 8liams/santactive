@@ -120,8 +120,8 @@ def render(data: dict) -> None:
         _encadre("Que ne mesure-t-il pas ?",
                  "La <strong>disponibilité réelle des rendez-vous</strong>, la capacité exacte des cabinets, la qualité des "
                  "soins, l’efficacité future d’une action, l’état de santé global d’une population et la plupart des "
-                 "inégalités sociales de santé. Les délais affichés sont des estimations historiques, jamais des "
-                 "délais observés en 2026.", "#FDF8EC")
+                 "inégalités sociales de santé. Aucun délai de rendez-vous actuel n’est affiché : l’enquête DREES 2016-2017 "
+                 "n’est citée qu’à titre historique (section 6).", "#FDF8EC")
     with c3:
         _encadre("Comment lire les résultats ?",
                  "Le <strong>score</strong> situe un département parmi les autres sur l’offre et l’accès. Le "
@@ -146,11 +146,11 @@ def render(data: dict) -> None:
         ["Effectifs de médecins (RPPS)", "DREES", "1<sup>er</sup> janv. 2026", "Département", "Densité de généralistes (20 %), densités de spécialistes (leviers)", "Personnes, pas temps de travail"],
         ["Accès aux équipements : temps vers le généraliste le plus proche", "INSEE (BPE 2025, Metric-OSRM, Filosofi)", "2025", "Carreau de 200 m → commune, département", "Temps d’accès (20 %), part à plus de 15 min, communes éloignées, situation actuelle du simulateur", "Hors Guadeloupe, Guyane, Mayotte ; voiture seulement"],
         ["Population, âges, densité", "INSEE, recensement", "2021", "Département", "Dénominateurs, part des 65 ans et plus (10 %), typologie", "Décalage avec 2026"],
-        ["Établissements de santé", "FINESS (ministère chargé de la Santé ; diffusion DREES)", "mars 2026", "Site", "Offre hospitalière (15 %), relais pour les leviers", "Sites, pas lits ni capacités"],
+        ["Établissements de santé", "FINESS (ministère chargé de la Santé ; diffusion DREES)", "mars 2026", "Site", "Offre hospitalière (15 %), relais pour les leviers", "Sites, pas lits ni capacités ; cliniques privées de court séjour exclues"],
         ["Pathologies prises en charge", "CNAM (cartographie des pathologies)", "2023", "Département × âge", "Indice de besoins, leviers de prévention, publics", "Patients suivis, pas besoins non couverts"],
         ["Transactions immobilières (DVF)", "DGFiP", "2025", "Commune, département", "Contexte foncier (5 %), proxy communal de conditions d’installation", "Zones peu denses mal couvertes"],
         ["Infirmières libérales (SNDS)", "DREES", "2023", "Département", "Relais de proximité (leviers)", "Libérales seulement"],
-        ["Délais d’attente (enquête)", "DREES", "2016-2017", "France entière", "Estimation indicative des délais par spécialité", "Historique, pas un délai observé"],
+        ["Délais d’attente (enquête)", "DREES", "2016-2017", "France entière", "Référence historique (Méthodologie uniquement)", "Plus affichée dans les fiches ni les rapports"],
         ["Isochrones routières", "IGN Géoplateforme (BD TOPO, Valhalla)", "à la demande, cache 24 h", "Point", "Scénario du simulateur", "Un point par commune ; service externe"],
         ["Communes : centre, mairie, population", "API Géo (Etalab)", "2026", "Commune", "Cartes communales, point d’implantation", "—"],
         ["Fichiers de l’équipe (temps d’accès, présences)", "Sant’active", "2026", "Commune, code postal", "Repli pour la Guadeloupe et la Guyane (signalé) ; présence locale d’une spécialité", "Méthode non documentée"],
@@ -174,7 +174,7 @@ def render(data: dict) -> None:
     }[cfg["temps"]]
     med_ligne = {"drees": "Généralistes en activité (personnes) / population 2021 × 100 000<br><span style=\"color:#9C9A92;\">DREES · RPPS · 1<sup>er</sup> janvier 2026</span>",
                  "equipe": "Lignes du fichier de l’équipe (mode historique)"}[cfg["source"]]
-    etabs_ligne = {"actuelle": "Sites FINESS : centres hospitaliers (CH, CHR) et établissements privés de soins de suite et de réadaptation, pour 100 000 habitants",
+    etabs_ligne = {"actuelle": "Sites FINESS : centres hospitaliers (CH, CHR) et établissements privés de soins de suite et de réadaptation, pour 100 000 habitants. Les cliniques privées de court séjour (MCO) ne sont pas comptées : l’indicateur mesure un maillage de sites, pas l’ensemble de l’offre hospitalière",
                    "court_sejour": "Sites FINESS de court séjour (CH, CHR, hôpitaux locaux, privés MCO, centres de lutte contre le cancer), pour 100 000 habitants"}[cfg["etabs_def"]]
     rows = [
         ("Accessibilité aux soins de ville", "APL", "30 %", apl_ligne + f'<br><span style="color:#9C9A92;">DREES · APL aux médecins généralistes · {cfg["apl_millesime"]}</span>', "Haut = favorable"),
@@ -214,7 +214,7 @@ def render(data: dict) -> None:
             "- Classement national calculé sur le score non arrondi ; égalité stricte départagée par le code du département "
             "(rangs uniques de 1 à 100).\n"
             "- Zones : tertiles du score (quantiles 0,333 et 0,667).\n"
-            "- Sous-scores de lecture (fiche) : accès aux soins = APL 60 % + temps 40 % ; ils ne modifient pas le score global.\n"
+            "- Sous-scores de lecture (fiche) : accès aux soins = APL 60 % + temps 40 % ; ils ne modifient pas le score Sant’active.\n"
             "- Typologie territoriale par densité (recensement 2021) : rural jusqu’à 80 hab./km², péri-urbain de 80 à 250, "
             "urbain de 250 à 1 000, urbain dense au-delà ; utilisée par certains leviers."
         )
@@ -332,12 +332,13 @@ def render(data: dict) -> None:
         "de 3 600 à 6 000. Le résultat est un <strong>ordre de grandeur</strong> : l’offre existante est supposée inchangée et les "
         "effets de voisinage sont ignorés, ce qui tend à surestimer. Ce n’est ni un effectif officiel de médecins manquants, ni un "
         "objectif de recrutement.",
-        f"<strong>Délais de rendez-vous.</strong> Sant’active part des délais médians nationaux de l’enquête DREES 2016-2017 "
+        f"<strong>Délais de rendez-vous (référence historique).</strong> Sant’active partait des délais médians nationaux de l’enquête DREES 2016-2017 "
         "(généraliste 2 jours, pédiatre 8, radiologue 11, dentiste 17, rhumatologue 31, gynécologue 32, cardiologue 37, dermatologue 50, "
-        f"ophtalmologue 52) et les module par le rapport entre l’APL de référence ({apl_nat_txt}) et l’APL du département, plafonné à ×3. "
+        f"ophtalmologue 52) et les modulait par le rapport entre l’APL de référence ({apl_nat_txt}) et l’APL du département, plafonné à ×3. "
         "La DREES documente une corrélation entre faible accessibilité et délais plus longs, pas une proportionnalité. "
-        "<strong>Ces valeurs ne sont pas des délais observés en 2026</strong> : ce sont des repères historiques, utiles pour comparer "
-        "des territoires, affichés comme estimations indicatives et à lire comme tels.",
+        "<strong>Ces valeurs ne sont pas des délais observés en 2026</strong>. Depuis le 28 octobre 2026, cette estimation n’est plus "
+        "affichée dans les fiches, les e-mails ni les rapports PDF, afin qu’elle ne soit pas lue comme une situation actuelle ; "
+        "elle reste documentée ici, avec sa date et ses limites, et le code de calcul est conservé.",
     )
     _hr()
 
@@ -380,7 +381,7 @@ def render(data: dict) -> None:
     # ══════════════════════════════════════════════════════════════════════════
     _section("8 · LIMITES ET TERRITOIRES PARTICULIERS", "Ce qu’il faut garder en tête.")
     limites = [
-        ("01", "Accès effectif non mesuré", "Ni le temps de trajet, ni l’APL ne disent si un rendez-vous est possible. Les délais affichés sont des estimations historiques."),
+        ("01", "Accès effectif non mesuré", "Ni le temps de trajet, ni l’APL ne disent si un rendez-vous est possible. Aucun délai de rendez-vous actuel n’est mesuré ni affiché."),
         ("02", "Score relatif", "Le score situe un département parmi les autres ; 70 % mesure l’offre de médecine générale. Les besoins sont traités dans la priorisation."),
         ("03", "Décalages de millésimes", f"Recensement 2021, CNAM 2023, APL {cfg['apl_millesime']}, BPE et temps 2025, RPPS et FINESS 2026, DVF 2025, délais 2016-2017."),
         ("04", "Outre-mer", "Mayotte hors score. Guadeloupe et Guyane sans temps INSEE : score sur cinq dimensions, lecture communale et leviers de proximité en repli sur l’indicateur interne, signalé. Simulateur indisponible pour ces trois territoires ; La Réunion et la Martinique couvertes."),

@@ -131,13 +131,13 @@ def fmt_rang_affichage(rang, total) -> str:
 
 
 def fmt_classement_national(rang, total) -> str:
-    """Formate le classement national en ordinal (1er, 2ème…, Nème)."""
+    """Formate le classement national en ordinal français : 1er, 2e, 59e, 100e."""
     pos = rang_affichage(rang, total)
     if pos is None:
         return "N/D"
     if pos == 1:
         return "1er"
-    return f"{pos}\u202fème"
+    return f"{pos}e"
 
 
 # ── Calcul principal ──────────────────────────────────────────────────────────

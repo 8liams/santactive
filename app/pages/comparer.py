@@ -27,7 +27,7 @@ from ..router import navigate
 APL_NATIONAL_REF = None  # référence = médiane des valeurs départementales (voir _national_reference)
 
 COMPARE_METRICS: list[tuple[str, str, str, str]] = [
-    ("Score global",         "score_global",          ".1f", "/100"),
+    ("Score Sant’active",         "score_global",          ".1f", "/100"),
     ("APL (DREES)",          "apl_dept",       ".1f", "/hab."),
     (f"Temps d'accès médian ({TEMPS_LABEL_COURT}, score)", "temps_acces_median", ".1f", " min"),
     ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
@@ -353,7 +353,7 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
     majeurs = [e for e in ecarts[:3] if e[0] >= 0.08]
     communs = [e for e in ecarts if e[0] < 0.08 or (e[8] and len(set(e[8].values())) == 1 and "at" not in e[8].values())]
 
-    lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score global", "apl_dept": "l’accessibilité aux généralistes (APL)",
+    lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score Sant’active", "apl_dept": "l’accessibilité aux généralistes (APL)",
               "temps_acces_median": f"le temps d’accès ({TEMPS_LABEL_COURT})", "med_gen_pour_100k": "la densité de généralistes",
               "structures_pour_100k": "l’offre hospitalière", "prix_m2_moyen": "le prix du foncier", "pct_plus_65": "la part des 65 ans et plus"}
     li = ""
@@ -530,7 +530,7 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
 
 _IMPLICATIONS: dict[str, tuple[str, str, str]] = {
     # (libellé court, unité, implication lorsque l'écart est défavorable)
-    "score_global": ("score global", "/100", "le territoire le moins bien classé cumule les signaux d'accès défavorables"),
+    "score_global": ("score Sant’active", "/100", "le territoire le moins bien classé cumule les signaux d'accès défavorables"),
     "apl_dept": ("APL pondéré", " consult./an/hab.", "l'accès aux généralistes y justifie en priorité les leviers d'installation et d'exercice coordonné"),
     "temps_acces_median": ("temps d'accès médian", " min", "l'éloignement y appelle des réponses de proximité (équipes mobiles, téléconsultation assistée)"),
     "med_gen_pour_100k": ("densité de généralistes", " /100k", "la démographie médicale y est le premier facteur limitant"),

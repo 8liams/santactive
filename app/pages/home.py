@@ -54,7 +54,7 @@ def render(data: dict) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 INDICATORS = [
-    ("score_global",       "Score global",   "score", False),
+    ("score_global",       "Score Sant’active",   "score", False),
     ("apl_dept",           "APL",            "score", False),
     ("temps_acces_median", "Temps d'accès",  "temps", False),
     ("med_gen_pour_100k",  "Médecins /100k", "score", False),
@@ -170,7 +170,7 @@ def _render_usages(master: pd.DataFrame) -> None:
 
 
 # Indicateurs de la carte : un seul contrôle, un seul état (clé home_indicateur)
-INDICATEURS_PRINCIPAUX = ["Score global", "APL", "Temps d'accès"]
+INDICATEURS_PRINCIPAUX = ["Score Sant’active", "APL", "Temps d'accès"]
 
 
 def _bounds_for(geojson: dict, codes: set[str]) -> list | None:
@@ -202,7 +202,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     idx = labels.index(selected_label) if selected_label in labels else 0
     col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
-        st.caption(f"Indicateur « {selected_label} » non disponible, affichage du score global.")
+        st.caption(f"Indicateur « {selected_label} » non disponible, affichage du score Sant’active.")
         col_key, cmap_name, reverse_scale = "score_global", "score", False
 
     t = T.get()

@@ -96,7 +96,7 @@ class TestPdfDepartement(unittest.TestCase):
         m = DATA["master"]
         pire = m.loc[m["rang_national"] == 1].iloc[0]
         meilleur = m.loc[m["rang_national"] == 100].iloc[0]
-        self.assertEqual(fmt_classement_national(pire["rang_national"], 100), "100\u202fème")
+        self.assertEqual(fmt_classement_national(pire["rang_national"], 100), "100e")
         self.assertEqual(fmt_classement_national(meilleur["rang_national"], 100), "1er")
         self.assertLess(pire["score_global"], meilleur["score_global"])
 

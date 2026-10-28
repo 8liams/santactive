@@ -34,6 +34,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as _canvas
 from reportlab.platypus import (
+    CondPageBreak,
     KeepTogether,
     PageBreak,
     Paragraph,
@@ -310,7 +311,7 @@ _SOURCES_ROWS = [
     ("Médecins généralistes", "DREES, répertoire RPPS au 1er janvier 2026 · INSEE RP 2021",
      "Personnes en activité, tous modes d'exercice, rapportées à la population municipale."),
     ("Structures de soins", "FINESS (ministère chargé de la Santé, diffusion DREES), mars 2026",
-     "Centres hospitaliers, centres hospitaliers régionaux, établissements privés de soins de suite et de réadaptation : des sites, pas des capacités."),
+     "Centres hospitaliers, centres hospitaliers régionaux, établissements privés de soins de suite et de réadaptation : des sites, pas des capacités. Les cliniques privées de court séjour ne sont pas comptées ; l'indicateur ne décrit pas toute l'offre hospitalière."),
     ("Population, âge, densité", "INSEE, recensement de la population 2021", "Population municipale, part des 65 ans et plus, densité."),
     ("Pathologies", "CNAM, cartographie des pathologies et des dépenses, 2023", "Patients pris en charge ; prévalences brutes ou standardisées sur l'âge selon l'usage."),
     ("Prix immobilier", "DVF (DGFiP), 2025", "Prix médian des transactions, indicateur de contexte (5 % du score)."),
@@ -318,7 +319,9 @@ _SOURCES_ROWS = [
 
 
 def _sources_pages(story: list, *, lien_methodo: str, niveau: str) -> None:
-    story.append(PageBreak())
+    # Nouvelle page seulement s'il reste moins de la moitié d'une page : évite une page à moitié vide.
+    story.append(Spacer(1, 8))
+    story.append(CondPageBreak(130 * mm))
     _heading("Sources, méthode et limites", story)
     rows = [[_th("Donnée"), _th("Source et millésime"), _th("Lecture")]]
     for a, b, c in _SOURCES_ROWS:
@@ -360,7 +363,7 @@ def _sources_pages(story: list, *, lien_methodo: str, niveau: str) -> None:
         "Le score situe un département parmi les autres à une date donnée ; il ne mesure pas une évolution.",
         "Les leviers sont des pistes fondées sur des règles explicites, à instruire avec les acteurs locaux (ARS, CPTS, "
         "collectivités, professionnels) ; ils ne constituent ni une prescription ni une évaluation de politique publique.",
-        "Les estimations (ETP théoriques, délais indicatifs) sont signalées comme telles et ne remplacent pas une donnée observée.",
+        "Les estimations (équivalents temps plein théoriques) sont signalées comme telles et ne remplacent pas une donnée observée.",
     ]:
         story.append(Paragraph("– " + lim, ST_SMALL))
         story.append(Spacer(1, 2))
@@ -662,7 +665,7 @@ def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict
              _num(med("temps_acces_interne_median"), 0) + " min", "INSEE 2025 hors champ : indicateur interne de repli", "interne")
     crow("Généralistes pour 100 000 hab.", _num(mg, 0), _num(mg_m, 0), "personnes en activité, tous modes d'exercice", "RPPS 2026")
     crow("Sites hospitaliers pour 100 000 hab.", _num(r.get("structures_pour_100k"), 1), _num(med("structures_pour_100k"), 1),
-         "CH, CHR, SSR privés ; sites, pas capacités", "FINESS 2026")
+         "CH, CHR, SSR privés ; cliniques privées de court séjour exclues", "FINESS 2026")
     crow("Part des 65 ans et plus", _num(p65) + NBSP + "%", _num(p65_m) + NBSP + "%", "pression sur la demande de soins", "INSEE RP 2021")
     crow("Prix médian au m²", _num(r.get("prix_m2_moyen"), 0) + " €", _num(med("prix_m2_moyen"), 0) + " €", "contexte d'installation (5 % du score)", "DVF 2025")
     story.append(_table(comp, [CONTENT_W * 0.34, CONTENT_W * 0.17, CONTENT_W * 0.21, CONTENT_W * 0.28]))
@@ -672,7 +675,9 @@ def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict
     _heading("Recommandations opérationnelles", story,
              "Leviers issus d'un catalogue de dispositifs existants, retenus par des règles explicites sur les indicateurs "
              "observés (au plus quatre, deux par famille). Pistes à instruire avec les acteurs locaux, pas des prescriptions.")
-    if maintien or not recos:
+    if maintien and recos and (recos[0].get("action") or recos[0].get("probleme")):
+        story.append(KeepTogether(_reco_card(1, recos[0], r, data)))
+    elif maintien or not recos:
         story.append(_box([Paragraph("<b>Maintien et veille.</b> Aucun levier du catalogue n'est déclenché : les conditions "
                                      "obligatoires (part d'habitants éloignés, sous-densité, besoins spécifiques) ne sont pas réunies. "
                                      "Recommandation : suivre les départs de généralistes et l'APL communal, et réexaminer à la "
@@ -712,29 +717,7 @@ def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict
                               "inchangée, déficit calculé commune par commune (effets de voisinage ignorés, tendance à surestimer), "
                               f"ETP différents des médecins physiques. Source : DREES, APL {APL_MILLESIME}.", ST_NOTE))
         deep.append(Spacer(1, 10))
-    try:
-        from .components.delais import compute_delais_proxy
-        if apl is not None and apl_m:
-            ddf = compute_delais_proxy(dept_code, apl, apl_m)
-            if ddf is not None and not ddf.empty and "delai_estime_jours" in ddf.columns:
-                deep.append(Paragraph("Délais de rendez-vous · estimation indicative", ST_H3))
-                deep.append(Spacer(1, 3))
-                deep.append(Paragraph(
-                    "Aucune source publique ne mesure les délais par département. Les valeurs ci-dessous partent des délais "
-                    "nationaux observés par la DREES en <b>2016-2017</b> et les ajustent par le rapport entre l'APL de référence "
-                    f"({_num(apl_m, 2)}) et l'APL du département ({_num(apl, 2)}), plafonné à ×3. <b>Ce ne sont pas des délais "
-                    "actuels observés</b> : l'estimation sert à comparer des territoires, pas à annoncer un délai en 2026.", ST_SMALL))
-                deep.append(Spacer(1, 5))
-                drows = [[_th("Spécialité"), _th("Délai national 2016-2017", TA_CENTER), _th("Estimation ajustée", TA_CENTER), _th("Lecture")]]
-                for _, d in ddf.iterrows():
-                    nat_j, est_j = int(d.get("delai_median_jours", 0)), int(d.get("delai_estime_jours", 0))
-                    diff = est_j - nat_j
-                    vc = ROUGE_CRIT if diff > 3 else (VERT_FAV if diff < -3 else AMBRE)
-                    drows.append([_td(_esc(d.get("specialite", ""))), _td(f"{nat_j} j", TA_CENTER, color=GRIS_TXT),
-                                  _td(f"{est_j} j", TA_CENTER, bold=True, color=vc), _td(_esc(d.get("interpretation", "")), size=7.5, color=GRIS_TXT)])
-                deep.append(_table(drows, [CONTENT_W * 0.30, CONTENT_W * 0.20, CONTENT_W * 0.18, CONTENT_W * 0.32]))
-    except Exception:
-        pass
+    # Délais DREES 2016-2017 : retirés des rapports (décision du 28 octobre 2026) ; historique dans la Méthodologie.
     # Pathologies (prévalence brute) en approfondissement
     if data and isinstance(data.get("patho"), pd.DataFrame):
         try:
@@ -753,13 +736,14 @@ def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict
                         mx = float(top5["prev"].max())
                         for _, p in top5.iterrows():
                             prow.append([_td(_esc(str(p["patho_niv1"])[:70])), _td(_num(p["prev"], 2) + NBSP + "%", TA_CENTER, bold=True),
-                                         _td(_num(p["Ntop"], 0), TA_CENTER, color=GRIS_TXT), _bar(float(p["prev"]) / mx * 100, BLEU_ROYAL, 36 * mm)])
+                                         _td(_num(p["Ntop"], 0), TA_CENTER, color=GRIS_TXT), _bar(float(p["prev"]) / mx * 100, BLEU_ROYAL, 26 * mm)])
                         deep.append(_table(prow, [CONTENT_W * 0.50, CONTENT_W * 0.15, CONTENT_W * 0.15, CONTENT_W * 0.20])); deep.append(Spacer(1, 10))
         except Exception:
             pass
 
     if deep:
-        story.append(PageBreak())
+        story.append(Spacer(1, 8))
+        story.append(CondPageBreak(120 * mm))
         _heading("Approfondissement", story, "Pathologies observées (CNAM) et calculs Sant'active signalés comme estimations ; ils complètent le diagnostic sans s'y substituer.")
         story.extend(deep)
 

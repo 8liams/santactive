@@ -712,7 +712,7 @@ def _t_maintien(p):
     probleme = (f"{p['nom_sujet']} ne déclenche aucun signal d'alerte départemental parmi les conditions suivies "
                 f"(APL pondéré {_f(p['apl_dept'], '.2f')}, {_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k, "
                 "prévalences et démographie dans la norme).")
-    indicateurs = [f"score global {_f(p['score_global'])}/100", f"APL pondérée {_f(p['apl_dept'], '.2f')} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'), '.2f')})"]
+    indicateurs = [f"score Sant’active {_f(p['score_global'])}/100", f"APL pondérée {_f(p['apl_dept'], '.2f')} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'), '.2f')})"]
     action = ("Maintenir l'offre et anticiper les départs en retraite des généralistes ; partager les "
               "organisations qui fonctionnent avec les départements voisins.")
     if poches:

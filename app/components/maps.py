@@ -150,7 +150,7 @@ def render_national_choropleth(
 
     # Label et format du tooltip selon l'indicateur sélectionné
     _metric_meta: dict[str, tuple[str, str]] = {
-        "score_global":         ("Score global",        "{:.1f}/100"),
+        "score_global":         ("Score Sant’active",        "{:.1f}/100"),
         "apl_dept":      (APL_LABEL_COURT,       "{:.1f}\u202f/hab."),
         "temps_acces_median":   ("Temps d'accès",       "{:.1f}\u202fmin"),
         "med_gen_pour_100k":    ("Médecins / 100k",     "{:.0f}"),
@@ -244,7 +244,7 @@ def render_national_choropleth(
         fields=["dept_name", "main_display",
                 "score_global_display", "zone", "region_name", "code"],
         aliases=["Département", main_label,
-                 "Score global", "Zone", "Région", "Code"],
+                 "Score Sant’active", "Zone", "Région", "Code"],
         localize=True,
         sticky=False,
         labels=True,
@@ -364,7 +364,7 @@ def render_dom_cartouches(master: pd.DataFrame, only: set | None = None, **_igno
                           + (f" · {int(rang)}ᵉ" if pd.notna(rang) else "") + '</small></div>'
                           f'<div class="dom-card-zone"><i style="background:{zone_color};"></i>Zone {_html.escape(zone.lower())}</div>')
         else:
-            score_html = ('<div class="dom-card-score nd">Hors score global</div>'
+            score_html = ('<div class="dom-card-score nd">Hors score Sant’active</div>'
                           '<div class="dom-card-zone"><i style="background:#9C9A92;"></i>Données partielles</div>')
         pop_html = (f'<div class="dom-card-pop">{int(pop):,} hab.</div>'.replace(",", "\u202f")
                     if pop is not None and pd.notna(pop) else "")

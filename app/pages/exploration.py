@@ -1,4 +1,4 @@
-"""Prioriser : matrice offre × besoins (prototype, ne remplace pas le score).
+"""Prioriser : matrice offre × besoins (analyse exploratoire, ne remplace pas le score).
 
 Lecture en trois niveaux :
 1. les départements à examiner en priorité (offre faible, besoins forts) avec
@@ -48,7 +48,7 @@ def render(data: dict) -> None:
     t = T.get()
     st.markdown(
         '<div class="fiche-header"><div class="fiche-eyebrow"><span class="code">PRIORISATION</span>'
-        '<span class="dot"></span><span class="region">Lecture complémentaire au score · prototype</span></div>'
+        '<span class="dot"></span><span class="region">Analyse exploratoire · lecture complémentaire au score</span></div>'
         '<div class="fiche-title-row"><h1 class="fiche-title">Prioriser <em>les territoires</em></h1></div>'
         '<p class="fiche-header-lead">Où l’offre de soins est-elle faible alors que les besoins sont élevés ? '
         'Chaque département est situé par rapport aux autres sur deux indices : ce qu’il offre, ce dont sa population a besoin.</p>'
@@ -255,7 +255,7 @@ def render(data: dict) -> None:
         st.markdown(
             "- **Indice offre et accès** : moyenne pondérée des rangs percentiles de l’APL pondérée (30), des généralistes "
             "pour 100 000 habitants (20), des structures pour 100 000 habitants (15) et du temps d’accès (20) — les poids "
-            "actuels du score global, renormalisés ; le foncier et le vieillissement en sont exclus.\n"
+            "actuels du score Sant’active, renormalisés ; le foncier et le vieillissement en sont exclus.\n"
             "- **Indice besoins sanitaires** : moyenne à poids égaux des rangs percentiles de la part des 65 ans et plus "
             "et des prévalences CNAM 2023 standardisées sur l’âge lorsque la couverture des poids d’âge atteint 90 % "
             "(sinon brutes, signalé). Poids égaux faute de référence validée.\n"
@@ -265,6 +265,6 @@ def render(data: dict) -> None:
             + ". Un indice de besoins calculé sur moins de composantes est moins robuste.\n"
             "- **Limites** : les quadrants dépendent des médianes (un département proche d’un trait change de couleur pour "
             "quelques dixièmes de point) ; les prévalences mesurent des patients pris en charge, pas des besoins non couverts ; "
-            "les deux indices ne sont pas intégrés au score global et n’ont pas vocation à le remplacer sans validation. "
+            "les deux indices ne sont pas intégrés au score Sant’active et n’ont pas vocation à le remplacer sans validation. "
             "Matrice expérimentale : elle oriente l’examen, elle ne classe pas officiellement les territoires."
         )

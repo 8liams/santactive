@@ -141,14 +141,14 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         "body": (
             "Lecture combinée de deux dimensions du score : l'APL (60 %) et le temps de trajet en voiture "
             "vers un médecin généraliste (40 %, INSEE 2025), en rangs parmi les départements."
-            "<br><br>Facilite la lecture du diagnostic ; ne remplace pas le score global."
+            "<br><br>Facilite la lecture du diagnostic ; ne remplace pas le score Sant’active."
         ),
     },
     "score_pros": {
         "title": "Offre médicale (sous-score)",
         "body": (
             "Rang du département pour la densité de médecins généralistes pour 100 000 habitants "
-            "(DREES RPPS 2026). Facilite la lecture du diagnostic ; ne remplace pas le score global."
+            "(DREES RPPS 2026). Facilite la lecture du diagnostic ; ne remplace pas le score Sant’active."
         ),
     },
     "score_etabs": {
@@ -157,6 +157,8 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "Rang du département pour le nombre de sites hospitaliers pour 100 000 habitants : centres "
             "hospitaliers et centres hospitaliers régionaux, établissements privés de soins de suite et "
             "de réadaptation. Compte des sites, pas des lits ni des capacités."
+            "<br><br>Les cliniques privées de court séjour (médecine, chirurgie, obstétrique) ne sont pas "
+            "comptées : l'indicateur ne décrit pas toute l'offre hospitalière du département."
             f"{_SRC}FINESS (ministère chargé de la Santé, diffusion DREES), mars 2026."
         ),
     },

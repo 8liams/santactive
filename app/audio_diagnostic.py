@@ -59,8 +59,8 @@ def _territory_label_for_speech(nom: str, *, kind: str = "dept") -> str:
 
 
 def _ordinal_fr(n: int) -> str:
-    """Ordinal oral aligné sur l'affichage fiche (1er, 2ème…)."""
-    return "1er" if n == 1 else f"{n}ème"
+    """Ordinal oral aligné sur l'affichage (1er, 2e, 59e)."""
+    return "1er" if n == 1 else f"{n}e"
 
 
 def _join_names_fr(names: list[str], *, max_names: int = 5) -> str:
