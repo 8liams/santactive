@@ -55,6 +55,10 @@ PILOTES_VALIDES = {"18": "Cher", "23": "Creuse", "93": "Seine-Saint-Denis", "974
 SEUILS = (10, 15, 20)
 _COULEURS = {10: "#1B5E3F", 15: "#7DBE8F", 20: "#E8A838", 30: "#D9772B", 99: "#A51C30"}
 _LIB_CLASSE = {10: "≤ 10 min", 15: "10–15 min", 20: "15–20 min", 30: "20–30 min", 99: "> 30 min"}
+# Carte continue (grille routière, phase C) : six classes + « non calculé » ; vert → orange → rouge
+_COULEURS_CONTINU = {5: "#1B5E3F", 10: "#4F9D69", 15: "#B9D88B", 20: "#E8A838", 30: "#D9772B", 99: "#A51C30", 0: "#DAD8D0"}
+_LIB_CONTINU = {5: "≤ 5 min", 10: "5–10 min", 15: "10–15 min", 20: "15–20 min", 30: "20–30 min", 99: "> 30 min",
+                0: "non calculé (pas de route carrossable à moins de 2 km)"}
 _NEUF = "#1A3D8F"
 ISO_MIN_KM2 = 2.0      # surface minimale plausible d'une isochrone de 10 min en voiture (Mende : 5,6 km²)
 _SOURCE_INSEE = ("Insee, base permanente des équipements 2025, distancier Metric-OSRM, "
@@ -407,17 +411,55 @@ def charger_zones(dept: str) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
-def _union_squares(df: pd.DataFrame):
-    """Union des carrés de 200 m (approximation WGS84) d'un sous-ensemble de carreaux → géométrie."""
+def _union_squares(df: pd.DataFrame, half_m: float = 100.0):
+    """Union des carrés (200 m par défaut, approximation WGS84) d'un sous-ensemble de points → géométrie."""
     import shapely
     if df.empty:
         return None
     lat = df["lat"].to_numpy(float); lon = df["lon"].to_numpy(float)
-    dlat = 100 / 111_320
-    dlon = 100 / (111_320 * np.maximum(np.cos(np.radians(lat)), 0.2))
+    dlat = half_m / 111_320
+    dlon = half_m / (111_320 * np.maximum(np.cos(np.radians(lat)), 0.2))
     boxes = shapely.box(lon - dlon, lat - dlat, lon + dlon, lat + dlat)
     g = shapely.union_all(boxes).buffer(0)
     return g if not g.is_empty else None
+
+
+@st.cache_data(show_spinner=False)
+def charger_continu(dept: str) -> dict | None:
+    """Carte continue des temps d'accès (grille routière OSRM, scripts/donnees/carte_continue.py) ;
+    None si l'option SANTACTIVE_CARTE_CONTINUE est « off » (V1) ou si le département n'a pas été
+    calculé (la carte retombe alors sur les zones INSEE habitées)."""
+    from ..config import CARTE_CONTINUE
+    if CARTE_CONTINUE != "on":
+        return None
+    p = GEO_DIR / f"continu_mg_{dept}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+@st.cache_data(show_spinner=False)
+def charger_grille(dept: str) -> pd.DataFrame | None:
+    p = GEO_DIR / f"grille_mg_{dept}.csv.gz"
+    return pd.read_csv(p) if p.exists() else None
+
+
+@st.cache_data(show_spinner=False)
+def charger_controle_continu(dept: str) -> dict | None:
+    p = GEO_DIR / f"controle_continu_{dept}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def _continu_layer(continu: dict, name: str, opacity: float) -> folium.GeoJson:
+    """Grille routière : classe de temps (couleur) et statut (calculé : plein ; approché, route la plus
+    proche à plus de 500 m : teinte plus claire ; non calculé : gris)."""
+    def _style(f, o=opacity):
+        pr = f["properties"]; cl = int(pr["classe"]); st_ = pr.get("statut", "calcule")
+        c = _COULEURS_CONTINU[cl]
+        if cl == 0:
+            return {"fillColor": c, "color": c, "weight": 0.3, "fillOpacity": o * 0.8}
+        return {"fillColor": c, "color": c, "weight": 0.3, "fillOpacity": o if st_ == "calcule" else o * 0.45}
+    return folium.GeoJson(continu, name=name, style_function=_style,
+                          tooltip=folium.GeoJsonTooltip(fields=["classe", "statut"],
+                                                        aliases=["Temps vers un généraliste (classe, min ≤ ; 0 = non calculé)", "Statut"]))
 
 
 def _zones_layer(zones: dict | None, name: str, opacity: float, classes=None) -> folium.GeoJson | None:
@@ -525,15 +567,20 @@ def render(data: dict) -> None:
 
 
 def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *, estompe: bool = False,
-                detail: bool = True) -> folium.Map:
-    """Fond de carte : zones continues par classe (aujourd'hui), communes équipées, communes éloignées,
-    carroyage détaillé (> 10 min) en couche facultative."""
+                detail: bool = True, continu: dict | None = None) -> folium.Map:
+    """Fond de carte : carte continue (grille routière) lorsqu'elle existe, sinon zones INSEE habitées
+    par classe ; communes équipées, communes éloignées ; zones INSEE et carroyage détaillé en couches
+    facultatives."""
     m = folium.Map(location=[float(carreaux["lat"].mean()), float(carreaux["lon"].mean())], zoom_start=9,
                    tiles=TILE_URL, attr=TILE_ATTR, scrollWheelZoom=False, zoom_snap=0.25)
     m.get_root().header.add_child(folium.Element(
         "<style>.leaflet-container{background:#F4F3EE!important;}"
         ".sa-ign-legend{font-family:Marianne,Inter,sans-serif;font-size:11px;background:rgba(255,255,255,.95);"
-        "padding:10px 12px;border-radius:4px;border:1px solid #C9C6BA;line-height:1.7;}"
+        "padding:10px 12px;border-radius:4px;border:1px solid #C9C6BA;line-height:1.7;max-width:270px;}"
+        ".sa-ign-legend div{white-space:normal;line-height:1.35;margin:2px 0;}"
+        ".sa-ign-legend i{flex:0 0 auto;}"
+        "@media (max-width:520px){.sa-ign-legend{max-width:54%;font-size:9.5px;padding:6px 8px;line-height:1.4;}"
+        ".sa-ign-legend div{line-height:1.2;margin:1px 0;}.sa-ign-legend i{width:9px;height:9px;margin-right:4px;}}"
         ".sa-ign-legend b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#6B6B68;margin-bottom:4px;}"
         ".sa-ign-legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:middle;}"
         ".sa-ign-legend i.pt{border-radius:50%;width:10px;height:10px;}"
@@ -547,9 +594,17 @@ def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *
         ".sa-pin-lbl{position:absolute;left:50%;top:50px;transform:translateX(-50%);white-space:nowrap;font-family:Marianne,Inter,sans-serif;"
         "font-size:11px;font-weight:700;color:#1A3D8F;background:rgba(255,255,255,.95);border:1.5px solid #1A3D8F;border-radius:6px;padding:2px 8px;}"
         "</style>"))
-    lz = _zones_layer(zones, "Aujourd’hui : zones par temps de trajet", 0.18 if estompe else 0.55)
-    if lz is not None:
-        lz.add_to(m)
+    if continu:
+        _continu_layer(continu, "Aujourd’hui : temps vers un généraliste (grille routière)", 0.22 if estompe else 0.62).add_to(m)
+        fgz = folium.FeatureGroup(name="Zones habitées INSEE (classes)", show=False)
+        lz = _zones_layer(zones, "zones", 0.55)
+        if lz is not None:
+            lz.add_to(fgz)
+        fgz.add_to(m)
+    else:
+        lz = _zones_layer(zones, "Aujourd’hui : zones par temps de trajet", 0.18 if estompe else 0.55)
+        if lz is not None:
+            lz.add_to(m)
     if detail:
         fg = folium.FeatureGroup(name="Carroyage détaillé (> 10 min)", show=False)
         layer = _squares_layer(carreaux[carreaux["duree"] > 10], "carreaux", lambda r: _COULEURS[int(r["classe"])], 0.6)
@@ -559,10 +614,17 @@ def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *
     return m
 
 
-def _legende(m: folium.Map, seuil: int | None, mode: str | None) -> None:
+def _legende(m: folium.Map, seuil: int | None, mode: str | None, continu: bool = False) -> None:
     """Légende cohérente avec le mode : situation actuelle, avec la nouvelle offre, gain seulement."""
-    base = ('<b>Aujourd’hui : trajet en voiture vers un généraliste</b>'
-            + "".join(f'<div><i style="background:{_COULEURS[s_]};opacity:.75;"></i>{_LIB_CLASSE[s_]}</div>' for s_ in (10, 15, 20, 30, 99)))
+    if continu:
+        base = ('<b>Aujourd’hui : trajet en voiture vers un généraliste</b>'
+                + "".join(f'<div><i style="background:{_COULEURS_CONTINU[s_]};opacity:.8;"></i>{_LIB_CONTINU[s_]}</div>' for s_ in (5, 10, 15, 20, 30, 99, 0))
+                + '<div style="color:#6B6B68;font-size:10px;line-height:1.3;margin:2px 0 4px;">temps calculé depuis la route la plus proche '
+                  'de chaque maille de 500 m (OSRM, cabinets BPE 2025) · teinte claire : route à plus de 500 m, temps approché · '
+                  'pas une mesure exacte en chaque lieu</div>')
+    else:
+        base = ('<b>Aujourd’hui : trajet en voiture vers un généraliste</b>'
+                + "".join(f'<div><i style="background:{_COULEURS[s_]};opacity:.75;"></i>{_LIB_CLASSE[s_]}</div>' for s_ in (10, 15, 20, 30, 99)))
     communes = ('<b style="margin-top:6px;">Communes</b>'
                 '<div><i class="pt" style="background:#0A1938;"></i>généraliste présent (BPE 2025)</div>'
                 '<div><i class="pt" style="background:#D9772B;"></i>temps moyen &gt; 15 min</div>')
@@ -572,8 +634,9 @@ def _legende(m: folium.Map, seuil: int | None, mode: str | None) -> None:
                 '<div><i class="pin-mini"></i>nouvelle offre simulée (point hypothétique)</div>'
                 f'<div><i style="border:2px dashed {_NEUF};background:transparent;"></i>isochrone IGN ≤ {seuil} min</div>')
         if mode == "Avec la nouvelle offre":
-            scen += (f'<div><i style="background:{_COULEURS[10]};border:2px solid {_NEUF};"></i>zone dont la classe change : nouvelle couleur, '
-                     f'contour marine si elle passe sous {seuil} min</div>')
+            scen += (f'<div><i style="background:{_COULEURS[10]};border:2px solid {_NEUF};"></i>'
+                     + ("mailles dont le temps s’améliore : nouvelle couleur ; " if continu else "zone dont la classe change : nouvelle couleur, ")
+                     + f'contour marine = habitants passant sous {seuil} min (carreaux INSEE)</div>')
         else:
             scen += (f'<div><i style="background:{_NEUF};"></i>nouvellement couverts (passent sous {seuil} min)</div>'
                      '<div><i style="background:#1B5E3F;opacity:.6;"></i>rapprochés (déjà sous le seuil, trajet raccourci)</div>')
@@ -582,6 +645,23 @@ def _legende(m: folium.Map, seuil: int | None, mode: str | None) -> None:
     m.get_root().html.add_child(folium.Element(
         '<div class="leaflet-bottom leaflet-left" style="pointer-events:none;">'
         f'<div class="leaflet-control" style="margin:0 0 24px 12px;">{legend}</div></div>'))
+
+
+def _note_continu(dept: str, continu: dict | None) -> None:
+    """Sous la carte continue : ce qu'elle est, sa précision mesurée contre les carreaux INSEE."""
+    if not continu:
+        return
+    c = charger_controle_continu(dept) or {}
+    g = c.get("global") or {}
+    txt = ("Les surfaces colorées sont une grille routière de 500 m : pour chaque maille, temps en voiture (OSRM, réseau OpenStreetMap) "
+           "depuis la route la plus proche vers le cabinet de médecine générale le plus rapide (BPE 2025, y compris les départements voisins). "
+           "Les mailles sans route à moins de 2 km restent grises. Les habitants et les gains sont toujours comptés sur les carreaux INSEE.")
+    if g:
+        txt += (f" Contrôle sur les {g.get('carreaux', 0):,} carreaux habités du département : même classe de temps pour "
+                f"{g.get('concordance_pop', 0) * 100:.0f} % des habitants, écart médian {str(g.get('ecart_median_min', 0)).replace('.', ',')} min"
+                + (f" (rural {c['rural'].get('concordance_pop', 0) * 100:.0f} %, urbain {c['urbain'].get('concordance_pop', 0) * 100:.0f} %)" if c.get("rural") and c.get("urbain") else "")
+                + ".").replace(",", "\u202f").replace("\u202f ", ", ")
+    st.caption(txt)
 
 
 def _marqueur_offre(m: folium.Map, lon: float, lat: float, nom: str, libelle_point: str) -> None:
@@ -657,21 +737,28 @@ def _render_situation(dept: str, nom_dept: str, carreaux: pd.DataFrame, sit: pd.
 def _render_vue_departement(data, dept, nom_dept, carreaux, sit, zones, seuil, tot, loin, key_sim) -> None:
     """Étape 1 : explorer le département avant de simuler."""
     part_sup = float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) / tot
+    continu = charger_continu(dept)
+    lead = ("Les surfaces colorées montrent, pour chaque maille de 500 m, le temps de trajet en voiture depuis la route la plus proche vers le "
+            "cabinet de médecine générale le plus rapide (réseau routier OpenStreetMap, cabinets BPE 2025, y compris ceux des départements voisins). "
+            "Les zones grises n’ont pas de route carrossable à moins de 2 km. Les habitants et les gains restent comptés sur les carreaux INSEE 2025."
+            if continu else
+            "Les surfaces colorées montrent le temps de trajet en voiture des habitants vers le généraliste le plus "
+            "proche (INSEE 2025, zones construites à partir des carreaux de 200 m).")
     st.markdown('<div class="section-header" style="margin-top:14px;"><div class="section-eyebrow">EXPLORER</div>'
                 f'<h2 class="section-title">Zones bien et mal desservies <em>en {html.escape(nom_dept)}</em></h2>'
-                '<p class="section-lead">Les surfaces colorées montrent le temps de trajet en voiture des habitants vers le généraliste le plus '
-                'proche (INSEE 2025, zones construites à partir des carreaux de 200 m). Les secteurs orange et rouge sont ceux où une '
+                f'<p class="section-lead">{lead} Les secteurs orange et rouge sont ceux où une '
                 'implantation pourrait rapprocher des habitants ; choisissez ensuite une commune pour simuler.</p></div>', unsafe_allow_html=True)
     if part_sup < 0.01 and float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) < 1000:
         note = _urbain_note(dept, nom_dept, data["master"], part_sup, seuil)
         if note:
             st.markdown(f'<div class="sa-notice sa-notice--info">{note}</div>', unsafe_allow_html=True)
-    m = _carte_base(carreaux, zones, sit)
+    m = _carte_base(carreaux, zones, sit, continu=continu)
     _points_communes(m, sit)
     m.fit_bounds([[float(carreaux["lat"].min()), float(carreaux["lon"].min())], [float(carreaux["lat"].max()), float(carreaux["lon"].max())]], padding=(10, 10))
-    _legende(m, None, None)
+    _legende(m, None, None, continu=bool(continu))
     folium.LayerControl(collapsed=True).add_to(m)
     st_folium(m, use_container_width=True, height=640, returned_objects=[], key=f"ign_map_{dept}_vue")
+    _note_continu(dept, continu)
     # Secteurs pouvant bénéficier d'une intervention : communes avec le plus d'habitants au-delà du seuil
     pot = sit[sit[f"pop_sup_{seuil}"] >= 50].sort_values(f"pop_sup_{seuil}", ascending=False).head(8)
     if len(pot):
@@ -766,7 +853,8 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
     mode = v1.radio("Affichage de la carte", modes, index=1 if valide else 0, horizontal=True, key=f"ign_mode_{dept}_{int(valide)}")
     cadrage = v2.toggle("Cadrer sur le scénario", value=True, key=f"ign_cadrage_{dept}") if sim_geoms else False
     faible = mode == "Gain seulement"
-    m = _carte_base(carreaux, zones, sit, estompe=faible)
+    continu = charger_continu(dept)
+    m = _carte_base(carreaux, zones, sit, estompe=faible, continu=continu)
     if valide and mode != "Situation actuelle":
         from shapely.geometry import mapping as _mapping
         # Isochrone du seuil affichée ; les deux autres restent disponibles dans le sélecteur de couches
@@ -781,13 +869,29 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
                            tooltip=f"Isochrone IGN {s_} min depuis la nouvelle offre").add_to(fg)
             fg.add_to(m)
         if mode == "Avec la nouvelle offre":
-            change = com[com["classe_neuf"] < com["classe"]]
-            for cl in sorted(change["classe_neuf"].unique()):
-                g = _union_squares(change[change["classe_neuf"] == cl])
-                if g is not None:
-                    folium.GeoJson({"type": "Feature", "geometry": _mapping(g)}, name=f"Après : ≤ {int(cl)} min",
-                                   style_function=lambda f, c=_COULEURS[int(cl)]: {"fillColor": c, "color": c, "weight": 0.6, "fillOpacity": 0.8},
-                                   tooltip=f"Avec la nouvelle offre : ≤ {int(cl)} min").add_to(m)
+            grille = charger_grille(dept) if continu else None
+            if grille is not None:
+                # Carte continue : chaque maille routière contenue dans une isochrone IGN prend la classe de
+                # cette isochrone si elle est meilleure (même règle que pour les carreaux ; aucun habitant
+                # n'est compté ici, les gains restent calculés sur les carreaux INSEE).
+                gm = scenario(grille.rename(columns={"classe": "classe_grille"}).assign(classe=lambda d: d["classe_grille"].where(d["statut"] == "calcule", 99)), sim_geoms)
+                gm["classe_neuf_c"] = gm["classe_neuf"].map(lambda c: {10: 10, 15: 15, 20: 20}.get(int(c), 99))
+                gm["classe_c"] = gm["classe_grille"].astype(int)
+                ameliore = gm[(gm["statut"] == "calcule") & (gm["classe_neuf_c"] < gm["classe_c"])]
+                for cl in sorted(ameliore["classe_neuf_c"].unique()):
+                    g = _union_squares(ameliore[ameliore["classe_neuf_c"] == cl], half_m=250.0)
+                    if g is not None:
+                        folium.GeoJson({"type": "Feature", "geometry": _mapping(g)}, name=f"Après : ≤ {int(cl)} min (grille)",
+                                       style_function=lambda f, c=_COULEURS_CONTINU[int(cl)]: {"fillColor": c, "color": c, "weight": 0.4, "fillOpacity": 0.85},
+                                       tooltip=f"Avec la nouvelle offre : ≤ {int(cl)} min (maille routière dans l’isochrone IGN)").add_to(m)
+            else:
+                change = com[com["classe_neuf"] < com["classe"]]
+                for cl in sorted(change["classe_neuf"].unique()):
+                    g = _union_squares(change[change["classe_neuf"] == cl])
+                    if g is not None:
+                        folium.GeoJson({"type": "Feature", "geometry": _mapping(g)}, name=f"Après : ≤ {int(cl)} min",
+                                       style_function=lambda f, c=_COULEURS[int(cl)]: {"fillColor": c, "color": c, "weight": 0.6, "fillOpacity": 0.8},
+                                       tooltip=f"Avec la nouvelle offre : ≤ {int(cl)} min").add_to(m)
             g_gain = _union_squares(gain)
             if g_gain is not None:
                 folium.GeoJson({"type": "Feature", "geometry": _mapping(g_gain)}, name=f"Passe sous {seuil} min",
@@ -812,9 +916,10 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
         m.fit_bounds([[b[1], b[0]], [b[3], b[2]]], padding=(20, 20))
     else:
         m.fit_bounds([[float(carreaux["lat"].min()), float(carreaux["lon"].min())], [float(carreaux["lat"].max()), float(carreaux["lon"].max())]], padding=(10, 10))
-    _legende(m, seuil, mode)
+    _legende(m, seuil, mode, continu=bool(continu))
     folium.LayerControl(collapsed=True).add_to(m)
     st_folium(m, use_container_width=True, height=580, returned_objects=[], key=f"ign_map_{dept}_{choix}_{seuil}_{mode}_{cadrage}")
+    _note_continu(dept, continu)
 
     # 4. Tableau des communes bénéficiaires
     if len(gpc):

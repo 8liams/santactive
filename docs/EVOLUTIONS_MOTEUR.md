@@ -468,3 +468,56 @@ département. Non intégré au score.
   l'établissement le plus proche » corrigés en « vers un généraliste ».
 - **Distinction maintenue** : temps de trajet (INSEE), présence d'un généraliste (BPE),
   disponibilité effective des soins (non mesurée : délais, capacité).
+
+## 20. Carte continue des temps d'accès : expérimentation Creuse, Dordogne, Gironde (28 octobre 2026)
+
+- **Méthode (approche B validée)** : grille Lambert-93 de 500 m sur le département (contours
+  communaux API Géo), temps en voiture OSRM local (profil voiture, OpenStreetMap, six
+  extraits Geofabrik fusionnés, 1,4 Go, graphe construit en 7 min, pic mémoire 5,6 Go)
+  depuis la route la plus proche de chaque maille vers le plus rapide des 30 cabinets les
+  plus proches à vol d'oiseau (BPE 2025 géolocalisée, type D265, qualité A/B ou M repérée
+  à la voie ; 900 cabinets exclus en France, placés au hasard dans la commune), cabinets
+  du département et des voisins dans un rayon de 30 km. Statuts : calculé (route à moins
+  de 500 m), approché (route entre 500 m et 2 km, teinte claire), non calculé (gris).
+  Polygones par (classe, statut), découpés au contour, simplifiés à 60 m.
+  Script : `scripts/donnees/carte_continue.py` ; sorties `static/geo/grille_mg_<dept>.csv.gz`,
+  `continu_mg_<dept>.json`, `controle_continu_<dept>.json`.
+- **Témoin K** : avec 10 voisins, 2,7 % des mailles de Gironde manquaient le cabinet le plus
+  rapide (Garonne, estuaire : jusqu'à 11 min d'écart) ; 20 → 0,6 % ; 30 retenu (témoin 60 :
+  0 % en Creuse et Dordogne, 0,9 % en Gironde, écart maximal 4,8 min).
+- **Contrôle contre les carreaux INSEE 2025** (carreau → maille la plus proche) :
+
+  | Département | Carreaux | Même classe (habitants) | Écart médian | Accord seuil 10 | Accord seuil 15 | Accord seuil 20 |
+  |---|---|---|---|---|---|---|
+  | Creuse (rural) | 15 870 | 84,8 % (rural 81,9 %, urbain 99,4 %) | −0,4 min | 90,0 % | 93,5 % | 98,2 % |
+  | Dordogne (mixte) | 48 997 | 88,0 % (rural 86,3 %, urbain 94,2 %) | +0,1 min | 93,4 % | 97,2 % | 99,6 % |
+  | Gironde (urbain) | 56 520 | 94,9 % (rural 89,4 %, urbain 97,7 %) | +0,1 min | 96,7 % | 99,1 % | 99,7 % |
+
+  Les désaccords sont concentrés aux limites de classes (90ᵉ centile de l'écart absolu :
+  1,7 à 2,9 min) ; la grille est légèrement plus rapide que l'INSEE en Creuse (réseau 2026
+  contre 2022, départ depuis la route et non depuis le carreau). Aucun carreau habité en
+  zone « non calculé » (Gironde : 4 sur 56 520).
+- **Volumes et performances** : calcul 16 à 52 s par département (dont témoin), fichiers
+  0,9 à 1,8 Mo par département (grille + polygones), 4 Mo pour les trois ; chargement
+  < 0,05 s ; pages du simulateur en 4 à 6 s dans le navigateur (inchangé).
+- **Application** : couche continue utilisée comme fond lorsqu'elle existe (sinon zones
+  INSEE habitées), zones INSEE et carroyage en couches facultatives, légende à six classes
+  et « non calculé », note de précision sous la carte (concordance mesurée), recoloration
+  des mailles contenues dans l'isochrone IGN dans « Avec la nouvelle offre » ; gains et
+  populations toujours sur les carreaux INSEE.
+
+## 21. V1 figée pour la mise en production (28 octobre 2026)
+
+- Fonctionnalités de la V1 : parcours territorial (contrôle unifié, territoire de
+  référence, Diagnostic par niveau), Prioriser, Diagnostic national / régional /
+  départemental / communal, Comparer, simulateur d'implantation (98 départements,
+  cartographie INSEE par zones habitées, isochrones IGN, trois modes), leviers,
+  exports PDF, Méthodologie. Règles actives : APL DREES 2024, temps INSEE 2025 (score,
+  communes critiques, leviers, exports), rangs uniques, pondérations inchangées.
+- Carte continue (phase C) : désactivée en production (`SANTACTIVE_CARTE_CONTINUE=off`
+  par défaut) ; code conservé inerte ; données expérimentales (Creuse, Dordogne,
+  Gironde) et pipeline conservés sur la branche locale `v2/carte-continue`, non
+  publiée. Reprise V2 : `docs/ETUDE_CARTE_CONTINUE.md` et §20.
+- Déploiement : dépôt GitHub public `8liams/santactive`, branche `main`, Streamlit
+  Community Cloud (webhook `share.streamlit.io`, application `santactive.streamlit.app`) ;
+  Dockerfile et `railway.toml` conservés pour un hébergement alternatif.
