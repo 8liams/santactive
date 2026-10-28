@@ -188,6 +188,8 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
     # recalcul direct sur le fichier communal DREES 2023 : 11 210 951 hab. (16,6 %).
     pop_sous_seuil = float((part_apl * pop).sum()) if not part_apl.empty and not pop.empty else float("nan")
     pop_15 = float(num("pop_communes_critiques").sum()) if "pop_communes_critiques" in master.columns else float("nan")
+    nb_15 = float(num("nb_communes_critiques").sum()) if "nb_communes_critiques" in master.columns else float("nan")
+    _fmt_m = lambda v: (f"{v / 1e6:.1f}\u202fM" if v >= 1e6 else f"{int(v):,}".replace(",", "\u202f")) if pd.notna(v) else "N/D"
     nb_depts_sous_2_5 = int((num("apl_dept") < 2.5).sum())
     nb_depts_sous_med = int((num("apl_dept") < apl_med).sum()) if pd.notna(apl_med) else 0
 
@@ -208,8 +210,8 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
               "habitants d\u2019une commune sous APL 2,5, soit 16,6\u202f% · DREES 2023")
         + kpi("Généralistes", f"{med_med:.0f}" if pd.notna(med_med) else "N/D", " /100k hab.",
               "densité médiane · RPPS 1ᵉʳ janv. 2026", "med_100k")
-        + kpi("À plus de 15 min", f"{pop_15 / 1e6:.1f}\u202fM" if pd.notna(pop_15) else "N/D", " hab.",
-              "habitants des communes à plus de 15 min d\u2019un généraliste · indicateur interne", "temps_acces")
+        + kpi("Communes à plus de 15 min", f"{int(nb_15):,}".replace(",", "\u202f") if pd.notna(nb_15) else "N/D", " communes",
+              f"{_fmt_m(pop_15)} habitants · temps d\u2019accès interne, partiel (0 = offre dans la commune)", "temps_acces")
         + '</div>'
         '<div class="nat-zones">'
         f'<div class="nat-zone" style="background:#A51C30;"><b>{nb_depts_sous_2_5}</b>départements sous le repère APL 2,5</div>'
