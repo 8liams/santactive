@@ -3032,10 +3032,10 @@ img[alt="ESData, ESD Paris"] {
         flex: 1 1 100% !important; min-width: 100% !important;
     }
     .st-key-fiche_actions:not(#_) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) {
-        flex: 1 1 46% !important;   /* deux boutons (copier, e-mail) */
+        flex: 1 1 100% !important; min-width: 100% !important;   /* copier + e-mail sur leur ligne */
     }
     .st-key-fiche_actions:not(#_) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(n+3) {
-        flex: 1 1 22% !important;
+        flex: 1 1 calc(50% - 4px) !important; max-width: calc(50% - 4px) !important;
     }
     .st-key-fiche_actions .fiche-topbar .breadcrumb { flex-wrap: wrap; row-gap: 2px; }
     .map-legend { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
