@@ -51,6 +51,7 @@ def render(data: dict) -> None:
 
     render_topbar(r, data)
     render_header(r, master)
+    _render_parcours(r)
     render_diagnostic(r, master, data)
     render_recommandations(r, master, data)
     render_scorecard(r, master)
@@ -168,6 +169,27 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         '</div>'
         '</div>'
         '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_parcours(r: pd.Series) -> None:
+    """Liens de parcours : communes fragiles, simulation IGN (si pilote), région, comparaison."""
+    from .acces_ign import pilotes_disponibles
+
+    dept = str(r.get("dept", "")).zfill(2)
+    region_code = str(r.get("Code région", ""))
+    links = [f'<a href="#communes">Communes fragiles ↓</a>']
+    if dept in pilotes_disponibles():
+        links.append(f'<a class="primary" href="{internal_href("acces", dept_code=dept)}" target="_self">Simuler une implantation (pilote IGN) →</a>')
+    links.append(f'<a href="{internal_href("comparer")}&depts={dept}" target="_self">Comparer →</a>')
+    if region_code:
+        links.append(f'<a href="{internal_href("region", region_code=region_code)}" target="_self">Région →</a>')
+    st.markdown(
+        '<div class="sa-parcours">' + "".join(links) + '</div>'
+        '<div class="sa-couverture">Couverture : <b>score et diagnostic</b> nationaux (100 départements) · '
+        '<b>communes</b> : temps d\u2019accès et prix, partiels · <b>simulation routière</b> : pilote expérimental'
+        + (" (disponible ici)" if dept in pilotes_disponibles() else " (Cher uniquement pour l\u2019instant)") + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -528,6 +550,7 @@ SINGLE_COMMUNE_DEPTS = {"75"}  # extensible si d'autres identifiés
 
 def render_carte_communale(r: pd.Series, data: dict) -> None:
     from ..commune_opportunity import (
+        CAPACITE_LEGENDE,
         action_priority_legend_items,
         besoin_legend_items,
         build_commune_code_lookup,
@@ -537,15 +560,17 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     from ..components.maps import _fetch_communes_geojson, fetch_communes_population
 
     st.markdown(
+        '<div id="communes"></div>'
         '<div class="section-header">'
         '<div class="section-eyebrow">ZOOM TERRITORIAL</div>'
         '<h2 class="section-title">Communes prioritaires pour une '
         '<em>action de santé.</em></h2>'
         '<p class="section-lead">'
-        "Deux lectures distinctes, au choix : le <strong>besoin d\u2019accès</strong> (temps de trajet "
-        "vers une offre de médecine générale, donnée observée) et la <strong>priorité d\u2019action</strong> "
-        "(score qui croise ce besoin, la population de la commune et les conditions de déploiement). "
-        "La carte et le classement suivent la même lecture."
+        "Trois lectures distinctes, au choix : le <strong>besoin d\u2019accès</strong> (temps de trajet "
+        "vers une offre de médecine générale), la <strong>capacité</strong> (APL communal DREES : une offre "
+        "présente peut être insuffisante) et la <strong>priorité d\u2019action</strong> (score qui croise le besoin "
+        "d\u2019accès, la population et des conditions de déploiement approchées). La carte et le classement "
+        "suivent la même lecture ; la faisabilité réelle se confirme localement."
         '</p>'
         '</div>',
         unsafe_allow_html=True,
@@ -610,7 +635,8 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
 
     # ── Choix de la lecture ──────────────────────────────────────────────────
     modes = {"Besoin d\u2019accès (temps de trajet)": "besoin",
-             "Priorité d\u2019action (besoin × population × faisabilité)": "priorite"}
+             "Capacité (APL communal)": "capacite",
+             "Priorité d\u2019action (besoin × population × déploiement)": "priorite"}
     choix = st.radio("Lecture", list(modes), horizontal=True, key=f"commune_mode_{dept_code}",
                      label_visibility="collapsed")
     mode = modes[choix]
@@ -624,12 +650,22 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
                 f"la plus proche (indicateur interne, 0 = offre dans la commune). {nb_15} communes sont à plus de "
                 f"15 min, soit {int(pop_15):,} habitants. Le classement liste les communes les plus éloignées, "
                 f"avec leur population : il mesure une distance, pas un volume.").replace(",", "\u202f")
+    elif mode == "capacite":
+        apl_c = pd.to_numeric(comm_data["apl_commune"], errors="coerce")
+        nb_sous = int((apl_c < 2.5).sum()); nb_offre_sous = int(((apl_c < 2.5) & (temps_num <= 0)).sum())
+        pop_sous = pd.to_numeric(comm_data.loc[apl_c < 2.5, "population"], errors="coerce").sum()
+        note = (f"<strong>Capacité.</strong> APL communal DREES 2023 (consultations de médecine générale accessibles par an "
+                f"et par habitant, repère de sous-densité 2,5). {nb_sous} communes sont sous le repère, soit {int(pop_sous):,} "
+                f"habitants, dont {nb_offre_sous} disposent pourtant d\u2019une offre sur place : la présence d\u2019un praticien "
+                f"n\u2019implique pas une capacité suffisante. Mesure théorique (offre pondérée par la distance), pas un délai "
+                f"observé.").replace(",", "\u202f")
     else:
         note = (f"<strong>Priorité d\u2019action.</strong> Score 0–100 qui croise le besoin d\u2019accès (45\u202f%), "
-                f"la population de la commune (35\u202f%) et les conditions de déploiement mesurées par le prix "
-                f"au m² (20\u202f%), en rangs percentiles au sein du département. Les {nb_sur_place} communes qui "
-                f"disposent déjà d\u2019une offre ne sont pas classées. La population affichée est celle de la "
-                f"commune (INSEE), pas un impact sanitaire.")
+                f"la population de la commune (35\u202f%) et des conditions de déploiement approchées par le prix "
+                f"au m² (20\u202f%, proxy partiel : il ne dit rien du foncier disponible, des locaux ou des candidats à "
+                f"l\u2019installation), en rangs percentiles au sein du département. Les {nb_sur_place} communes qui "
+                f"disposent déjà d\u2019une offre ne sont pas classées ici (voir la lecture capacité). La population "
+                f"affichée est celle de la commune (INSEE), pas un impact sanitaire. Faisabilité à confirmer localement.")
     st.markdown(f'<p class="dim-switch-note">{note}</p>', unsafe_allow_html=True)
 
     comm_data["tt_score"] = comm_data["score_action"].apply(lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "N/D")
@@ -644,12 +680,19 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         etabs_overlay.columns = ["lat", "lon", "nom"]
         etabs_overlay = etabs_overlay.dropna(subset=["lat", "lon"]).head(50)
 
+    comm_data["tt_apl"] = comm_data["apl_commune"].apply(lambda x: f"{float(x):.1f}" if pd.notna(x) else "N/D")
     if mode == "besoin":
         comm_data["map_color"] = comm_data["besoin_color"]
         comm_data["map_value"] = temps_num
         label, legend = "Besoin d\u2019accès (temps de trajet)", besoin_legend_items()
         fields = ["nom", "tt_temps", "besoin_label", "tt_pop"]
         aliases = ["Commune", "Temps d\u2019accès", "Classe", "Habitants"]
+    elif mode == "capacite":
+        comm_data["map_color"] = comm_data["capacite_color"]
+        comm_data["map_value"] = pd.to_numeric(comm_data["apl_commune"], errors="coerce")
+        label, legend = "Capacité (APL communal 2023)", list(CAPACITE_LEGENDE)
+        fields = ["nom", "tt_apl", "capacite_label", "tt_temps", "tt_pop"]
+        aliases = ["Commune", "APL communal", "Lecture", "Temps d\u2019accès", "Habitants"]
     else:
         comm_data["map_color"] = comm_data["color_hex"]
         comm_data["map_value"] = comm_data["score_action"]
@@ -679,6 +722,10 @@ def _render_top_communes_action(comm_data: pd.DataFrame, mode: str = "priorite")
         titre = 'Top 10 des communes <em>les plus éloignées</em> d\u2019une offre.'
         lead = "Temps de trajet décroissant, puis population. Habitants = population municipale INSEE."
         col4 = "Classe de besoin"
+    elif mode == "capacite":
+        titre = 'Top 10 des communes <em>sous le repère APL 2,5</em> les plus peuplées.'
+        lead = "APL communal DREES 2023 inférieur à 2,5, avec ou sans offre sur place. Habitants = population municipale INSEE."
+        col4 = "Lecture capacité"
     else:
         titre = 'Top 10 des communes où une action <em>serait prioritaire</em>.'
         lead = ("Score d\u2019action décroissant (besoin, population, faisabilité). "
@@ -704,6 +751,10 @@ def _render_top_communes_action(comm_data: pd.DataFrame, mode: str = "priorite")
         temps_str = f"{float(temps):.0f} min" if pd.notna(temps) else "N/D"
         if mode == "besoin":
             cls, color = str(row.get("besoin_label", "N/D")), str(row.get("besoin_color", "#E8E6DD"))
+        elif mode == "capacite":
+            apl_v = row.get("apl_commune")
+            cls = f'APL {float(apl_v):.1f} · {str(row.get("capacite_label", "N/D"))}' if pd.notna(apl_v) else "N/D"
+            color = str(row.get("capacite_color", "#E8E6DD"))
         else:
             sc = row.get("score_action")
             cls = f'{str(row.get("niveau", "N/D"))} · {float(sc):.0f}/100' if pd.notna(sc) else "N/D"
@@ -860,6 +911,11 @@ def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
         meta += f'<div class="reco-meta-item"><span class="lbl">Population observée</span><span class="val">{esc(pop_obs)}</span></div>'
     if secteurs:
         meta += f'<div class="reco-meta-item wide"><span class="lbl">Communes et secteurs concernés</span><span class="val">{esc(secteurs)}</span></div>'
+    from .acces_ign import pilotes_disponibles
+    dept = str(r.get("dept", "")).zfill(2)
+    if reco.get("kind") in ("antennes", "navettes", "telemedecine", "msp", "attractivite_mg") and dept in pilotes_disponibles():
+        meta += (f'<div class="reco-meta-item wide"><a class="reco-link" href="{internal_href("acces", dept_code=dept)}" target="_self">'
+                 f'Simuler une implantation sur ce territoire (pilote IGN) →</a></div>')
 
     st.html(
         '<div class="reco-card reco-card-neutral">'

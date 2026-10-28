@@ -180,10 +180,16 @@ def _generate_region_synthesis(
             f"<strong>de fortes disparités territoriales</strong> "
             f"entre départements (écart de {ecart:.0f} points)."
         )
-    elif nb_crit == 0:
+    elif nb_crit == 0 and pd.notna(ecart) and ecart <= 12:
         lead = (
             f"<strong>{region_name}</strong> affiche un profil "
-            f"<strong>plutôt homogène</strong> à l'échelle régionale."
+            f"<strong>plutôt homogène</strong> à l'échelle régionale "
+            f"(écart de {ecart:.0f} points entre départements)."
+        )
+    elif nb_crit == 0:
+        lead = (
+            f"<strong>{region_name}</strong> ne compte <strong>aucun département en zone critique</strong>, "
+            f"mais des écarts de {ecart:.0f} points entre départements."
         )
     else:
         lead = (
@@ -197,7 +203,7 @@ def _generate_region_synthesis(
 
     detail = f" {tension.capitalize()}."
     if public != "n.d.":
-        detail += f" Public clé\u202f: <em>{public}</em>."
+        detail += f" Problématique de santé dominante\u202f: <em>{public}</em>."
 
     patho_labels = [
         _PUBLIC_SHORT.get(p["label"], p["label"])
@@ -405,8 +411,11 @@ def render_ou_agir(priorities: pd.DataFrame) -> None:
 def render_pour_qui(publics: list[dict]) -> None:
     st.markdown(
         '<div class="section-header" style="margin-top:56px;">'
-        '<div class="section-eyebrow">POUR QUI AGIR</div>'
-        '<h2 class="section-title">Publics <em>prioritaires.</em></h2>'
+        '<div class="section-eyebrow">SUR QUOI AGIR</div>'
+        '<h2 class="section-title">Problématiques de santé <em>prioritaires.</em></h2>'
+        '<p class="section-lead">Pathologies et vieillissement qui ressortent, en position nationale, dans les '
+        'départements de la région. Le volume est le nombre de patients pris en charge observé (CNAM 2023) ou '
+        'd\u2019habitants (INSEE) : une mesure de la population exposée, pas un impact attendu.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -431,7 +440,7 @@ def render_pour_qui(publics: list[dict]) -> None:
                 f'<div class="reco-stats" style="margin:14px 0;">'
                 f'<div class="reco-stat">'
                 f'<span class="val">{volume}</span>'
-                f'<span class="lbl">Volume concerné</span>'
+                f'<span class="lbl">Population exposée (observée)</span>'
                 f'</div>'
                 f'</div>'
                 f'<div style="font-size:12px;color:#4A4A4A;margin-bottom:8px;">'
@@ -450,7 +459,7 @@ def render_action_prioritaire(card: dict[str, str] | None) -> None:
 
     items = (
         ("Action recommandée", card["action"]),
-        ("Population potentiellement concernée", card["population"]),
+        ("Population des départements ciblés", card["population"]),
         ("Territoires prioritaires", card["territoires"]),
         ("Faisabilité", card["faisabilite"]),
         ("Horizon", card["horizon"]),
@@ -649,9 +658,12 @@ def render_diagnostic_region(region_depts: pd.DataFrame, region_name: str) -> No
             f"à {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
     else:
+        ecart = float(best["score_global"]) - float(worst["score_global"])
         phrase = (
-            f"Situation homogène. "
-            f"Écart de {worst['Nom du département']} ({worst['score_global']:.1f}/100) "
+            (f"Aucun département en zone critique, situation homogène (écart de {ecart:.0f} points). "
+             if ecart <= 12 else
+             f"Aucun département en zone critique, mais des écarts marqués ({ecart:.0f} points). ")
+            + f"De {worst['Nom du département']} ({worst['score_global']:.1f}/100) "
             f"à {best['Nom du département']} ({best['score_global']:.1f}/100)."
         )
 

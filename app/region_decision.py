@@ -285,7 +285,7 @@ def _build_pourquoi_levier(
             return (
                 f"{communes} communes éloignées des établissements recensées "
                 f"sur {n_depts} département{'s' if n_depts > 1 else ''} "
-                f"({pop_fmt.replace(' personnes', '')} habitants potentiellement touchés)."
+                f"({pop_fmt.replace(' personnes', '')} habitants dans ces départements, INSEE)."
             )
 
     justification = str(lev.get("justification", "")).strip()
@@ -304,7 +304,7 @@ def _build_pourquoi_maintenant(lev: dict, amplitude_pop: str) -> str:
     if tension:
         return (
             f"{tension.capitalize()} sur {n} département{'s' if n > 1 else ''} "
-            f"— population des départements ciblés\u202f: {amplitude_pop}."
+            f"— {amplitude_pop}."
         )
     return (
         f"Convergence des indicateurs régionaux sur {n} département"

@@ -317,7 +317,7 @@ def _specialites_faibles(p, seuil=30) -> list[str]:
         pc = p.get(f"pct_dens_{k}")
         if pd.notna(pc) and pc < seuil:
             out.append((pc, lab, p.get(f"dens_{k}"), p["med"].get(f"dens_{k}")))
-    return [f"{lab} ({_f(d)} /100k contre {_f(m)} en médiane)" for _, lab, d, m in sorted(out)]
+    return [f"{lab} : {_f(d)} pour 100 000 hab. (médiane des départements : {_f(m)})" for _, lab, d, m in sorted(out)]
 
 
 # ── Gabarits de texte ─────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ def _t_msp(p):
         "probleme": f"L'accès aux généralistes est insuffisant : {_pc(p['part_pop_apl_inf_2_5'])} des "
                     f"habitants {p['nom_de']} vivent dans une commune sous le repère APL de 2,5 "
                     f"(APL pondéré {_f(p['apl_dept'])}, médiane des départements {_f(p['med']['apl_dept'])}).",
-        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])} consult./an/hab.",
+        "indicateurs": [f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane des départements : {_f(p['med'].get('apl_dept'))})",
                         f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous 2,5",
                         f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k (médiane {_f(p['med']['med_gen_pour_100k'], '.0f')})",
                         f"{_f(p['centres_sante_100k'], '.1f')} centres de santé /100k"],
@@ -346,8 +346,8 @@ def _t_attractivite(p):
     return {
         "probleme": f"La densité de généralistes {p['nom_de']} ({_f(p['med_gen_pour_100k'], '.0f')} /100k) "
                     f"se situe dans le {p['pct_med_gen_pour_100k']:.0f}ᵉ percentile national.",
-        "indicateurs": [f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k (DREES 2026)",
-                        f"APL pondéré {_f(p['apl_dept'])}",
+        "indicateurs": [f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes pour 100 000 hab. (médiane : {_f(p['med'].get('med_gen_pour_100k'), '.0f')} · DREES 2026)",
+                        f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})",
                         f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous 2,5"],
         "action": "Mobiliser les aides à l'installation et au maintien (zonage ZIP/ZAC, contrat de "
                   "début d'exercice, guichet unique, accueil des internes et docteurs juniors).",
@@ -364,7 +364,7 @@ def _t_assistants(p):
         "probleme": f"Les généralistes {p['nom_de']} sont peu nombreux rapportés aux habitants "
                     f"({_f(p['med_gen_pour_100k'], '.0f')} /100k) et l'APL pondéré ({_f(p['apl_dept'])}) "
                     "reste sous la médiane : le temps médical disponible est la contrainte.",
-        "indicateurs": [f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k",
+        "indicateurs": [f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes pour 100 000 hab. (médiane : {_f(p['med'].get('med_gen_pour_100k'), '.0f')})",
                         f"APL pondéré {_f(p['apl_dept'])} (médiane {_f(p['med']['apl_dept'])})"],
         "action": "Développer les assistants médicaux et les protocoles de coopération "
                   "(infirmiers en pratique avancée, pharmaciens) pour augmenter la patientèle "
@@ -381,7 +381,7 @@ def _t_sas(p):
         "probleme": f"{p['nom_sujet']} cumule une population urbaine importante ({_n(p['population_num'])} hab.) "
                     f"et un APL pondéré de {_f(p['apl_dept'])} : les demandes de soins non programmés "
                     "se reportent sur les urgences.",
-        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k",
+        "indicateurs": [f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})", f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes pour 100 000 hab. (médiane : {_f(p['med'].get('med_gen_pour_100k'), '.0f')})",
                         f"{_f(p['structures_pour_100k'])} structures hospitalières /100k"],
         "action": "Consolider le service d'accès aux soins (SAS) et la régulation des soins non "
                   "programmés, avec des créneaux dédiés en centres et maisons de santé.",
@@ -430,7 +430,7 @@ def _t_teleconsultation(p):
     return {
         "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {_pc(p['part_pop_apl_inf_2_5'])} des habitants sont sous le repère APL "
                     f"et le temps d'accès médian atteint {_f(p['temps_acces_median'], '.0f')} min.",
-        "indicateurs": [f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous APL 2,5",
+        "indicateurs": [f"{_pc(p['part_pop_apl_inf_2_5'])} de la population dans une commune sous le repère APL 2,5",
                         f"temps d'accès médian {_f(p['temps_acces_median'], '.0f')} min",
                         f"{int(p['nb_communes_critiques'])} communes à plus de 15 min"],
         "action": "Installer des points de téléconsultation assistée (pharmacies, MSP, mairies) "
@@ -583,7 +583,7 @@ def _t_chroniques(p):
                     f"aux généralistes limité (APL pondéré {_f(p['apl_dept'])}).",
         "indicateurs": [f"{PATHO_LABELS[k]} : {_f(p.get(f'prevstd_{k}'), '.2f')} % standardisée"
                         for k in ("diabete", "cardio", "respi") if pd.notna(p.get(f"prevstd_{k}"))]
-                       + [f"APL pondéré {_f(p['apl_dept'])}"],
+                       + [f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})"],
         "action": "Organiser le télésuivi et l'éducation thérapeutique des patients chroniques "
                   "(infirmiers en pratique avancée, pharmaciens, télésurveillance remboursée).",
         "pourquoi": "Quand les généralistes sont peu disponibles, le suivi délégué et à distance "
@@ -614,7 +614,7 @@ def _t_mediation(p):
         "probleme": f"{p['nom_sujet']}, département urbain dense, présente un APL pondéré de {_f(p['apl_dept'])} et "
                     f"une prévalence standardisée du diabète de {_f(p['prevstd_diabete'], '.2f')} % "
                     f"(médiane {_f(p['med']['prevstd_diabete'], '.2f')} %).",
-        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"diabète standardisé {_f(p['prevstd_diabete'], '.2f')} %",
+        "indicateurs": [f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})", f"diabète standardisé {_f(p['prevstd_diabete'], '.2f')} %",
                         f"{_f(p['centres_sante_100k'])} centres de santé /100k"],
         "action": "Développer la médiation en santé et les centres de santé communautaires dans les "
                   "quartiers où le recours aux soins est faible.",
@@ -629,7 +629,7 @@ def _t_ville_hopital(p):
     return {
         "probleme": f"{p['nom_sujet']} dispose de {int(p['nb_hopitaux'])} sites hospitaliers (CH, CHR) pour une "
                     f"patientèle chronique importante et un APL pondéré de {_f(p['apl_dept'])}.",
-        "indicateurs": [f"{int(p['nb_hopitaux'])} sites CH/CHR", f"APL pondéré {_f(p['apl_dept'])}",
+        "indicateurs": [f"{int(p['nb_hopitaux'])} sites CH/CHR", f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})",
                         f"{_n(p['patients_cardio'])} patients cardio-neuro-vasculaires"],
         "action": "Structurer la coordination ville-hôpital : dispositif d'appui à la coordination (DAC), "
                   "sorties d'hospitalisation organisées, lettres de liaison et messagerie sécurisée.",
@@ -647,8 +647,8 @@ def _t_dom(p):
     return {
         "probleme": f"{p['nom_sujet']} cumule un APL pondéré de {_f(p['apl_dept'])} ({_pc(p['part_pop_apl_inf_2_5'])} de la "
                     f"population sous 2,5) et des contraintes géographiques ultramarines.{note}",
-        "indicateurs": [f"APL pondéré {_f(p['apl_dept'])}", f"{_pc(p['part_pop_apl_inf_2_5'])} sous APL 2,5",
-                        f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k",
+        "indicateurs": [f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})", f"{_pc(p['part_pop_apl_inf_2_5'])} de la population sous le repère APL 2,5",
+                        f"{_f(p['med_gen_pour_100k'], '.0f')} généralistes pour 100 000 hab. (médiane : {_f(p['med'].get('med_gen_pour_100k'), '.0f')})",
                         f"{_f(p['pct_moins_25'])} % de moins de 25 ans"],
         "action": "Adapter l'offre aux spécificités ultramarines : télémédecine avec les CHU de référence, "
                   "équipes mobiles (fluviales ou héliportées selon le territoire), centres délocalisés "
@@ -673,7 +673,7 @@ def _t_maintien(p):
     probleme = (f"{p['nom_sujet']} ne déclenche aucun signal d'alerte départemental parmi les conditions suivies "
                 f"(APL pondéré {_f(p['apl_dept'])}, {_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k, "
                 "prévalences et démographie dans la norme).")
-    indicateurs = [f"score global {_f(p['score_global'])}/100", f"APL pondéré {_f(p['apl_dept'])}"]
+    indicateurs = [f"score global {_f(p['score_global'])}/100", f"APL pondérée {_f(p['apl_dept'])} consult./an/hab. (médiane : {_f(p['med'].get('apl_dept'))})"]
     action = ("Maintenir l'offre et anticiper les départs en retraite des généralistes ; partager les "
               "organisations qui fonctionnent avec les départements voisins.")
     if poches:

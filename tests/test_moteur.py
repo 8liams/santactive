@@ -335,6 +335,103 @@ class TestInterface(unittest.TestCase):
         self.assertTrue(recos[0]["secteurs"])
 
 
+class TestParcoursEtSimulation(unittest.TestCase):
+    """Simulation IGN (calcul pur), lecture capacité, liens de parcours, formulations régionales."""
+
+    def test_simulation_ign_classes_et_gains(self):
+        from app.pages.acces_ign import gains, preparer, scenario
+
+        d = {"communes": [
+            {"code_insee": "1", "nom": "Offre", "population": 1000, "temps_ign_min": 0, "classe_iso_min": 10, "lon": 0.0, "lat": 0.0},
+            {"code_insee": "2", "nom": "Proche", "population": 500, "temps_ign_min": 17.4, "classe_iso_min": 15, "lon": 0.5, "lat": 0.0},
+            {"code_insee": "3", "nom": "Loin", "population": 300, "temps_ign_min": 27.0, "classe_iso_min": 30, "lon": 1.0, "lat": 0.0},
+            {"code_insee": "4", "nom": "TresLoin", "population": 200, "temps_ign_min": None, "classe_iso_min": 99, "lon": 5.0, "lat": 5.0},
+        ]}
+        com = preparer(d)
+        self.assertEqual(com.set_index("nom").loc["Offre", "classe_avant"], 0)
+        # itinéraire 17 min mais isochrone 15 : la plus favorable est retenue (cas Jouet-sur-l'Aubois)
+        self.assertEqual(com.set_index("nom").loc["Proche", "classe_avant"], 15)
+        self.assertTrue(com.set_index("nom").loc["Proche", "divergence"])
+        self.assertEqual(com.set_index("nom").loc["TresLoin", "classe_avant"], 99)
+        # nouvelle offre à « Loin » : carré de 0,8° autour, isochrones 10 et 15 identiques
+        carre = {"type": "Polygon", "coordinates": [[[0.2, -0.4], [1.8, -0.4], [1.8, 0.4], [0.2, 0.4], [0.2, -0.4]]]}
+        com2 = scenario(com, {10: carre, 15: carre})
+        gain, rapp = gains(com2, 15)
+        self.assertEqual(gain["nom"].tolist(), ["Loin"])          # 20–30 min → ≤ 10 min
+        self.assertEqual(rapp["nom"].tolist(), ["Proche"])        # déjà ≤ 15, passe à ≤ 10
+        gain20, _ = gains(com2, 20)
+        self.assertEqual(len(gain20), 1)
+        self.assertNotIn("Offre", rapp["nom"].tolist())
+        self.assertNotIn("TresLoin", com2.loc[com2["classe_apres"] <= 20, "nom"].tolist())
+
+    def test_lecture_capacite(self):
+        from app.commune_opportunity import capacite_class, top_communes_for_action
+
+        self.assertIn("capacité insuffisante", capacite_class(1.6, 0)[0])
+        self.assertEqual(capacite_class(3.4, 0)[0], "Offre présente, APL ≥ 3")
+        self.assertEqual(capacite_class(2.0, 12)[0], "Sans offre sur place, APL < 2,5")
+        self.assertEqual(capacite_class(float("nan"), 0)[0], "N/D")
+        df = pd.DataFrame({"commune": ["A", "B", "C"], "population": [100, 5000, 300], "temps_acces": [0, 0, 20],
+                           "score_action": [10, 20, 30], "apl_commune": [1.5, 3.2, 2.1]})
+        top = top_communes_for_action(df, limit=10, mode="capacite")
+        self.assertEqual(top["commune"].tolist(), ["C", "A"])
+
+    def test_fichier_apl_communal(self):
+        from app.commune_opportunity import load_apl_communes
+
+        apl = load_apl_communes()
+        self.assertGreater(len(apl), 30000)
+        self.assertLess(apl.get("18279", 9), 2.5)   # Vierzon : offre présente, APL 1,6
+
+    def test_parcours_fiche_et_ign(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "dept"; at.query_params["dept_code"] = "18"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("Simuler une implantation (pilote IGN)", html)
+        self.assertIn('id="communes"', html)
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "acces"; at.query_params["dept_code"] = "18"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("Territoire pilote", html)
+        self.assertIn("Retour au diagnostic", html)
+        self.assertEqual(len(at.selectbox), 1, "un seul sélecteur (commune) tant qu'il n'y a qu'un pilote")
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "exploration"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("Prioriser", html)
+        self.assertIn("Ouvrir le diagnostic", html)
+
+    def test_formulations_regionales(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "region"; at.query_params["region_code"] = "53"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        html = " ".join(m.value for m in at.markdown)
+        self.assertNotIn("Situation homogène", html)
+        self.assertNotIn("plutôt homogène", html)
+        self.assertNotIn("potentiellement touchés", html)
+        self.assertNotIn("Publics prioritaires", html)
+        self.assertIn("Problématiques de santé", html)
+
+    def test_chiffres_contextualises_dans_les_leviers(self):
+        from app.leviers import profil, selectionner
+
+        recos = selectionner(profil("973", DATA), n=4)
+        chips = [c for r in recos for c in r["indicateurs"]]
+        self.assertTrue(any("pour 100 000 hab." in c and "médiane" in c for c in chips), chips)
+        self.assertFalse(any("/100k contre" in c for c in chips), chips)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -65,6 +65,10 @@ def render_breadcrumb(crumbs: list[NavCrumb], *, key_prefix: str = "bc") -> None
     )
 
 
+def _cur(active: bool) -> str:
+    return ' aria-current="page"' if active else ""
+
+
 def render_topnav(current_view: View, master=None, *, with_search: bool = True) -> None:
     """Navigation principale unique : logo, liens, recherche globale.
 
@@ -72,11 +76,11 @@ def render_topnav(current_view: View, master=None, *, with_search: bool = True) 
     Mobile : logo + menu dépliable (<details>, sans JavaScript), recherche en
     dessous. Les liens sont des URL internes (?view=…) : le routage et les
     liens directs restent inchangés."""
-    items = [("home", "Accueil"), ("exploration", "Explorer"), ("comparer", "Comparer"),
+    items = [("home", "Accueil"), ("exploration", "Prioriser"), ("comparer", "Comparer"),
              ("acces", "Accès routier"), ("methodologie", "Méthodologie"), ("about", "À propos")]
     links = "".join(
         f'<a class="sa-nav-link{" sa-nav-link--active" if v == current_view else ""}" '
-        f'href="{internal_href(v)}" target="_self"{" aria-current=&quot;page&quot;" if v == current_view else ""}>{label}</a>'
+        f'href="{internal_href(v)}" target="_self"{_cur(v == current_view)}>{label}</a>'
         for v, label in items
     )
     brand = (

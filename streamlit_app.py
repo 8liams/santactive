@@ -133,7 +133,7 @@ geojson = load_geojson()
 init_from_url()
 view = get_current_view()
 
-render_topnav(view, master, with_search=(view != "home"))
+render_topnav(view, master, with_search=True)
 
 # ─── CONTEXTE PARTAGÉ ─────────────────────────────────────────────────────────
 data = {

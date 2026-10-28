@@ -67,6 +67,47 @@ def besoin_legend_items() -> list[tuple[str, str]]:
     return [(label, color) for _, label, color in _BESOIN_CLASSES] + [OFFRE_SUR_PLACE]
 
 
+# Lecture « capacité » : APL communal DREES 2023 (consultations accessibles par an
+# et par habitant), repère de sous-densité 2,5 — mesure théorique de capacité,
+# pas une file d'attente observée.
+_APL_PATH = "static/data/apl_communes_2023.csv"
+_APL_CACHE: dict[str, float] | None = None
+CAPACITE_LEGENDE: list[tuple[str, str]] = [
+    ("Offre présente, APL < 2,5 (capacité insuffisante)", "#D4663B"),
+    ("Offre présente, APL 2,5–3", "#E5B04A"),
+    ("Offre présente, APL ≥ 3", "#A3C282"),
+    ("Sans offre sur place, APL < 2,5", "#A51C30"),
+    ("Sans offre sur place, APL ≥ 2,5", "#D9E3D4"),
+]
+
+
+def load_apl_communes() -> dict[str, float]:
+    """APL communal 2023 par code INSEE (vide si le fichier est absent)."""
+    global _APL_CACHE
+    if _APL_CACHE is None:
+        try:
+            df = pd.read_csv(_APL_PATH, dtype={"code_insee": str})
+            _APL_CACHE = dict(zip(df["code_insee"].str.zfill(5), pd.to_numeric(df["apl"], errors="coerce")))
+        except (OSError, ValueError, KeyError):
+            _APL_CACHE = {}
+    return _APL_CACHE
+
+
+def capacite_class(apl, temps) -> tuple[str, str]:
+    """(libellé, couleur) de la lecture capacité pour une commune."""
+    if pd.isna(apl):
+        return "N/D", "#E8E6DD"
+    offre = pd.notna(temps) and float(temps) <= 0
+    a = float(apl)
+    if offre:
+        if a < 2.5:
+            return CAPACITE_LEGENDE[0]
+        if a < 3.0:
+            return CAPACITE_LEGENDE[1]
+        return CAPACITE_LEGENDE[2]
+    return CAPACITE_LEGENDE[3] if a < 2.5 else CAPACITE_LEGENDE[4]
+
+
 # Alias compatibilité interne
 opportunite_level = action_priority_level
 opportunity_legend_items = action_priority_legend_items
@@ -303,6 +344,12 @@ def build_commune_opportunity_df(
     besoin = temps_num.apply(besoin_class)
     df["besoin_label"] = besoin.apply(lambda x: x[0])
     df["besoin_color"] = besoin.apply(lambda x: x[1])
+    # Lecture « capacité » : APL communal DREES 2023
+    apl = load_apl_communes()
+    df["apl_commune"] = df["code_commune"].astype(str).str.zfill(5).map(apl)
+    cap = [capacite_class(a, t) for a, t in zip(df["apl_commune"], temps_num)]
+    df["capacite_label"] = [c[0] for c in cap]
+    df["capacite_color"] = [c[1] for c in cap]
     return df
 
 
@@ -324,8 +371,10 @@ def top_communes_for_action(
 
     - « priorite » : score d'action décroissant (besoin 45 %, population 35 %,
       faisabilité 20 %, inchangé) ;
-    - « besoin » : temps de trajet décroissant, puis population.
-    Dans les deux cas, les communes qui disposent déjà d'une offre de médecine
+    - « besoin » : temps de trajet décroissant, puis population ;
+    - « capacite » : communes sous le repère APL 2,5 (DREES 2023), les plus
+      peuplées d'abord, qu'elles aient ou non une offre sur place.
+    Dans les deux premiers cas, les communes qui disposent déjà d'une offre de médecine
     générale (temps 0) ne sont pas classées : une action d'accès n'y a pas
     d'objet. Aucun seuil de population : la population est déjà un facteur du
     score, et la lecture « besoin » doit pouvoir faire remonter de petites
@@ -335,6 +384,12 @@ def top_communes_for_action(
     if comm_data.empty or score_col not in comm_data.columns:
         return pd.DataFrame()
     temps = pd.to_numeric(comm_data.get("temps_acces"), errors="coerce")
+    if mode == "capacite":
+        # Communes sous le repère APL 2,5 (avec ou sans offre), les plus peuplées d'abord
+        apl = pd.to_numeric(comm_data.get("apl_commune"), errors="coerce")
+        cands = comm_data[apl.notna() & (apl < 2.5)].copy()
+        cands["_pop"] = pd.to_numeric(cands.get("population"), errors="coerce").fillna(0)
+        return cands.sort_values(["_pop", "apl_commune"], ascending=[False, True]).drop(columns=["_pop"]).head(limit).reset_index(drop=True)
     candidates = comm_data[temps.notna() & (temps > 0)].dropna(subset=[score_col]).copy()
     if candidates.empty:
         return pd.DataFrame()

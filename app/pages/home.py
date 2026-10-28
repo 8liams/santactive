@@ -6,7 +6,6 @@ import pandas as pd
 import streamlit as st
 
 from ..components.nav import internal_href
-from ..components.search_box import render_search_box
 from ..components.tooltip import info_tooltip
 from ..config import APL_LABEL_COURT
 from ..router import navigate
@@ -27,14 +26,7 @@ def render(data: dict) -> None:
         '</div>',
         unsafe_allow_html=True,
     )
-    with st.container(key="home_search_block"):
-        st.markdown(
-            '<div class="home-search-label">Rechercher un territoire '
-            '<span>· département, région ou commune</span></div>',
-            unsafe_allow_html=True,
-        )
-        render_search_box(master, key="sa_home_search", variant="hero",
-                          placeholder="Ex : Cher, Bretagne, Rennes, 2A…")
+    _render_usages(master)
 
     # ── CARTE + REPÈRES ───────────────────────────────────────────────────────
     with st.container(key="home_map_kpi"):
@@ -61,6 +53,41 @@ INDICATORS = [
 ]
 
 
+def _render_usages(master: pd.DataFrame) -> None:
+    """Quatre entrées par usage : trouver, prioriser, diagnostiquer, simuler."""
+    from .acces_ign import pilotes_disponibles
+
+    pilotes = pilotes_disponibles()
+    pilote = next(iter(pilotes), None)
+    crit = master[master["zone_short"] == "Critique"].sort_values("score_global") if "zone_short" in master.columns else master.head(0)
+    ex = crit.iloc[0] if not crit.empty else None
+    cards = [
+        ("Trouver un territoire", "Département, région ou commune : utilisez la recherche en haut de page, ou cliquez sur la carte.",
+         None, "Carte ci-dessous ↓", "#home_carte"),
+        ("Identifier une priorité", "Matrice offre × besoins : les départements où l\u2019offre est faible et les besoins forts.",
+         internal_href("exploration"), "Prioriser →", None),
+        ("Consulter un diagnostic", "Score, scorecard, leviers d\u2019action et communes fragiles d\u2019un département."
+         + (f" Exemple : {ex['Nom du département']} ({float(ex['score_global']):.0f}/100)." if ex is not None else ""),
+         internal_href("dept", dept_code=str(ex["dept"])) if ex is not None else internal_href("comparer"),
+         "Ouvrir un exemple →", None),
+        ("Étudier une implantation", f"Simulation routière IGN : où une nouvelle offre réduirait les temps de trajet. "
+         f"Pilote : {pilotes.get(pilote, '—')}." if pilote else "Simulation routière IGN (pilote à venir).",
+         internal_href("acces", dept_code=pilote) if pilote else None, "Simuler →", None),
+    ]
+    html_cards = ""
+    for titre, txt, href, lab, anchor in cards:
+        link = anchor or href
+        tgt = ' target="_self"' if href else ""
+        html_cards += (f'<a class="usage-card" href="{link}"{tgt}>'
+                       f'<div class="usage-title">{titre}</div><div class="usage-txt">{txt}</div>'
+                       f'<div class="usage-link">{lab}</div></a>')
+    st.markdown(f'<div class="usage-grid">{html_cards}</div>', unsafe_allow_html=True)
+
+
+# Indicateurs de la carte : lecture principale (accès aux soins) et lecture détaillée
+INDICATEURS_PRINCIPAUX = ["Score global", "APL", "Temps d'accès"]
+
+
 def _render_national_map(master: pd.DataFrame, geojson) -> None:
     from ..components import render_national_choropleth
     from ..components.maps import COLORMAPS
@@ -70,12 +97,16 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
         return
 
     labels = [l for _, l, _, _ in INDICATORS]
-    try:
-        selected_label = st.pills("Indicateur", options=labels, default=labels[0],
-                                  key="map_indicator_pills", label_visibility="collapsed")
-    except AttributeError:
-        selected_label = st.radio("Indicateur", options=labels, horizontal=True,
-                                  key="map_indicator_radio", label_visibility="collapsed")
+    st.markdown('<div id="home_carte"></div>', unsafe_allow_html=True)
+    p1, p2 = st.columns([1.6, 1], vertical_alignment="center")
+    with p1:
+        principal = st.pills("Accès aux soins", options=INDICATEURS_PRINCIPAUX, default=INDICATEURS_PRINCIPAUX[0],
+                             key="map_indicator_pills", label_visibility="collapsed")
+    with p2:
+        autres = ["—"] + [l for l in labels if l not in INDICATEURS_PRINCIPAUX]
+        detail = st.selectbox("Autres indicateurs", autres, key="map_indicator_detail", label_visibility="collapsed",
+                              format_func=lambda v: "Autres indicateurs (offre, contexte)…" if v == "—" else v)
+    selected_label = detail if detail != "—" else (principal or INDICATEURS_PRINCIPAUX[0])
     idx = labels.index(selected_label) if selected_label in labels else 0
     col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
@@ -153,8 +184,12 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
     med_med = num("med_gen_pour_100k").median()
     part_apl = num("part_pop_apl_inf_2_5")
     pop = num("population_num")
+    # Population sous le repère APL 2,5 : Σ part départementale × population INSEE 2021 (11,2 M) ;
+    # recalcul direct sur le fichier communal DREES 2023 : 11 210 951 hab. (16,6 %).
     pop_sous_seuil = float((part_apl * pop).sum()) if not part_apl.empty and not pop.empty else float("nan")
-    counts = master["zone_short"].value_counts() if "zone_short" in master.columns else {}
+    pop_15 = float(num("pop_communes_critiques").sum()) if "pop_communes_critiques" in master.columns else float("nan")
+    nb_depts_sous_2_5 = int((num("apl_dept") < 2.5).sum())
+    nb_depts_sous_med = int((num("apl_dept") < apl_med).sum()) if pd.notna(apl_med) else 0
 
     def kpi(label, value, unit, ctx, tip=None, crit=False):
         t = info_tooltip(tip) if tip else ""
@@ -170,20 +205,20 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
         + kpi("APL médiane", f"{apl_med:.1f}" if pd.notna(apl_med) else "N/D", " consult./hab.",
               "médiane des départements · DREES 2023 · repère de sous-densité : 2,5", "apl")
         + kpi("Sous le repère APL", fmt_pop, " hab.",
-              "habitants d’une commune sous APL 2,5 · DREES 2023")
+              "habitants d\u2019une commune sous APL 2,5, soit 16,6\u202f% · DREES 2023")
         + kpi("Généralistes", f"{med_med:.0f}" if pd.notna(med_med) else "N/D", " /100k hab.",
               "densité médiane · RPPS 1ᵉʳ janv. 2026", "med_100k")
-        + kpi("Temps d’accès", f"{temps_med:.0f}" if pd.notna(temps_med) else "N/D", " min",
-              "médiane des médianes départementales · 0 = offre dans la commune", "temps_acces")
+        + kpi("À plus de 15 min", f"{pop_15 / 1e6:.1f}\u202fM" if pd.notna(pop_15) else "N/D", " hab.",
+              "habitants des communes à plus de 15 min d\u2019un généraliste · indicateur interne", "temps_acces")
         + '</div>'
         '<div class="nat-zones">'
-        f'<div class="nat-zone" style="background:#A51C30;"><b>{int(counts.get("Critique", 0))}</b>zones critiques</div>'
-        f'<div class="nat-zone" style="background:#C8922A;"><b>{int(counts.get("Intermédiaire", 0))}</b>intermédiaires</div>'
-        f'<div class="nat-zone" style="background:#1B5E3F;"><b>{int(counts.get("Favorable", 0))}</b>favorables</div>'
+        f'<div class="nat-zone" style="background:#A51C30;"><b>{nb_depts_sous_2_5}</b>départements sous le repère APL 2,5</div>'
+        f'<div class="nat-zone" style="background:#C8922A;"><b>{nb_depts_sous_med}</b>départements sous la médiane APL ({apl_med:.1f})</div>'
         '</div>'
-        '<div class="nat-method">Le score Sant’active (0–100) classe les départements sur six indicateurs publics '
-        '(APL 30 %, temps d’accès 20 %, généralistes 20 %, structures 15 %, 65 ans et plus 10 %, '
-        'foncier 5 %), en rang percentile puis en terciles. '
+        '<div class="nat-method">Le score Sant\u2019active (0–100) classe les départements sur six indicateurs publics '
+        '(APL 30\u202f%, temps d\u2019accès 20\u202f%, généralistes 20\u202f%, structures 15\u202f%, 65 ans et plus 10\u202f%, '
+        'foncier 5\u202f%), en rang percentile. Les zones critique, intermédiaire et favorable sont des terciles de ce classement '
+        '(33 / 34 / 33 par construction) : elles situent un département, elles ne mesurent pas une évolution. '
         f'<a href="{internal_href("methodologie")}" target="_self">Méthodologie complète →</a></div>',
         unsafe_allow_html=True,
     )
