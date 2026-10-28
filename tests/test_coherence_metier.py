@@ -180,7 +180,7 @@ class TestCarteContinue(unittest.TestCase):
             ok, motif = continu_valide(d)
             self.assertTrue(ok, f"{d} : {motif}")
         self.assertEqual(departements_continu(), livres)
-        self.assertEqual(continu_valide("22"), (False, "non calculé"))  # Côtes-d'Armor : hors graphe routier calculé
+        self.assertEqual(continu_valide("972"), (False, "non calculé"))  # Martinique : projection locale non gérée, repli V1
 
 
 if __name__ == "__main__":
