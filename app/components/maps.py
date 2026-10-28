@@ -11,13 +11,15 @@ from streamlit_folium import st_folium
 
 from ..config import APL_LABEL_COURT, PALETTE
 
-# ── Tuiles CartoDB Positron : fond gris-clair minimal institutionnel ──────────
+# ── Fond de carte : sobre et neutre, pour ne pas concurrencer nos couleurs ──
 def _tile_config() -> tuple[str, str]:
-    """Fond de carte : clé CARTO via secrets/env, sinon fond libre.
+    """Fond de carte : clé CARTO via secrets/env, sinon fond libre neutre.
 
     Ordre : SANTACTIVE_TILE_URL (gabarit complet) → CARTO Positron si
-    CARTO_API_KEY est renseignée → IGN Plan v2 (Géoplateforme, libre, sans clé)
-    → OpenStreetMap. Jamais de clé dans le code ni dans les logs.
+    CARTO_API_KEY est renseignée → fond gris clair Esri « World Light Gray »
+    (libre d'usage avec attribution, sans clé) → IGN Plan v2 ou OSM si
+    SANTACTIVE_FOND_CARTE vaut « ign » ou « osm ». Jamais de clé dans le code
+    ni dans les logs.
     """
     import os
 
@@ -39,15 +41,20 @@ def _tile_config() -> tuple[str, str]:
             f"https://basemaps.cartocdn.com/rastertiles/light_all/{{z}}/{{x}}/{{y}}{{r}}.png?api_key={key}",
             "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> © <a href='https://carto.com/'>CARTO</a>",
         )
-    fond = (_secret("SANTACTIVE_FOND_CARTE") or "ign").lower()
+    fond = (_secret("SANTACTIVE_FOND_CARTE") or "gris").lower()
     if fond == "osm":
         return ("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>")
+    if fond == "ign":
+        return (
+            "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+            "&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM"
+            "&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+            "© <a href='https://www.ign.fr/'>IGN</a> · Géoplateforme (Plan IGN v2)",
+        )
     return (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
-        "&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&TILEMATRIXSET=PM"
-        "&FORMAT=image/png&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
-        "© <a href='https://www.ign.fr/'>IGN</a> · Géoplateforme (Plan IGN v2)",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        "Fond : Esri, HERE, Garmin, © OpenStreetMap contributors",
     )
 
 
@@ -152,11 +159,12 @@ def render_national_choropleth(
     }
     main_label, main_fmt = _metric_meta.get(metric, (metric, "{}"))
 
+    # Choroplèthe sans fond de carte : seuls les départements et leurs couleurs
+    # comptent à cette échelle (lecture institutionnelle, aucune route ni toponyme).
     m = folium.Map(
         location=[46.5, 2.4],
         zoom_start=6,
-        tiles=TILE_URL,
-        attr=TILE_ATTR,
+        tiles=None,
         zoom_control=True,
         scrollWheelZoom=False,   # la molette ne doit pas capturer le défilement de la page
         min_zoom=5,
@@ -212,7 +220,7 @@ def render_national_choropleth(
             return {"fillColor": "#E8E6DD", "color": BORDER_COLOR,
                     "weight": 0.6, "fillOpacity": 0.35}
         return {"fillColor": cmap(val), "color": BORDER_COLOR,
-                "weight": BORDER_WIDTH, "fillOpacity": 0.88}
+                "weight": BORDER_WIDTH, "fillOpacity": 0.92}
 
     def _highlight(feature: dict) -> dict:
         return {"fillColor": HOVER_COLOR, "color": HOVER_COLOR,
@@ -237,11 +245,11 @@ def render_national_choropleth(
         name="departements",
     ).add_to(m)
 
-    # Masque l'attribution Leaflet/CARTO
     m.get_root().header.add_child(
         folium.Element(
             "<style>"
             ".leaflet-control-attribution{display:none!important;}"
+            ".leaflet-container{background:#F4F3EE!important;}"
             "</style>"
         )
     )
@@ -269,170 +277,92 @@ DOM_CONFIG = {
 }
 
 
-def render_dom_cartouches(
-    master: pd.DataFrame,
-    geojson_dom: dict | None = None,  # non utilisé — conservé pour compatibilité
-    metric: str = "score_global",
-    colormap_name: str = "score",
-    reverse: bool = False,
-    height: int = 180,
-) -> None:
-    """Affiche 5 mini-cartes DOM en ligne sous la carte nationale.
+@st.cache_data(show_spinner=False)
+def _contours_dom() -> dict:
+    """Contours simplifiés des DROM (static/geo/contours_dom.json, pré-calculés)."""
+    import json
+    from pathlib import Path
 
-    Les contours sont récupérés depuis geo.api.gouv.fr (communes),
-    car le GeoJSON national ne contient pas les DOM.
-    Toutes les communes d'un DOM sont colorées avec la couleur
-    du score du département.
-    """
-    # Prépare les données métriques par code département
-    data_map: dict[str, float] = {}
-    if not master.empty and metric in master.columns:
-        for _, row in master.iterrows():
-            code = str(row.get("dept", ""))
-            val = row.get(metric)
-            if pd.notna(val):
-                data_map[code] = float(val)
-
-    clean_values = [v for v in data_map.values() if pd.notna(v)]
-    if not clean_values:
-        return
-
-    vmin, vmax = min(clean_values), max(clean_values)
-    if vmin >= vmax:
-        vmax = vmin + 1.0
-
-    colors = COLORMAPS.get(colormap_name, COLORMAPS["score"])
-    if reverse:
-        colors = list(reversed(colors))
-    cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
-
-    with st.container(key="home_dom_cartouches"):
-        cols = st.columns(5)
-
-        for i, (code_dom, cfg) in enumerate(DOM_CONFIG.items()):
-            with cols[i]:
-                # En-tête : nom + score
-                score_val = data_map.get(code_dom)
-                zone_row = master[master["dept"].astype(str) == code_dom]
-                zone = zone_row.iloc[0].get("zone_short", "") if not zone_row.empty else ""
-
-                zone_color = (
-                    "#A51C30" if zone == "Critique"
-                    else "#E8A838" if zone == "Intermédiaire"
-                    else "#1B5E3F" if zone == "Favorable"
-                    else "#9C9A92"
-                )
-                # Format selon l'indicateur affiché (avant : « /100 » pour tout,
-                # ex. « 3420/100 » pour un prix au m²)
-                _fmt_dom = {
-                    "score_global":         "{:.0f}/100",
-                    "apl_dept":      "{:.1f}\u202f/hab.",
-                    "temps_acces_median":   "{:.0f}\u202fmin",
-                    "med_gen_pour_100k":    "{:.0f}\u202f/100k",
-                    "structures_pour_100k": "{:.1f}\u202f/100k",
-                    "prix_m2_moyen":        "{:,.0f}\u202f€/m²",
-                    "pct_plus_65":          "{:.1f}\u202f%",
-                    "pct_moins_25":         "{:.1f}\u202f%",
-                }.get(metric, "{:.1f}")
-                score_display = (
-                    _fmt_dom.format(score_val).replace(",", "\u202f")
-                    if score_val is not None else "N/D"
-                )
-
-                st.markdown(
-                    f'<div class="dom-cartouche-head">'
-                    f'<div class="dom-cartouche-name">{cfg["nom"]}</div>'
-                    f'<div class="dom-cartouche-score">'
-                    f'<span style="color:{zone_color};">{score_display}</span>'
-                    f'</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-                # Contour du département (1 polygone, ~10× plus léger que les
-                # communes : la couleur est uniforme) ; repli sur les communes
-                geojson = _fetch_dept_outline(code_dom) or _fetch_communes_geojson(code_dom)
-                if geojson is None or not geojson.get("features"):
-                    st.markdown(
-                        f'<div style="height:{height}px;background:#F3F2EC;'
-                        f'border-radius:4px;display:flex;align-items:center;'
-                        f'justify-content:center;font-size:11px;color:#9C9A92;">'
-                        f'Carte indisponible</div>',
-                        unsafe_allow_html=True,
-                    )
-                    continue
-
-                # Couleur uniforme = score du département
-                dept_color = "#E8E6DD"
-                if score_val is not None:
-                    try:
-                        dept_color = cmap(score_val)
-                    except Exception:
-                        dept_color = "#E8E6DD"
-
-                def _style(feature, _color=dept_color):
-                    return {"fillColor": _color, "color": "#FFFFFF",
-                            "weight": 0.5, "fillOpacity": 0.88}
-
-                def _highlight(feature):
-                    return {"fillColor": "#0A1938", "color": "#0A1938",
-                            "weight": 1.5, "fillOpacity": 0.2}
-
-                m = folium.Map(
-                    location=[cfg["lat"], cfg["lon"]],
-                    zoom_start=cfg["zoom"],
-                    tiles=TILE_URL,
-                    attr=TILE_ATTR,
-                    zoom_control=False,
-                    scrollWheelZoom=False,
-                    dragging=False,
-                    doubleClickZoom=False,
-                    touchZoom=False,
-                )
-
-                # Masque l'attribution Leaflet (trop grande sur les mini-cartes)
-                m.get_root().header.add_child(
-                    folium.Element(
-                        "<style>"
-                        ".leaflet-control-attribution{display:none!important;}"
-                        "</style>"
-                    )
-                )
-
-                folium.GeoJson(
-                    geojson,
-                    style_function=_style,
-                    highlight_function=_highlight,
-                    tooltip=folium.GeoJsonTooltip(
-                        fields=["nom", "code"],
-                        aliases=["Commune", "Code INSEE"],
-                        localize=True,
-                        sticky=False,
-                        class_name="sa-tooltip",
-                    ),
-                ).add_to(m)
-
-                event = st_folium(
-                    m,
-                    use_container_width=True,
-                    height=height,
-                    returned_objects=["last_object_clicked"],
-                    key=f"dom_map_{code_dom}",
-                )
-
-                if event and event.get("last_object_clicked"):
-                    from ..router import navigate
-                    # Garde : ne renavigue pas à chaque rerun sur un clic déjà traité
-                    sig = (code_dom, str(event.get("last_object_clicked")))
-                    if st.session_state.get("_dom_last_click") != sig:
-                        st.session_state["_dom_last_click"] = sig
-                        navigate("dept", dept_code=code_dom)
+    p = Path("static/geo/contours_dom.json")
+    if not p.exists():
+        return {}
+    try:
+        fc = json.loads(p.read_text())
+    except Exception:
+        return {}
+    return {f["properties"]["code"]: f["geometry"] for f in fc.get("features", [])}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# CARTE COMMUNALE (zoom département)
-# ──────────────────────────────────────────────────────────────────────────────
+def _outline_svg(dept_code: str, fill: str, w: int = 120, h: int = 72) -> str:
+    """Silhouette SVG du département, cadrée dans w×h (projection équirectangulaire locale)."""
+    import math
 
-# Coordonnées fixes par département (lat, lon, zoom) — plus fiable que les centroids GeoJSON
+    geom = _contours_dom().get(str(dept_code))
+    if not geom:
+        return ""
+    polys = geom.get("coordinates") or []
+    if geom.get("type") == "Polygon":
+        polys = [polys]
+    rings = [poly[0] for poly in polys if poly]          # anneaux extérieurs
+    pts = [p for ring in rings for p in ring]
+    if not pts:
+        return ""
+    lat0 = sum(p[1] for p in pts) / len(pts)
+    k = math.cos(math.radians(lat0))
+    xs = [p[0] * k for p in pts]; ys = [p[1] for p in pts]
+    minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+    span = max(maxx - minx, maxy - miny) or 1.0
+    scale = min(w, h) * 0.94 / span
+    ox = (w - (maxx - minx) * scale) / 2; oy = (h - (maxy - miny) * scale) / 2
+    paths = []
+    for ring in rings:
+        if len(ring) < 4:
+            continue
+        d = " ".join(f"{'M' if i == 0 else 'L'}{(p[0] * k - minx) * scale + ox:.1f},{h - ((p[1] - miny) * scale + oy):.1f}"
+                     for i, p in enumerate(ring))
+        paths.append(d + " Z")
+    return (f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}" aria-hidden="true">'
+            f'<path d="{" ".join(paths)}" fill="{fill}" fill-opacity="0.85" stroke="#fff" stroke-width="0.8"/></svg>')
+
+
+def render_dom_cartouches(master: pd.DataFrame, **_ignored) -> None:
+    """Cartouches homogènes des cinq DROM : nom, score ou absence de score,
+    catégorie, population, silhouette du territoire, lien vers la fiche."""
+    import html as _html
+
+    from .nav import internal_href
+
+    cards = []
+    for code, cfg in DOM_CONFIG.items():
+        row = master[master["dept"].astype(str) == code]
+        r = row.iloc[0] if not row.empty else None
+        zone = str(r.get("zone_short", "")) if r is not None else ""
+        score = r.get("score_global") if r is not None else None
+        pop = r.get("population_num") if r is not None else None
+        zone_color = {"Critique": "#A51C30", "Intermédiaire": "#E8A838", "Favorable": "#1B5E3F"}.get(zone, "#9C9A92")
+        has_score = r is not None and pd.notna(score)
+        if has_score:
+            rang = r.get("rang_national")
+            score_html = (f'<div class="dom-card-score">{float(score):.0f}<small>/100'
+                          + (f" · {int(rang)}ᵉ" if pd.notna(rang) else "") + '</small></div>'
+                          f'<div class="dom-card-zone"><i style="background:{zone_color};"></i>Zone {_html.escape(zone.lower())}</div>')
+        else:
+            score_html = ('<div class="dom-card-score nd">Hors score global</div>'
+                          '<div class="dom-card-zone"><i style="background:#9C9A92;"></i>Données partielles</div>')
+        pop_html = (f'<div class="dom-card-pop">{int(pop):,} hab.</div>'.replace(",", "\u202f")
+                    if pop is not None and pd.notna(pop) else "")
+        svg = _outline_svg(code, zone_color if has_score else "#C9C6BA")
+        cards.append(
+            f'<a class="dom-card" href="{internal_href("dept", dept_code=code)}" target="_self">'
+            f'<div class="dom-card-top"><span class="dom-card-name">{_html.escape(cfg["nom"])}</span>'
+            f'<span class="dom-card-code">{code}</span></div>'
+            f'<div class="dom-card-svg">{svg}</div>'
+            f'{score_html}{pop_html}'
+            f'<span class="dom-card-link">Voir la fiche →</span></a>'
+        )
+    st.markdown(f'<div class="dom-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+
 DEPT_CENTER = {
     "01":(46.10,5.35,9),"02":(49.55,3.62,9),"03":(46.35,3.30,9),
     "04":(44.10,6.23,9),"05":(44.66,6.35,9),"06":(43.93,7.12,9),
@@ -470,6 +400,7 @@ DEPT_CENTER = {
     "973":(4.00,-53.00,8),"974":(-21.12,55.53,10),
     "976":(-12.78,45.23,11),
 }
+
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_communes_population(dept_code: str) -> dict[str, float]:

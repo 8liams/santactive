@@ -11,6 +11,7 @@ headless               = true
 address                = "0.0.0.0"
 enableCORS             = false
 enableXsrfProtection   = true
+enableStaticServing    = true   # /app/static/… : index de recherche JSON chargé par le navigateur
 
 [browser]
 gatherUsageStats       = false

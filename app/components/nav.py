@@ -65,72 +65,43 @@ def render_breadcrumb(crumbs: list[NavCrumb], *, key_prefix: str = "bc") -> None
     )
 
 
-def render_sidebar_nav(
-    current_view: View,
-    items: list[tuple[str, View]],
-    *,
-    key_prefix: str = "snav",
-) -> None:
-    """Liens sidebar desktop — même mécanisme que le fil d'Ariane (href, pas st.button)."""
-    del key_prefix
-    links: list[str] = []
-    for label, view in items:
-        active = " sa-sidebar-nav-link--active" if view == current_view else ""
-        href = internal_href(view)
-        links.append(
-            f'<a href="{href}" target="_self" class="sa-sidebar-nav-link{active}">'
-            f"{html.escape(label)}</a>"
-        )
-    st.markdown(
-        '<nav class="sa-sidebar-nav" aria-label="Navigation principale">'
-        + "".join(links)
-        + "</nav>",
-        unsafe_allow_html=True,
-    )
+def render_topnav(current_view: View, master=None, *, with_search: bool = True) -> None:
+    """Navigation principale unique : logo, liens, recherche globale.
 
-
-def render_topnav(current_view: View) -> None:
-    """Barre de navigation supérieure (desktop) : liens vers les pages principales."""
-    items = [("home", "Accueil"), ("comparer", "Comparer"), ("exploration", "Explorer"),
+    Ordinateur : barre horizontale (liens visibles, recherche à droite).
+    Mobile : logo + menu dépliable (<details>, sans JavaScript), recherche en
+    dessous. Les liens sont des URL internes (?view=…) : le routage et les
+    liens directs restent inchangés."""
+    items = [("home", "Accueil"), ("exploration", "Explorer"), ("comparer", "Comparer"),
              ("acces", "Accès routier"), ("methodologie", "Méthodologie"), ("about", "À propos")]
     links = "".join(
-        f'<a class="sa-topnav-link{" sa-topnav-link--active" if v == current_view else ""}" '
-        f'href="{internal_href(v)}" target="_self">{label}</a>'
+        f'<a class="sa-nav-link{" sa-nav-link--active" if v == current_view else ""}" '
+        f'href="{internal_href(v)}" target="_self"{" aria-current=&quot;page&quot;" if v == current_view else ""}>{label}</a>'
         for v, label in items
     )
-    st.markdown(
-        f'<nav class="sa-topnav" aria-label="Navigation principale">'
-        f'<a class="sa-topnav-brand" href="{internal_href("home")}" target="_self">Sant\u2019active</a>'
-        f'<div class="sa-topnav-links">{links}</div>'
-        f'<span class="sa-topnav-hint">Recherche dans le panneau latéral</span>'
-        f'</nav>',
-        unsafe_allow_html=True,
+    brand = (
+        f'<a class="sa-nav-brand" href="{internal_href("home")}" target="_self" aria-label="Sant\u2019active, accueil">'
+        '<img src="app/static/brand/logo-santactive-mark.png" alt="" width="30" height="26">'
+        '<span>Sant\u2019active</span></a>'
     )
-
-
-def render_mobile_nav(current_view: View, *, key_prefix: str = "mnav") -> None:
-    """Bandeau mobile fixe — liens horizontaux (HTML, pas de colonnes Streamlit)."""
-    del key_prefix
-    items: list[tuple[View, str]] = [
-        ("home", "Accueil"),
-        ("comparer", "Comparaison"),
-        ("exploration", "Explorer"),
-        ("acces", "Accès routier"),
-        ("enjeux", "À quoi ça sert ?"),
-        ("methodologie", "Méthodologie"),
-        ("about", "À propos"),
-    ]
-    links: list[str] = []
-    for view, label in items:
-        active = " sa-mnav-link--active" if view == current_view else ""
-        href = internal_href(view)
-        links.append(
-            f'<a href="{href}" target="_self" class="sa-mnav-link{active}">'
-            f"{html.escape(label)}</a>"
-        )
-    st.markdown(
-        '<nav class="sa-mobile-nav" aria-label="Navigation principale">'
-        + "".join(links)
-        + "</nav>",
-        unsafe_allow_html=True,
-    )
+    with st.container(key="sa_topnav"):
+        if with_search and master is not None:
+            c1, c2 = st.columns([2.6, 1], gap="small", vertical_alignment="center")
+        else:
+            c1, c2 = st.container(), None
+        with c1:
+            st.markdown(
+                '<nav class="sa-nav" aria-label="Navigation principale">'
+                + brand
+                + f'<div class="sa-nav-links">{links}</div>'
+                + '<details class="sa-nav-mobile"><summary aria-label="Menu">'
+                '<span></span><span></span><span></span></summary>'
+                f'<div class="sa-nav-mobile-links">{links}</div></details>'
+                '</nav>',
+                unsafe_allow_html=True,
+            )
+        if c2 is not None:
+            from .search_box import render_search_box
+            with c2:
+                render_search_box(master, key="sa_nav_search", variant="nav",
+                                  placeholder="Rechercher un territoire…")

@@ -4,7 +4,7 @@ from .alerts import render_alert
 from .badges import zone_badge_html
 from .kpi_card import render_kpi_card
 from .maps import render_commune_choropleth, render_national_choropleth
-from .nav import NavCrumb, dept_link_html, render_breadcrumb, render_mobile_nav
+from .nav import NavCrumb, dept_link_html, render_breadcrumb, render_topnav
 from .delais import compute_delais_proxy, load_delais_nationaux, is_desert_medical
 from .share_bar import (
     dept_share_context,
@@ -21,7 +21,7 @@ __all__ = [
     "render_commune_choropleth",
     "NavCrumb",
     "render_breadcrumb",
-    "render_mobile_nav",
+    "render_topnav",
     "dept_link_html",
     "internal_href",
     "compute_delais_proxy",

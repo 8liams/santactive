@@ -1,251 +1,124 @@
-"""Écran d'accueil : recherche live + carte France + KPIs nationaux."""
+"""Écran d'accueil : recherche, carte nationale, repères nationaux, outre-mer."""
 
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-from streamlit_searchbox import st_searchbox
 
-from ..config import PALETTE
-from ..search import SearchResult, search_territory
-from ..router import navigate
+from ..components.nav import internal_href
+from ..components.search_box import render_search_box
 from ..components.tooltip import info_tooltip
+from ..config import APL_LABEL_COURT
+from ..router import navigate
 
-# Caches module-level (appelés hors contexte render par le callback searchbox)
-_MASTER_CACHE: pd.DataFrame | None = None
-_DATA_CACHE: dict | None = None
-_COMMUNES_CACHE: pd.DataFrame | None = None
-
-
-def _get_communes_for_search() -> pd.DataFrame:
-    """Construit un DataFrame {commune, code_departement} dédupliqué."""
-    global _COMMUNES_CACHE, _DATA_CACHE
-    if _COMMUNES_CACHE is not None:
-        return _COMMUNES_CACHE
-    if _DATA_CACHE is None:
-        _COMMUNES_CACHE = pd.DataFrame(columns=["commune", "code_departement"])
-        return _COMMUNES_CACHE
-
-    temps = _DATA_CACHE.get("temps")
-    if temps is None or temps.empty:
-        _COMMUNES_CACHE = pd.DataFrame(columns=["commune", "code_departement"])
-    else:
-        from ..search import _norm
-
-        _COMMUNES_CACHE = (
-            temps[["commune", "code_departement"]]
-            .dropna()
-            .drop_duplicates(subset=["commune", "code_departement"])
-            .reset_index(drop=True)
-        )
-        _COMMUNES_CACHE["commune_norm"] = _COMMUNES_CACHE["commune"].map(_norm)
-    return _COMMUNES_CACHE
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# CALLBACK SEARCHBOX
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _search_callback(query: str) -> list:
-    """Appelé à chaque frappe — retourne (label_affiché, valeur_stockée)."""
-    if not query or len(query) < 2 or _MASTER_CACHE is None:
-        return []
-    communes_df = _get_communes_for_search()
-    results = search_territory(
-        query, _MASTER_CACHE, communes=communes_df, limit=10
-    )
-    return [(_fmt_label(r), {"level": r.level, "code": r.code}) for r in results]
-
-
-def _fmt_label(r: SearchResult) -> str:
-    icon = {"region": "⬢", "departement": "▮", "commune": "●"}.get(r.level, "·")
-    level_label = {"region": "Région", "departement": "Département",
-                   "commune": "Commune"}.get(r.level, r.level)
-    if r.parent_name:
-        return f"{icon}  {r.name}   ·   {level_label} · {r.parent_name}"
-    return f"{icon}  {r.name}   ·   {level_label}"
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# RENDER PRINCIPAL
-# ──────────────────────────────────────────────────────────────────────────────
 
 def render(data: dict) -> None:
-    global _MASTER_CACHE, _DATA_CACHE, _COMMUNES_CACHE
     master: pd.DataFrame = data["master"]
-    _MASTER_CACHE = master
-    _DATA_CACHE = data
-    # Le cache communes n'est recalculé que si le jeu de données change
-    if st.session_state.get("_home_temps_id") != id(data.get("temps")):
-        _COMMUNES_CACHE = None
-        st.session_state["_home_temps_id"] = id(data.get("temps"))
     geojson = data.get("geojson")
 
-    # ── HERO ──────────────────────────────────────────────────────────────────
-    st.markdown("""
-<div class="home-hero">
-    <div class="hero-eyebrow">Observatoire · 100 départements analysés · vues communales partielles</div>
-    <h1 class="hero-title">
-        La santé de votre territoire,<br><em>en un seul regard.</em>
-    </h1>
-    <p class="hero-lead">
-        Données de diagnostic, d'accès aux soins, de démographie et de pathologies
-        consolidées en une fiche territoriale pour les ARS, les élus et les
-        professionnels de santé.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-    # ── LABEL + SEARCHBOX LIVE ────────────────────────────────────────────────
+    # ── HERO compact + recherche principale ───────────────────────────────────
+    nb = int(master["score_global"].notna().sum())
     st.markdown(
-        '<div class="home-search-intro">'
-        '<div class="home-search-eyebrow">EXPLORER UN TERRITOIRE</div>'
-        '<div class="home-search-title">'
-        'Recherchez un <em style="font-style:italic;color:#1A3D8F;">département</em>, '
-        'une r\u00e9gion ou une commune.'
-        '</div>'
+        '<div class="home-hero">'
+        f'<div class="hero-eyebrow">Observatoire · {nb} départements analysés · vues communales partielles</div>'
+        '<h1 class="hero-title">La santé de votre territoire, <em>en un seul regard.</em></h1>'
+        '<p class="hero-lead">Accès aux soins, démographie médicale, pathologies et leviers d’action, '
+        'consolidés en une fiche pour les ARS, les élus et les professionnels de santé.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
-    selection = st_searchbox(
-        _search_callback,
-        placeholder="Ex\u202f: Cher, Bretagne, Rennes\u2026",
-        label="",
-        key="home_searchbox",
-        clear_on_submit=False,
-        rerun_on_update=False,   # pas de rerun (carte, DOM) à chaque frappe
-    )
+    with st.container(key="home_search_block"):
+        st.markdown(
+            '<div class="home-search-label">Rechercher un territoire '
+            '<span>· département, région ou commune</span></div>',
+            unsafe_allow_html=True,
+        )
+        render_search_box(master, key="sa_home_search", variant="hero",
+                          placeholder="Ex : Cher, Bretagne, Rennes, 2A…")
 
-    if selection and isinstance(selection, dict):
-        level = selection.get("level")
-        code = selection.get("code")
-        if level == "departement":
-            navigate("dept", dept_code=code)
-        elif level == "region":
-            navigate("region", region_code=code)
-        elif level == "commune":
-            navigate("commune", commune_code=code)
-
-    # ── CARTE + KPIs ───────────────────────────────────────────────────────────
+    # ── CARTE + REPÈRES ───────────────────────────────────────────────────────
     with st.container(key="home_map_kpi"):
-        col_map, col_kpi = st.columns([1.6, 1], gap="large")
+        col_map, col_kpi = st.columns([2.1, 1], gap="large")
         with col_map:
             _render_national_map(master, geojson)
         with col_kpi:
-            _render_national_kpis(data)
+            _render_national_kpis(master)
     with st.container(key="home_dom"):
-        _render_dom_section(master, geojson)
+        _render_dom_section(master)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CARTE NATIONALE (Folium/Leaflet)
 # ──────────────────────────────────────────────────────────────────────────────
 
+INDICATORS = [
+    ("score_global",       "Score global",   "score", False),
+    ("apl_dept",           "APL",            "score", False),
+    ("temps_acces_median", "Temps d'accès",  "temps", False),
+    ("med_gen_pour_100k",  "Médecins /100k", "score", False),
+    ("prix_m2_moyen",      "Prix immo",      "prix",  False),
+    ("pct_plus_65",        "Part 65+",       "age",   False),
+]
+
+
 def _render_national_map(master: pd.DataFrame, geojson) -> None:
     from ..components import render_national_choropleth
-
-    st.markdown(
-        '<div class="map-header">'
-        '<div class="map-title">Accessibilité aux soins en France</div>'
-        f'<div class="map-sub">Score global · 100 départements · 2021–2026 '
-        f'{info_tooltip("score_global")}</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    from ..components.maps import COLORMAPS
 
     if not geojson:
         st.warning("Carte indisponible. Vérifiez la connexion.")
         return
 
-    # Sélecteur d'indicateur — pills arrondis
-    INDICATORS = [
-        ("score_global",       "Score global",   "score", False),
-        ("apl_dept",    "APL",            "score", False),
-        ("temps_acces_median", "Temps d'accès",  "temps", False),
-        ("med_gen_pour_100k",  "Médecins /100k", "score", False),
-        ("prix_m2_moyen",      "Prix immo",      "prix",  False),
-        ("pct_plus_65",        "Part 65+",       "age",   False),
-    ]
-    INDICATOR_KEYS   = [k for k, _, _, _ in INDICATORS]
-    INDICATOR_LABELS = [l for _, l, _, _ in INDICATORS]
-    INDICATOR_CMAPS  = [c for _, _, c, _ in INDICATORS]
-    INDICATOR_REV    = [rv for _, _, _, rv in INDICATORS]
-
+    labels = [l for _, l, _, _ in INDICATORS]
     try:
-        selected_label = st.pills(
-            "Indicateur",
-            options=INDICATOR_LABELS,
-            default=INDICATOR_LABELS[0],
-            key="map_indicator_pills",
-            label_visibility="collapsed",
-        )
+        selected_label = st.pills("Indicateur", options=labels, default=labels[0],
+                                  key="map_indicator_pills", label_visibility="collapsed")
     except AttributeError:
-        selected_label = st.radio(
-            "Indicateur",
-            options=INDICATOR_LABELS,
-            horizontal=True,
-            key="map_indicator_radio",
-            label_visibility="collapsed",
-        )
-
-    idx = INDICATOR_LABELS.index(selected_label) if selected_label in INDICATOR_LABELS else 0
-    col_key       = INDICATOR_KEYS[idx]
-    cmap_name     = INDICATOR_CMAPS[idx]
-    reverse_scale = INDICATOR_REV[idx]
-
-    # Fallback si la colonne est absente ou entièrement vide
+        selected_label = st.radio("Indicateur", options=labels, horizontal=True,
+                                  key="map_indicator_radio", label_visibility="collapsed")
+    idx = labels.index(selected_label) if selected_label in labels else 0
+    col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
-        st.caption(
-            f"Indicateur « {selected_label} » non disponible, "
-            "affichage du score global."
-        )
+        st.caption(f"Indicateur « {selected_label} » non disponible, affichage du score global.")
         col_key, cmap_name, reverse_scale = "score_global", "score", False
 
-    event = render_national_choropleth(
-        master=master,
-        geojson=geojson,
-        metric=col_key,
-        colormap_name=cmap_name,
-        reverse=reverse_scale,
-        height=560,
-        key=f"home_national_map_{col_key}",
+    sub = {"score_global": "Score Sant’active · 100 départements · cliquez sur un département pour ouvrir sa fiche",
+           "apl_dept": f"{APL_LABEL_COURT} · DREES 2023",
+           "temps_acces_median": "Temps d'accès médian à un généraliste · minutes",
+           "med_gen_pour_100k": "Généralistes pour 100 000 habitants · DREES 2026",
+           "prix_m2_moyen": "Prix médian au m² · DVF 2025",
+           "pct_plus_65": "Part des 65 ans et plus · INSEE 2021"}.get(col_key, "")
+    st.markdown(
+        f'<div class="map-header"><div class="map-title">Accessibilité aux soins en France</div>'
+        f'<div class="map-sub">{sub} {info_tooltip("score_global") if col_key == "score_global" else ""}</div></div>',
+        unsafe_allow_html=True,
     )
 
-    # Clic sur un département → ouvre la fiche
+    event = render_national_choropleth(
+        master=master, geojson=geojson, metric=col_key, colormap_name=cmap_name,
+        reverse=reverse_scale, height=600, key=f"home_national_map_{col_key}",
+    )
     if event:
         clicked = event.get("last_active_drawing")
         if clicked and event.get("last_object_clicked"):
             props = (clicked.get("properties") or {}) if isinstance(clicked, dict) else {}
             code = props.get("code")
-            # Garde : un clic déjà traité ne doit pas renaviguer à chaque rerun
             if code and st.session_state.get("_home_map_last_click") != (code, str(event.get("last_object_clicked"))):
                 st.session_state["_home_map_last_click"] = (code, str(event.get("last_object_clicked")))
                 navigate("dept", dept_code=str(code))
 
-    # Légende zones — uniquement pour le score global (terciles Sant'active)
     if col_key == "score_global" and "zone_short" in master.columns:
         counts = master["zone_short"].value_counts()
         st.markdown(
             '<div class="map-legend">'
-            f'<span class="legend-item">'
-            f'<span class="swatch" style="background:#A51C30;"></span>'
-            f'Critique <span class="count">({int(counts.get("Critique", 0))})</span>'
-            '</span>'
-            f'<span class="legend-item">'
-            f'<span class="swatch" style="background:#E8A838;"></span>'
-            f'Intermédiaire <span class="count">({int(counts.get("Intermédiaire", 0))})</span>'
-            '</span>'
-            f'<span class="legend-item">'
-            f'<span class="swatch" style="background:#1B5E3F;"></span>'
-            f'Favorable <span class="count">({int(counts.get("Favorable", 0))})</span>'
-            '</span>'
-            '</div>',
+            + "".join(
+                f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>'
+                f'{lab} <span class="count">({int(counts.get(lab, 0))})</span></span>'
+                for lab, c in (("Critique", "#A51C30"), ("Intermédiaire", "#E8A838"), ("Favorable", "#1B5E3F")))
+            + '</div>',
             unsafe_allow_html=True,
         )
-
     else:
-        # Légende dégradée (min → max) pour les indicateurs hors score global
-        from ..components.maps import COLORMAPS
         vals = pd.to_numeric(master[col_key], errors="coerce").dropna()
         stops = ", ".join(reversed(COLORMAPS[cmap_name]) if reverse_scale else COLORMAPS[cmap_name])
         unit = {"apl_dept": "/hab.", "temps_acces_median": "min", "med_gen_pour_100k": "/100k",
@@ -253,174 +126,64 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
         if not vals.empty:
             st.markdown(
                 '<div class="map-legend map-legend--gradient">'
-                f'<span class="count">{vals.min():,.0f}\u202f{unit}</span>'
+                f'<span class="count">{vals.min():,.0f} {unit}</span>'
                 f'<span class="gradient" style="background:linear-gradient(90deg,{stops});"></span>'
-                f'<span class="count">{vals.max():,.0f}\u202f{unit}</span>'
-                '</div>'.replace(",", "\u202f"),
+                f'<span class="count">{vals.max():,.0f} {unit}</span></div>'.replace(",", " "),
                 unsafe_allow_html=True,
             )
     st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)
 
 
-def _render_dom_section(master: pd.DataFrame, geojson) -> None:
-    """Cartouches DOM en pleine largeur (sous le bloc carte / KPI)."""
+def _render_dom_section(master: pd.DataFrame) -> None:
     from ..components.maps import render_dom_cartouches
 
-    col_key, cmap_name, reverse_scale = st.session_state.get(
-        "_home_map_choice", ("score_global", "score", False))
-    st.markdown(
-        '<div class="map-section-eyebrow">DÉPARTEMENTS ET RÉGIONS D\'OUTRE-MER</div>',
-        unsafe_allow_html=True,
-    )
-    with st.spinner("Chargement des cartes d'outre-mer…"):
-        render_dom_cartouches(
-            master=master,
-            geojson_dom=geojson,
-            metric=col_key,
-            colormap_name=cmap_name,
-            reverse=reverse_scale,
-            height=130,
-        )
+    st.markdown('<div class="map-section-eyebrow">Départements et régions d’outre-mer</div>',
+                unsafe_allow_html=True)
+    render_dom_cartouches(master)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# KPI NATIONAUX
+# REPÈRES NATIONAUX
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _render_national_kpis(data: dict) -> None:
-    master = data["master"] if isinstance(data, dict) else data
+def _render_national_kpis(master: pd.DataFrame) -> None:
+    num = lambda c: pd.to_numeric(master[c], errors="coerce") if c in master.columns else pd.Series(dtype=float)
+    apl_med = num("apl_dept").median()
+    temps_med = num("temps_acces_median").median()
+    med_med = num("med_gen_pour_100k").median()
+    part_apl = num("part_pop_apl_inf_2_5")
+    pop = num("population_num")
+    pop_sous_seuil = float((part_apl * pop).sum()) if not part_apl.empty and not pop.empty else float("nan")
+    counts = master["zone_short"].value_counts() if "zone_short" in master.columns else {}
 
-    apl_nationale  = float(pd.to_numeric(master["apl_dept"], errors="coerce").median())
-    temps_median   = round(float(pd.to_numeric(master["temps_acces_median"], errors="coerce").median()), 1) if "temps_acces_median" in master.columns else 12.0
-    med_median     = round(float(pd.to_numeric(master["med_gen_pour_100k"], errors="coerce").median()), 0) if "med_gen_pour_100k" in master.columns else 110.0
-    nb_critiques   = int((master["zone_short"] == "Critique").sum()) if "zone_short" in master.columns else 0
-    nb_depts       = len(master)
-    delai_ophtalmo = 52
+    def kpi(label, value, unit, ctx, tip=None, crit=False):
+        t = info_tooltip(tip) if tip else ""
+        return (f'<div class="nat-kpi"><div class="nat-kpi-label">{label} {t}</div>'
+                f'<div class="nat-kpi-value{" crit" if crit else ""}">{value}<small>{unit}</small></div>'
+                f'<div class="nat-kpi-ctx">{ctx}</div></div>')
 
-    kpis = [
-        {
-            "label":   f'APL · accessibilité DREES {info_tooltip("apl")}',
-            "value":   f"{apl_nationale:.1f}",
-            "unit":    "/hab.",
-            "context": "médiane nationale · données communales ANCT 2023",
-            "detail":  (
-                "Nombre de consultations disponibles par an et par habitant. "
-                "Repère de sous-densité utilisé pour le zonage des "
-                "médecins généralistes : 2,5."
-            ),
-            "rouge": False,
-        },
-        {
-            "label":   f'Temps d\'accès {info_tooltip("temps_acces")}',
-            "value":   f"{temps_median:.1f}",
-            "unit":    "min",
-            "context": "médiane des médianes départementales",
-            "detail":  (
-                "Temps d'accès communal (0 min = offre présente dans la "
-                "commune), agrégé en médiane simple des communes par "
-                "département, non pondérée par la population."
-            ),
-            "rouge": False,
-        },
-        {
-            "label":   f'Médecins / 100k {info_tooltip("med_100k")}',
-            "value":   f"{int(med_median)}",
-            "unit":    "",
-            "context": "généralistes actifs · médiane nationale · RPPS janv. 2026",
-            "detail":  (
-                "Densité médiane de médecins généralistes pour 100\u202f000 hab. "
-                "Inclut tous modes d'exercice (libéral + salarié). "
-                "L'APL est l'indicateur plus précis pour l'accès réel."
-            ),
-            "rouge": False,
-        },
-        {
-            "label":   f'Délai ophtalmo estimé {info_tooltip("delais_rdv")}',
-            "value":   f"{delai_ophtalmo}",
-            "unit":    "jours",
-            "context": "médiane nationale · DREES enquête 2016-2017",
-            "detail":  (
-                "Délai médian pour obtenir un RDV chez un ophtalmologue. "
-                "Spécialité avec les délais les plus longs en France. "
-                "Les délais réels par département ne sont pas disponibles "
-                "en open data. Voir Méthodologie."
-            ),
-            "rouge": False,
-        },
-        {
-            "label":   f'Zones critiques {info_tooltip("zone")}',
-            "value":   str(nb_critiques),
-            "unit":    "",
-            "context": f"sur {nb_depts} départements · tiers inférieur",
-            "detail":  (
-                "Départements dont le score global est dans le tiers "
-                "inférieur national (< 33e percentile). Nécessitent "
-                "une attention prioritaire en termes d'offre de soins."
-            ),
-            "rouge": True,
-        },
-    ]
-
+    fmt_pop = f"{pop_sous_seuil / 1e6:.1f} M" if pd.notna(pop_sous_seuil) else "N/D"
     st.markdown(
-        '<div class="kpi-stack-header">'
-        '<div class="eyebrow">France entière</div>'
-        '<h3>Les chiffres <em>qui comptent</em></h3>'
-        '</div>',
+        '<div class="kpi-stack-header"><div class="eyebrow">France entière</div>'
+        '<h3>Les repères <em>nationaux</em></h3></div>'
+        '<div class="nat-kpis">'
+        + kpi("APL médiane", f"{apl_med:.1f}" if pd.notna(apl_med) else "N/D", " consult./hab.",
+              "médiane des départements · DREES 2023 · repère de sous-densité : 2,5", "apl")
+        + kpi("Sous le repère APL", fmt_pop, " hab.",
+              "habitants d’une commune sous APL 2,5 · DREES 2023")
+        + kpi("Généralistes", f"{med_med:.0f}" if pd.notna(med_med) else "N/D", " /100k hab.",
+              "densité médiane · RPPS 1ᵉʳ janv. 2026", "med_100k")
+        + kpi("Temps d’accès", f"{temps_med:.0f}" if pd.notna(temps_med) else "N/D", " min",
+              "médiane des médianes départementales · 0 = offre dans la commune", "temps_acces")
+        + '</div>'
+        '<div class="nat-zones">'
+        f'<div class="nat-zone" style="background:#A51C30;"><b>{int(counts.get("Critique", 0))}</b>zones critiques</div>'
+        f'<div class="nat-zone" style="background:#C8922A;"><b>{int(counts.get("Intermédiaire", 0))}</b>intermédiaires</div>'
+        f'<div class="nat-zone" style="background:#1B5E3F;"><b>{int(counts.get("Favorable", 0))}</b>favorables</div>'
+        '</div>'
+        '<div class="nat-method">Le score Sant’active (0–100) classe les départements sur six indicateurs publics '
+        '(APL 30 %, temps d’accès 20 %, généralistes 20 %, structures 15 %, 65 ans et plus 10 %, '
+        'foncier 5 %), en rang percentile puis en terciles. '
+        f'<a href="{internal_href("methodologie")}" target="_self">Méthodologie complète →</a></div>',
         unsafe_allow_html=True,
     )
-
-    for kpi in kpis:
-        val_color = "#A51C30" if kpi["rouge"] else "#0A0A0A"
-        st.markdown(
-            f'<div style="padding:16px 0 4px;">'
-            f'<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
-            f'text-transform:uppercase;color:#6B6B68;margin-bottom:6px;">'
-            f'{kpi["label"]}</div>'
-            f'<div style="font-size:34px;font-weight:300;line-height:1;'
-            f'letter-spacing:-0.02em;color:{val_color};">'
-            f'{kpi["value"]}'
-            f'<span style="font-size:13px;font-weight:400;color:#6B6B68;'
-            f'margin-left:4px;">{kpi["unit"]}</span>'
-            f'</div>'
-            f'<div style="font-size:11px;color:#9C9A92;margin-top:4px;'
-            f'letter-spacing:0.02em;">{kpi["context"]}</div>'
-            f'<div style="font-size:12px;color:#6B6B68;margin-top:6px;'
-            f'line-height:1.5;font-style:italic;">{kpi["detail"]}</div>'
-            f'</div>'
-            f'<hr style="border:none;border-top:1px solid #E8E6DD;margin:8px 0 0;">',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown(
-        '<div class="methodology-card">'
-        '<strong>Comment sont calculés les scores\u202f?</strong>'
-        '<p style="margin:10px 0 0;line-height:1.55;">'
-        'Le score Sant\u2019active synthétise l\u2019accès aux soins à partir de '
-        '<strong>6 indicateurs publics</strong> couvrant l\u2019accessibilité, '
-        'l\u2019offre médicale et le contexte territorial.'
-        '</p>'
-        '<p style="margin:8px 0 0;line-height:1.55;">'
-        'Les départements sont comparés entre eux à l\u2019échelle nationale '
-        'grâce à une normalisation en rang percentile.'
-        '</p>'
-        '<p style="margin:10px 0 6px;line-height:1.55;">'
-        '<strong>Les indicateurs pris en compte sont\u202f:</strong>'
-        '</p>'
-        '<ul style="margin:0 0 8px 18px;padding:0;line-height:1.55;">'
-        '<li>APL (30\u202f%)</li>'
-        '<li>Temps d\u2019accès médian (20\u202f%)</li>'
-        '<li>Médecins généralistes /100k (20\u202f%)</li>'
-        '<li>Structures de soins /100k (15\u202f%)</li>'
-        '<li>Part des 65 ans et plus (10\u202f%)</li>'
-        '<li>Prix immobilier médian (5\u202f%)</li>'
-        '</ul>'
-        '<p style="margin:0;line-height:1.55;">'
-        'Un score supérieur à 50 indique une situation meilleure que la '
-        'médiane nationale. Pour le détail complet de la méthode, consulter '
-        'la page <em>Méthodologie</em>.'
-        '</p>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    if st.button("Méthodologie complète →", key="home_methodo", type="secondary"):
-        navigate("methodologie")

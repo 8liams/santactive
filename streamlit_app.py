@@ -22,7 +22,7 @@ from app.pages import (
     home,
     methodologie,
 )  # noqa: E402  (importés après set_page_config)
-from app.components.nav import render_mobile_nav, render_sidebar_nav, render_topnav
+from app.components.nav import render_topnav
 from app.router import get_current_view, init_from_url, navigate
 from app.scoring import compute_scores
 
@@ -72,22 +72,10 @@ header[data-testid="stHeader"] {
     overflow: hidden !important;
 }
 
-/* ─── SIDEBAR visible sur desktop uniquement ───────────────────────────── */
-@media screen and (min-width: 769px) {
-    [data-testid="stSidebar"] {
-        transform: none !important;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        min-width: 245px !important;
-        max-width: 245px !important;
-        width: 245px !important;
-        position: relative !important;
-        z-index: 100 !important;
-    }
-    [data-testid="stSidebarCollapseButton"]   { display: none !important; }
-    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
-}
+/* ─── PANNEAU LATÉRAL : supprimé (navigation supérieure unique) ──────────── */
+[data-testid="stSidebar"],
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"] { display: none !important; width: 0 !important; }
 
 /* ─── RESTE ──────────────────────────────────────────────────────────────── */
 #MainMenu { visibility: hidden; }
@@ -145,107 +133,7 @@ geojson = load_geojson()
 init_from_url()
 view = get_current_view()
 
-render_mobile_nav(view)
-render_topnav(view)
-
-# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-with st.sidebar:
-    # ── Brand block ──────────────────────────────────────────────────────────
-    _logo_b64 = _get_image_b64("static/brand/logo-santactive.png")
-    if _logo_b64:
-        st.sidebar.markdown("""
-<div class="sidebar-brand">
-    <img src="data:image/png;base64,{logo_b64}"
-         alt="Sant'active">
-</div>
-""".format(logo_b64=_logo_b64), unsafe_allow_html=True)
-    else:
-        st.sidebar.markdown("""
-        <div class="sidebar-brand">
-        <div style="font-size:18px;font-weight:700;color:white;">Sant'active</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown(
-        "<hr style='border:none;border-top:1px solid rgba(255,255,255,0.1);"
-        "margin:0 0 20px;'>",
-        unsafe_allow_html=True,
-    )
-
-    # ── Navigation ───────────────────────────────────────────────────────────
-    st.markdown(
-        '<p style="font-size:10px;font-weight:700;letter-spacing:0.14em;'
-        'color:rgba(255,255,255,0.4);text-transform:uppercase;margin:0 0 8px 4px;">'
-        "Navigation</p>",
-        unsafe_allow_html=True,
-    )
-
-    render_sidebar_nav(
-        view,
-        [
-            ("Accueil", "home"),
-            ("À quoi ça sert ?", "enjeux"),
-            ("Comparaison", "comparer"),
-        ],
-    )
-
-    # ── Recherche rapide sidebar ──────────────────────────────────────────────
-    st.sidebar.markdown(
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:rgba(255,255,255,0.35);'
-        'margin:20px 0 6px;padding:0 4px;">RECHERCHE RAPIDE</div>',
-        unsafe_allow_html=True,
-    )
-    sidebar_search = st.sidebar.text_input(
-        "Rechercher",
-        placeholder="D\u00e9partement, r\u00e9gion\u2026",
-        key="sidebar_search_input",
-        label_visibility="collapsed",
-    )
-    if sidebar_search and len(sidebar_search) >= 2:
-        from app.search import search_territory
-        _sb_results = search_territory(sidebar_search, master, limit=5)
-        for _r in _sb_results:
-            _lbl = _r.name
-            if _r.level == "departement":
-                _lbl += f" ({_r.code})"
-            if st.sidebar.button(_lbl, key=f"sb_result_{_r.code}",
-                                 use_container_width=True):
-                if _r.level == "departement":
-                    navigate("dept", dept_code=_r.code)
-                elif _r.level == "region":
-                    navigate("region", region_code=_r.code)
-
-    st.markdown(
-        '<p style="font-size:10px;font-weight:700;letter-spacing:0.14em;'
-        'color:rgba(255,255,255,0.4);text-transform:uppercase;'
-        'margin:20px 0 8px 4px;">'
-        "Ressources</p>",
-        unsafe_allow_html=True,
-    )
-
-    render_sidebar_nav(
-        view,
-        [
-            ("Méthodologie", "methodologie"),
-            ("À propos", "about"),
-        ],
-        key_prefix="snav_res",
-    )
-
-    # ── Footer ───────────────────────────────────────────────────────────────
-    st.markdown(
-        '<div style="margin-top:40px;padding:14px 4px 0;">'
-        '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);'
-        'margin:0 0 10px;">'
-        '<p style="font-size:10px;color:rgba(255,255,255,0.3);line-height:1.6;'
-        'margin:0;">'
-        "Sources&nbsp;: INSEE 2021 · RPPS 2026<br>"
-        "FINESS 2026 · DVF 2025<br>"
-        "CNAM 2023 · DREES"
-        "</p></div>",
-        unsafe_allow_html=True,
-    )
+render_topnav(view, master, with_search=(view != "home"))
 
 # ─── CONTEXTE PARTAGÉ ─────────────────────────────────────────────────────────
 data = {
