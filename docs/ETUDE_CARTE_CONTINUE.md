@@ -190,20 +190,19 @@ extension aux autres régions par lots, avec reprise.
 
 ## Généralisation du 28 octobre 2026 (soir) — couverture réelle
 
-- Pipeline `scripts/donnees/carte_continue.py` exécuté sur le graphe OSRM local « sud-ouest » (Nouvelle-Aquitaine,
-  Occitanie, Centre-Val de Loire et Auvergne en grande partie) : **30 départements** calculés et validés
-  (03, 09, 12, 15, 16, 17, 18, 19, 23, 24, 28, 31, 32, 33, 36, 37, 40, 41, 43, 45, 46, 47, 63, 64, 65, 79, 81, 82, 86, 87),
-  17 à 46 s par département, 33 Mo de fichiers (grille, polygones, contrôle).
+- Pipeline `scripts/donnees/carte_continue.py` exécuté sur quatre graphes OSRM locaux préparés à partir des extraits
+  Geofabrik (sud-ouest, nord-ouest, est, sud-est ; profil voiture, algorithme CH ; 7 Go d'extraits, 10 min de
+  préparation par zone) : **96 départements métropolitains calculés et validés** (tous sauf l'outre-mer), 3 à 74 s par
+  département, environ 100 Mo de fichiers (grille, polygones, contrôle) chargés à la demande.
+- Cabinets des départements voisins pris en compte dans un rayon de 30 km ; ceux situés hors du graphe de la zone
+  (région voisine non chargée) sont écartés par distance de rattachement (`filtrer_offres_hors_graphe`), ce qui évite
+  les offres fictives au bord du graphe.
 - Validation automatique dans l'application (`acces_ign.continu_valide`) : concordance de classe avec les carreaux INSEE
-  ≥ 80 % des habitants, accord au seuil de 15 min ≥ 90 %, écart de classe à 15 min ≤ 5 % des habitants (sur- et
-  sous-estimation), ≤ 2 % de carreaux habités sans maille. Mesuré : concordance 84–95 %, accord 93–99 %,
-  écarts ≤ 3,3 %. Tout département qui échouerait retombe sur la cartographie V1 (zones INSEE) ; option
-  `SANTACTIVE_CARTE_CONTINUE=on` par défaut.
-- **Non couverts (68 départements)** : hors du graphe routier chargé (Bretagne, Normandie, Hauts-de-France, Grand Est,
-  Île-de-France, Bourgogne-Franche-Comté, Pays de la Loire, Provence-Alpes-Côte d'Azur, Corse, outre-mer, et une partie
-  d'Auvergne-Rhône-Alpes). Ils gardent la carte V1. Pour les couvrir : graphes OSRM régionaux (Geofabrik) à préparer
-  puis relancer le script, environ 30 s par département.
-- Limite connue : les cabinets des départements voisins situés hors du graphe sont rattachés par OSRM au bord du graphe ;
-  le contrôle INSEE n'a révélé aucun écart particulier sur les départements frontaliers du graphe (28, 45, 03, 63, 43,
-  65, 09, 31, 82), mais un filtrage des cabinets par distance de rattachement est à ajouter au script avant d'étendre.
+  ≥ 80 % des habitants, accord au seuil de 15 min ≥ 90 %, écart de classe à 15 min ≤ 5 % des habitants, ≤ 2 % de
+  carreaux habités sans maille. Mesuré sur les 96 : concordance 81–100 % (Lozère 81 %, Paris 100 %), accord
+  91–100 %, écarts ≤ 3,7 %. Tout département non conforme retombe sur la cartographie V1 (zones INSEE).
+- **Non couverts : Martinique (972) et La Réunion (974)**. Le script travaille en Lambert-93 ; les coordonnées BPE de
+  l'outre-mer sont dans des projections locales (RGAF09 UTM 20N, RGR92 UTM 40S) : aucune offre n'est retenue et le
+  calcul s'arrête. Ces deux départements gardent la carte V1 du simulateur. À faire : projection par territoire dans
+  le script (contour, grille, offres) puis relance sur les graphes `martinique.osrm` et `reunion.osrm` déjà préparés.
 - Les populations, gains et classements restent calculés sur les carreaux INSEE ; aucun score ni recommandation modifié.
