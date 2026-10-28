@@ -89,14 +89,27 @@ def quantile_bins(values, n_classes: int) -> list[float]:
     return out
 
 
-def national_legend_classes(master: pd.DataFrame, metric: str, colormap_name: str, reverse: bool = False) -> list[tuple[float, float, str]]:
+def national_legend_classes(master: pd.DataFrame, metric: str, colormap_name: str, reverse: bool = False,
+                            bins: list[float] | None = None) -> list[tuple[float, float, str]]:
     """Classes (borne basse, borne haute, couleur) identiques à celles de la carte nationale pour un indicateur."""
     colors = COLORMAPS[colormap_name]
     if reverse:
         colors = list(reversed(colors))
+    if bins:
+        bins = [float(b) for b in bins]
+        return [(bins[i], bins[i + 1], colors[i]) for i in range(len(bins) - 1)]
     vals = pd.to_numeric(master[metric], errors="coerce").dropna().tolist() if metric in master.columns else []
     bins = quantile_bins(vals, len(colors))
     return [(bins[i], bins[i + 1], colors[i]) for i in range(len(colors))]
+
+
+def decimales_legende(bornes: list[float], minimum: int = 0, maximum: int = 2) -> int:
+    """Nombre de décimales nécessaire pour que deux bornes consécutives restent distinctes une fois arrondies."""
+    for d in range(minimum, maximum + 1):
+        arr = [round(b, d) for b in bornes]
+        if all(arr[i] < arr[i + 1] for i in range(len(arr) - 1)):
+            return d
+    return maximum
 
 
 def _tooltip_style() -> str:
@@ -149,8 +162,12 @@ def render_national_choropleth(
     key: str = "national_map",
     bounds: list | None = None,
     highlight_codes: set | None = None,
+    bins: list[float] | None = None,
 ) -> dict | None:
-    """Carte choroplèthe nationale avec tooltip adaptatif à l'indicateur."""
+    """Carte choroplèthe nationale avec tooltip adaptatif à l'indicateur.
+
+    ``bins`` : bornes de classes fixes (interprétables) ; sinon classes de quantiles pour les
+    indicateurs autres que le score, échelle linéaire pour le score."""
     st.markdown(_tooltip_style(), unsafe_allow_html=True)
 
     if not geojson or not geojson.get("features") or master.empty:
@@ -170,7 +187,10 @@ def render_national_choropleth(
     colors = COLORMAPS[colormap_name]
     if reverse:
         colors = list(reversed(colors))
-    if metric == "score_global":
+    if bins:
+        bins = [float(b) for b in bins]
+        cmap = StepColormap(colors=colors[:len(bins) - 1], index=bins, vmin=bins[0], vmax=bins[-1])
+    elif metric == "score_global":
         cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
     else:
         # Classes de quantiles : chaque couleur couvre le même nombre de départements, les valeurs
@@ -186,6 +206,7 @@ def render_national_choropleth(
         "med_gen_pour_100k":    ("Médecins / 100k",     "{:.0f}"),
         "structures_pour_100k": ("Structures / 100k",   "{:.1f}"),
         "prix_m2_moyen":        ("Prix médian /m²",     "{:,.0f}\u202f€"),
+        "acces_mg_part_sup_10_pct": ("Habitants à plus de 10 min d’un généraliste", "{:.1f}\u202f%"),
         "pct_plus_65":          ("Part des 65+",        "{:.1f}\u202f%"),
         "pct_moins_25":         ("Part des <25",        "{:.1f}\u202f%"),
     }
@@ -196,7 +217,8 @@ def render_national_choropleth(
     m = folium.Map(
         location=[46.5, 2.4],
         zoom_start=6,
-        tiles=None,
+        tiles=TILE_URL,          # même fond que le simulateur (style neutre) ; les départements restent la seule information
+        attr=TILE_ATTR,
         zoom_control=True,
         scrollWheelZoom=False,   # la molette ne doit pas capturer le défilement de la page
         min_zoom=5,
@@ -264,7 +286,7 @@ def render_national_choropleth(
             return {"fillColor": "#E8E6DD", "color": "#0A1938" if dans_hl else BORDER_COLOR,
                     "weight": 2.2 if dans_hl else 0.6, "fillOpacity": 0.35 if not hl or dans_hl else 0.15}
         return {"fillColor": cmap(val), "color": "#0A1938" if dans_hl else BORDER_COLOR,
-                "weight": 2.2 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.92 if not hl or dans_hl else 0.45}
+                "weight": 2.2 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.86 if not hl or dans_hl else 0.42}
 
     def _highlight(feature: dict) -> dict:
         return {"fillColor": HOVER_COLOR, "color": HOVER_COLOR,

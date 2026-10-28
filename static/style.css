@@ -3430,3 +3430,24 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .st-key-prio_quadrant_row div[data-testid="stRadio"] label[data-baseweb="radio"] { justify-content: center; text-align: center; width: 100%; }
 @media (max-width: 1100px) { .st-key-prio_quadrant_row div[data-testid="stRadio"] > div[role="radiogroup"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .st-key-prio_quadrant_row div[data-testid="stRadio"] > div[role="radiogroup"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ─── Contrôles segmentés natifs (st.segmented_control) : rectangles à petits arrondis, actif bleu marine ── */
+div[data-testid="stSegmentedControl"] [role="radiogroup"], div[data-testid="stSegmentedControl"] [role="group"] { gap: 8px !important; flex-wrap: wrap !important; }
+div[data-testid="stSegmentedControl"] button, div[data-testid="stSegmentedControl"] [role="radio"] {
+    border: 1.5px solid #D8D6CE !important; border-radius: 6px !important; background: #fff !important; color: #2B2B2B !important;
+    font-family: Marianne, Inter, sans-serif !important; font-size: 13px !important; font-weight: 500 !important;
+    padding: 6px 16px !important; min-height: 0 !important; box-shadow: none !important; transition: background .12s, border-color .12s !important; }
+div[data-testid="stSegmentedControl"] button:hover, div[data-testid="stSegmentedControl"] [role="radio"]:hover { border-color: #1A3D8F !important; color: #1A3D8F !important; background: #F0F3FA !important; }
+div[data-testid="stSegmentedControl"] button[aria-checked="true"], div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+div[data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"] { background: #1A3D8F !important; border-color: #1A3D8F !important; color: #fff !important; }
+div[data-testid="stSegmentedControl"] button:focus-visible { outline: 2px solid #1A3D8F !important; outline-offset: 2px !important; }
+div[data-testid="stSegmentedControl"] button p, div[data-testid="stSegmentedControl"] [role="radio"] p { margin: 0 !important; color: inherit !important; }
+div[data-testid="stSegmentedControl"] label[data-testid="stWidgetLabel"] p { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #6B6B68; font-weight: 700; }
+.st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="radiogroup"], .st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="group"] { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] button { width: 100%; justify-content: center; }
+@media (max-width: 1100px) { .st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="radiogroup"], .st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="group"] { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="radiogroup"], .st-key-prio_quadrant_row div[data-testid="stSegmentedControl"] [role="group"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Carte nationale : apparition en fondu au changement d'indicateur (évite le basculement brutal) */
+.st-key-home_map_kpi iframe[title*="folium"] { animation: sa-fade .45s ease-out; }
+@keyframes sa-fade { from { opacity: .25; } to { opacity: 1; } }

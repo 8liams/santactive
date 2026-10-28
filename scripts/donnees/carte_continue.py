@@ -150,6 +150,25 @@ def osrm_table(base: str, sources_ll: np.ndarray, dests_ll: np.ndarray, session:
     return np.full((ns, nd), np.nan), np.full(ns, np.nan)
 
 
+def filtrer_offres_hors_graphe(off: pd.DataFrame, base: str, max_m: float = SNAP_MAX_M) -> pd.DataFrame:
+    """Écarte les cabinets dont la route la plus proche dans le graphe OSRM est à plus de max_m :
+    un cabinet situé hors du graphe (région voisine non chargée) serait sinon rattaché au bord du
+    graphe et créerait une offre fictive à cet endroit."""
+    if off.empty:
+        return off
+    s = requests.Session()
+    lon, lat = TO_WGS.transform(off["x"].to_numpy(), off["y"].to_numpy())
+    garder = np.ones(len(off), dtype=bool)
+    for i, (lo, la) in enumerate(zip(lon, lat)):
+        try:
+            r = s.get(f"{base}/nearest/v1/driving/{lo:.5f},{la:.5f}?number=1", timeout=30)
+            d = r.json().get("waypoints", [{}])[0].get("distance", np.nan) if r.status_code == 200 else np.nan
+        except (requests.RequestException, ValueError):
+            d = np.nan
+        garder[i] = np.isfinite(d) and d <= max_m
+    return off[garder].reset_index(drop=True)
+
+
 def calculer(pts: pd.DataFrame, offres: pd.DataFrame, base: str, k: int, taille_lot: int = 100) -> pd.DataFrame:
     tree = cKDTree(offres[["x", "y"]].to_numpy())
     _, idx = tree.query(pts[["x", "y"]].to_numpy(), k=min(k, len(offres)))
@@ -260,6 +279,10 @@ def main() -> None:
     offres = charger_offres(Path(args.bpe))
     zone = dept_l93.buffer(RAYON_OFFRES_KM * 1000)
     off = offres[shapely.contains_xy(zone, offres["x"].to_numpy(), offres["y"].to_numpy())].reset_index(drop=True)
+    n_avant = len(off)
+    off = filtrer_offres_hors_graphe(off, args.osrm)
+    if len(off) < n_avant:
+        print(f"  {n_avant - len(off)} cabinets hors du graphe routier écartés (région voisine non chargée)", flush=True)
     print(f"{dept} : {len(off)} cabinets D265 dans le département + {RAYON_OFFRES_KM} km (dont {int((off['dep'] == dept).sum())} dans le département)"
           + (f" · qualité XY : {off['qualite'].value_counts().to_dict()}" if off["qualite"].notna().any() else ""), flush=True)
     pts = grille(dept_l93, args.pas)
@@ -273,7 +296,7 @@ def main() -> None:
     ctrl = controle(gr, dept, args.pas)
     if not args.sans_test_k:
         ctrl["test_k"] = test_k(pts, off, args.osrm)
-    ctrl["offres"] = {"dans_rayon": int(len(off)), "dans_departement": int((off["dep"] == dept).sum())}
+    ctrl["offres"] = {"dans_rayon": int(len(off)), "dans_departement": int((off["dep"] == dept).sum()), "hors_graphe_ecartes": int(n_avant - len(off))}
     ctrl["duree_calcul_s"] = round(time.time() - t0)
     ctrl["tailles_ko"] = {f.name: round(f.stat().st_size / 1e3) for f in (GEO / f"grille_mg_{dept}.csv.gz", GEO / f"continu_mg_{dept}.json")}
     (GEO / f"controle_continu_{dept}.json").write_text(json.dumps(ctrl, indent=1, ensure_ascii=False))

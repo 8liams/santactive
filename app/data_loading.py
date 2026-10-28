@@ -408,15 +408,17 @@ def load_acces_insee_dept() -> pd.DataFrame:
     (communes dont le temps moyen dépasse 15 min), acces_mg_pop (population localisée).
     Guadeloupe, Guyane et Mayotte sont hors champ (NaN).
     """
-    cols = ["dept", "acces_mg_t_med", "acces_mg_t_moy", "acces_mg_t_p90", "acces_mg_part_sup_15",
-            "acces_mg_part_sup_20", "acces_mg_part_sup_30", "acces_mg_pop_sup_15", "acces_mg_nb_communes_sup_15",
-            "acces_mg_nb_communes_equipees", "acces_mg_pop"]
+    cols = ["dept", "acces_mg_t_med", "acces_mg_t_moy", "acces_mg_t_p90", "acces_mg_part_sup_10", "acces_mg_part_sup_10_pct",
+            "acces_mg_part_sup_15", "acces_mg_part_sup_20", "acces_mg_part_sup_30", "acces_mg_pop_sup_15",
+            "acces_mg_nb_communes_sup_15", "acces_mg_nb_communes_equipees", "acces_mg_pop"]
     path = Path(ACCES_INSEE_DEPT_PATH)
     if not path.exists():
         return pd.DataFrame(columns=cols)
     d = pd.read_csv(path, dtype={"dept": str})
     d = d[d["type"] == "D265"].copy()
     d["acces_mg_pop_sup_15"] = d["part_sup_15"] * d["pop"]
+    d["acces_mg_part_sup_10"] = pd.to_numeric(d.get("part_sup_10"), errors="coerce")
+    d["acces_mg_part_sup_10_pct"] = d["acces_mg_part_sup_10"] * 100
     d = d.rename(columns={"t_med": "acces_mg_t_med", "t_moy": "acces_mg_t_moy", "t_p90": "acces_mg_t_p90",
                           "part_sup_15": "acces_mg_part_sup_15", "part_sup_20": "acces_mg_part_sup_20",
                           "part_sup_30": "acces_mg_part_sup_30", "nb_communes_sup_15": "acces_mg_nb_communes_sup_15",

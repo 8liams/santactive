@@ -57,7 +57,7 @@ def render(data: dict) -> None:
 INDICATORS = [
     ("score_global",       "Score Sant’active",   "score", False),
     ("apl_dept",           "APL",            "score", False),
-    ("temps_acces_median", "Temps d'accès",  "temps", False),
+    ("acces_mg_part_sup_10_pct", "Éloignement (> 10 min)", "temps", False),
     ("med_gen_pour_100k",  "Médecins /100k", "score", False),
     ("prix_m2_moyen",      "Prix immo",      "prix",  False),
     ("pct_plus_65",        "Part 65+",       "age",   False),
@@ -171,7 +171,9 @@ def _render_usages(master: pd.DataFrame) -> None:
 
 
 # Indicateurs de la carte : un seul contrôle, un seul état (clé home_indicateur)
-INDICATEURS_PRINCIPAUX = ["Score Sant’active", "APL", "Temps d'accès"]
+INDICATEURS_PRINCIPAUX = ["Score Sant’active", "APL", "Éloignement (> 10 min)"]
+# Classes fixes, interprétables, pour l'éloignement (part des habitants à plus de 10 min en voiture d'un généraliste, INSEE 2025)
+BINS_FIXES = {"acces_mg_part_sup_10_pct": [0, 2, 5, 10, 20, 100]}
 
 
 def _bounds_for(geojson: dict, codes: set[str]) -> list | None:
@@ -199,7 +201,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
 
     labels = [l for _, l, _, _ in INDICATORS]
     st.markdown('<div id="home_carte"></div>', unsafe_allow_html=True)
-    selected_label = st.radio("Indicateur affiché", labels, horizontal=True, key="home_indicateur")
+    selected_label = st.segmented_control("Indicateur affiché", labels, default=labels[0], key="home_indicateur") or labels[0]
     idx = labels.index(selected_label) if selected_label in labels else 0
     col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
@@ -211,7 +213,8 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     bounds = _bounds_for(geojson, hl_codes) if hl_codes else None
     sub = {"score_global": "Score Sant’active · 100 départements · cliquez sur un département pour ouvrir sa fiche",
            "apl_dept": f"{APL_LABEL_COURT} · {APL_SOURCE_LABEL}",
-           "temps_acces_median": f"Temps d’accès médian · minutes · {TEMPS_LABEL_COURT} (dimension du score)",
+           "acces_mg_part_sup_10_pct": "Part des habitants à plus de 10 minutes en voiture d’un généraliste · INSEE 2025 · "
+                                       "classes fixes : moins de 2 %, 2 à 5 %, 5 à 10 %, 10 à 20 %, 20 % et plus",
            "med_gen_pour_100k": "Généralistes pour 100 000 habitants · DREES 2026",
            "prix_m2_moyen": "Prix médian au m² · DVF 2025",
            "pct_plus_65": "Part des 65 ans et plus · INSEE 2021"}.get(col_key, "")
@@ -229,7 +232,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     event = render_national_choropleth(
         master=master, geojson=geojson, metric=col_key, colormap_name=cmap_name,
         reverse=reverse_scale, height=600, key=f"home_national_map_{col_key}_{t.param}",
-        bounds=bounds, highlight_codes=hl_codes or None,
+        bounds=bounds, highlight_codes=hl_codes or None, bins=BINS_FIXES.get(col_key),
     )
     if event:
         clicked = event.get("last_active_drawing")
@@ -253,19 +256,31 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
         )
     else:
         # Légende = classes de quantiles de la carte (mêmes bornes, mêmes couleurs)
-        from ..components.maps import national_legend_classes
-        unit = {"apl_dept": "/hab.", "temps_acces_median": "min", "med_gen_pour_100k": "/100k hab.",
-                "prix_m2_moyen": "€/m²", "pct_plus_65": "%"}.get(col_key, "")
-        dec = {"apl_dept": 1, "pct_plus_65": 1}.get(col_key, 0)
-        fmt = lambda v: f"{v:,.{dec}f}".replace(",", "\u202f").replace(".", ",")
-        classes = national_legend_classes(master, col_key, cmap_name, reverse_scale)
+        from ..components.maps import decimales_legende, national_legend_classes
+        unit = {"apl_dept": "consult./hab.", "acces_mg_part_sup_10_pct": "% des habitants", "med_gen_pour_100k": "généralistes /100 000 hab.",
+                "prix_m2_moyen": "€/m²", "pct_plus_65": "% de 65 ans et plus"}.get(col_key, "")
+        fixes = BINS_FIXES.get(col_key)
+        classes = national_legend_classes(master, col_key, cmap_name, reverse_scale, bins=fixes)
         if classes:
+            bornes = [classes[0][0]] + [hi for _, hi, _ in classes]
+            dec = decimales_legende(bornes, minimum={"apl_dept": 1, "pct_plus_65": 1}.get(col_key, 0))
+            fmt = lambda v: f"{v:,.{dec}f}".replace(",", "\u202f").replace(".", ",")
+            def lib(i, lo, hi):
+                if fixes:
+                    if i == 0:
+                        return f"moins de {fmt(hi)}"
+                    if i == len(classes) - 1:
+                        return f"{fmt(lo)} et plus"
+                    return f"{fmt(lo)} à {fmt(hi)}"
+                return f"{fmt(lo)} à {fmt(hi)}"
             items = "".join(
-                f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>'
-                f'{fmt(lo)} – {fmt(hi)}</span>' for lo, hi, c in classes)
+                f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>{lib(i, lo, hi)}</span>'
+                for i, (lo, hi, c) in enumerate(classes))
+            note = ("classes fixes, lisibles d’un département à l’autre" if fixes
+                    else f"{len(classes)} classes de même effectif de départements (quantiles)")
             st.markdown(
                 f'<div class="map-legend map-legend--classes">{items}'
-                f'<span class="legend-unit">{unit} · {len(classes)} classes de même effectif de départements</span></div>',
+                f'<span class="legend-unit">{unit} · {note}</span></div>',
                 unsafe_allow_html=True,
             )
     st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)

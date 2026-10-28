@@ -686,8 +686,8 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     modes = {"Besoin d\u2019accès (temps de trajet)": "besoin",
              "Capacité (APL communal)": "capacite",
              "Priorité d\u2019action (besoin × population × déploiement)": "priorite"}
-    choix = st.radio("Lecture", list(modes), horizontal=True, key=f"commune_mode_{dept_code}",
-                     label_visibility="collapsed")
+    choix = st.segmented_control("Lecture", list(modes), default=list(modes)[0], key=f"commune_mode_{dept_code}",
+                                 label_visibility="collapsed") or list(modes)[0]
     mode = modes[choix]
 
     temps_num = pd.to_numeric(comm_data["temps_acces"], errors="coerce")

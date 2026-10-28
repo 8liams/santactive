@@ -190,8 +190,8 @@ def render(data: dict) -> None:
         f'{aide_methodo("comparer")}</div>', unsafe_allow_html=True)
 
     kinds = {"dept": "Départements", "region": "Régions"}
-    kind = st.radio("Niveau de comparaison", list(kinds), format_func=kinds.get, horizontal=True,
-                    key="comparer_territory_kind")
+    kind = st.segmented_control("Niveau de comparaison", list(kinds), format_func=kinds.get, default="dept",
+                                key="comparer_territory_kind") or "dept"
     is_region = kind == "region"
     sel_key = f"cmp_sel_{kind}"
     selected_codes: list[str] = list(st.session_state.get(sel_key, []))
