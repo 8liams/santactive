@@ -408,7 +408,7 @@ class TestParcoursEtSimulation(unittest.TestCase):
         at.run()
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("Territoire pilote", html)
+        self.assertIn("Territoire de travail", html)
         self.assertIn("Retour au diagnostic", html)
         from app.pages.acces_ign import pilotes_disponibles
         labels = [sb.label for sb in at.selectbox]
@@ -743,7 +743,7 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
         at.run()
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("pas disponible pour Paris", html)
+        self.assertIn("pas encore disponible pour Paris", html)
 
     def test_comparer_similaires_et_synthese(self):
         from app.pages.comparer import _similar, build_regions_comparison_df
