@@ -26,8 +26,15 @@ def _qp_first(value: object) -> str | None:
 
 
 def _set_query_params(view: View, params: dict[str, str]) -> None:
-    """Remplace entièrement les query params (évite les clés territoriales résiduelles)."""
+    """Remplace entièrement les query params (évite les clés territoriales résiduelles).
+
+    Le territoire de référence (paramètre ``t``, voir app/territoire.py) est
+    conservé d'une vue à l'autre."""
     qp: dict[str, str] = {"view": view, **params}
+    from .territoire import SESSION_KEY, PARAM, Territoire
+    t = st.session_state.get(SESSION_KEY)
+    if isinstance(t, Territoire) and PARAM not in qp:
+        qp[PARAM] = t.param
     if hasattr(st.query_params, "from_dict"):
         st.query_params.from_dict(qp)
         return
@@ -90,6 +97,8 @@ def navigate_compare(*dept_codes: str) -> None:
 
 def init_from_url() -> None:
     """Synchronise session ↔ URL (liens HTML ou navigation programmatique)."""
+    from .territoire import init_from_url as _init_territoire
+    _init_territoire()
     qp = dict(st.query_params)
     url_view = _qp_first(qp.get("view"))
 

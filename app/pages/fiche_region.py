@@ -50,6 +50,8 @@ def render(data: dict) -> None:
 
     region_name = region_depts.iloc[0]["Nom de la région"]
     region_code_val = str(region_depts.iloc[0].get("Code région", ""))
+    from .. import territoire as T
+    T.follow_region(region_code_val)   # la région ouverte devient le territoire de référence
 
     priorities_raw = compute_dept_priorities(
         region_depts, data.get("patho"), reference=master

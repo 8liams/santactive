@@ -48,6 +48,8 @@ def render(data: dict) -> None:
         return
 
     r = row.iloc[0]
+    from .. import territoire as T
+    T.follow_dept(dept_code)   # la fiche ouverte devient le territoire de référence
 
     render_topbar(r, data)
     render_header(r, master)

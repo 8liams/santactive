@@ -3111,3 +3111,104 @@ img[alt="ESData, ESD Paris"] {
 .usage-link { font-size: 12.5px; font-weight: 600; color: #1A3D8F; margin-top: 2px; }
 @media screen and (max-width: 768px) { .usage-grid { grid-template-columns: 1fr 1fr; } }
 @media screen and (max-width: 420px) { .usage-grid { grid-template-columns: 1fr; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HARMONISATION DES CONTRÔLES — charte rectangulaire, coins 6 px
+   État actif : fond bleu marine, texte blanc. Inactif : blanc, bordure grise.
+   Les intitulés de widgets (stWidgetLabel) restent de simples libellés.
+   ═══════════════════════════════════════════════════════════════════════════ */
+div[data-testid="stRadio"] label[data-testid="stWidgetLabel"],
+div[data-testid="stPills"] label[data-testid="stWidgetLabel"],
+div[data-testid="stSelectbox"] label[data-testid="stWidgetLabel"],
+div[data-testid="stMultiSelect"] label[data-testid="stWidgetLabel"],
+div[data-testid="stToggle"] label[data-testid="stWidgetLabel"],
+div[data-testid="stSlider"] label[data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] label[data-testid="stWidgetLabel"] {
+    border: 0 !important; background: transparent !important; padding: 0 0 4px !important;
+    border-radius: 0 !important; cursor: default !important; margin: 0 !important;
+    color: #6B6B68 !important; font-size: 11px !important; font-weight: 700 !important;
+    letter-spacing: .08em !important; text-transform: uppercase !important;
+}
+div[data-testid="stRadio"] label[data-testid="stWidgetLabel"] p,
+div[data-testid="stPills"] label[data-testid="stWidgetLabel"] p,
+div[data-testid="stSelectbox"] label[data-testid="stWidgetLabel"] p,
+div[data-testid="stMultiSelect"] label[data-testid="stWidgetLabel"] p {
+    font-size: 11px !important; font-weight: 700 !important; letter-spacing: .08em !important;
+    text-transform: uppercase !important; color: #6B6B68 !important;
+}
+div[data-testid="stRadio"] label[data-testid="stWidgetLabel"]:hover { background: transparent !important; color: #6B6B68 !important; }
+
+/* Options radio (segments) */
+div[data-testid="stRadio"] div[role="radiogroup"] { gap: 6px !important; }
+div[data-testid="stRadio"] div[role="radiogroup"] > label {
+    border: 1.5px solid #C9C6BA !important; border-radius: 6px !important;
+    padding: 6px 14px !important; background: #FFFFFF !important; color: #2B2B2B !important;
+    font-size: 13px !important; font-weight: 500 !important; line-height: 1.3 !important;
+    min-height: 34px !important; display: inline-flex !important; align-items: center !important;
+}
+div[data-testid="stRadio"] div[role="radiogroup"] > label:hover { border-color: #1A3D8F !important; background: #F0F3FA !important; color: #1A3D8F !important; }
+div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) {
+    background: #1A3D8F !important; border-color: #1A3D8F !important; color: #FFFFFF !important;
+}
+div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) p,
+div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) span { color: #FFFFFF !important; }
+div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:focus-visible) { outline: 2px solid #2E6BE6 !important; outline-offset: 2px !important; }
+
+/* Pills natifs → même apparence que les segments radio */
+div[data-testid="stPills"] button,
+div[data-testid="stPills"] button[data-testid="stBaseButton-pills"] {
+    border-radius: 6px !important; border: 1.5px solid #C9C6BA !important;
+    padding: 6px 14px !important; min-height: 34px !important;
+}
+div[data-testid="stPills"] button[data-testid="stBaseButton-pillsActive"],
+div[data-testid="stPills"] button[aria-pressed="true"] {
+    background: #1A3D8F !important; border-color: #1A3D8F !important; color: #FFFFFF !important;
+}
+div[data-testid="stPills"] button[data-testid="stBaseButton-pillsActive"] p,
+div[data-testid="stPills"] button[data-testid="stBaseButton-pillsActive"] span { color: #FFFFFF !important; }
+
+/* Boutons Streamlit : rectangle 6 px, primaire marine / secondaire blanc bordé */
+.stButton > button, .stDownloadButton > button, [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"] {
+    border-radius: 6px !important; font-family: Marianne, Inter, sans-serif !important;
+    font-size: 13px !important; font-weight: 500 !important; min-height: 36px !important;
+}
+[data-testid="stBaseButton-primary"] { background: #1A3D8F !important; color: #FFFFFF !important; border: 1.5px solid #1A3D8F !important; }
+[data-testid="stBaseButton-primary"]:hover { background: #2E6BE6 !important; border-color: #2E6BE6 !important; }
+[data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-primary"] span { color: #FFFFFF !important; }
+[data-testid="stBaseButton-secondary"] { background: #FFFFFF !important; color: #2B2B2B !important; border: 1.5px solid #C9C6BA !important; }
+[data-testid="stBaseButton-secondary"]:hover { border-color: #1A3D8F !important; color: #1A3D8F !important; background: #F0F3FA !important; }
+[data-testid="stBaseButton-secondary"] p { color: inherit !important; }
+
+/* Sélecteurs (selectbox / multiselect) : même rectangle */
+div[data-testid="stSelectbox"] > div > div, div[data-testid="stMultiSelect"] > div > div,
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div, div[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    border-radius: 6px !important; border-color: #C9C6BA !important; background: #FFFFFF !important;
+    font-family: Marianne, Inter, sans-serif !important; font-size: 13px !important;
+}
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div:hover, div[data-testid="stMultiSelect"] [data-baseweb="select"] > div:hover { border-color: #1A3D8F !important; }
+div[data-testid="stMultiSelect"] span[data-baseweb="tag"] { background: #E8EDF8 !important; color: #0A1938 !important; border-radius: 4px !important; }
+div[data-testid="stMultiSelect"] span[data-baseweb="tag"] span { color: #0A1938 !important; }
+/* Bascule (st.toggle) : marine à l'état actif */
+div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="stToggle"] [aria-checked="true"] { background: #1A3D8F !important; }
+/* Infobulles d'aide des widgets : lisibles */
+[data-testid="stTooltipContent"], [data-baseweb="tooltip"] { font-family: Marianne, Inter, sans-serif !important; font-size: 12px !important; max-width: 320px !important; }
+
+/* ─── Sélecteur du territoire de référence (barre de navigation) ───────── */
+.st-key-sa_topnav [data-testid="stSelectbox"] { margin: 0 !important; }
+.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    min-height: 38px !important; border: 1.5px solid #1A3D8F !important; background: #F7F9FD !important;
+    border-radius: 6px !important; font-weight: 600 !important; color: #0A1938 !important;
+}
+.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] > div::before {
+    content: "Territoire"; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: #1A3D8F; position: absolute; top: -7px; left: 8px; background: #fff; padding: 0 4px; line-height: 1;
+}
+.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] { position: relative; }
+.st-key-sa_topnav [data-testid="stSelectbox"] [data-baseweb="select"] input { font-weight: 600 !important; }
+@media screen and (max-width: 768px) {
+    .st-key-sa_topnav [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    .st-key-sa_topnav [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:not(#_) { flex: 1 1 100% !important; min-width: 100% !important; }
+    .st-key-sa_topnav [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2):not(#_),
+    .st-key-sa_topnav [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3):not(#_) { flex: 1 1 calc(50% - 6px) !important; min-width: calc(50% - 6px) !important; }
+    div[data-testid="stRadio"] div[role="radiogroup"] > label { padding: 5px 10px !important; font-size: 12px !important; }
+}

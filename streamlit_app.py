@@ -133,6 +133,16 @@ geojson = load_geojson()
 init_from_url()
 view = get_current_view()
 
+# Territoire de référence : une fiche ouverte devient le contexte avant même
+# l'affichage de la barre (le sélecteur la reflète dès ce rendu).
+from app import territoire as _T
+if view == "dept" and st.session_state.get("dept_code") and (master["dept"] == str(st.session_state["dept_code"])).any():
+    _T.follow_dept(str(st.session_state["dept_code"]))
+elif view == "region" and st.session_state.get("region_code"):
+    _T.follow_region(str(st.session_state["region_code"]))
+elif view == "commune" and st.session_state.get("dept_code"):
+    _T.follow_dept(str(st.session_state["dept_code"]))
+
 render_topnav(view, master, with_search=True)
 
 # ─── CONTEXTE PARTAGÉ ─────────────────────────────────────────────────────────
