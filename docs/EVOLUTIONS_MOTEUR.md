@@ -130,10 +130,40 @@ Indice offre (poids actuels renormalisés) et indice besoins (65+, prévalences
 standardisées si fiables), quadrants par rapport aux médianes, explication par
 département. Non intégré au score.
 
-## 12. Interface
+## 12. Interface (refonte du 28 octobre 2026, vérifiée dans le navigateur)
 
-Navigation supérieure (panneau latéral replié, recherche et navigation
-complètes dans le panneau), actions de fiche compactes, scorecard en six
-tuiles avec détail dépliable, cartes de recommandation structurées,
-comparateur chiffré, justifications communales factuelles, fonds de carte
-configurables (CARTO avec clé via secrets, IGN Plan v2 par défaut).
+- Navigation unique : barre supérieure (logo, Accueil, Explorer, Comparer,
+  Accès routier, Méthodologie, À propos, recherche globale) ; panneau latéral
+  et bandeau mobile supprimés ; menu compact `<details>` sur mobile.
+- Recherche : composant Streamlit maison (`app/components/search_frontend/`,
+  protocole v1 sans dépendance). Index statique
+  `static/data/index_recherche.json` (régénérer avec
+  `scripts/donnees/generer_index_recherche.py` après un changement de
+  données ; `server.enableStaticServing = true` dans `.streamlit/config.toml`,
+  ce qui expose en lecture tout le dossier `static/`). Menu flottant, 7
+  résultats, classement exact / préfixe / début de mot / contenu (communes
+  −10), clavier, aucun rerun pendant la frappe ; la sélection renvoie
+  `{level, code}` à Python qui navigue.
+- Accueil : hero compact, recherche principale, carte nationale sans fond de
+  carte (choroplèthe seule), repères nationaux (APL médiane, population sous
+  2,5, généralistes, temps d'accès, terciles), cartouches DOM homogènes avec
+  silhouette (`static/geo/contours_dom.json`, `generer_contours_dom.py`),
+  Mayotte « hors score global ».
+- Fonds de carte (`_tile_config`) : CARTO Positron si `CARTO_API_KEY`, sinon
+  Esri World Light Gray (libre, attribution) ; `SANTACTIVE_FOND_CARTE=ign|osm`.
+- Fiches : fil d'Ariane et actions (copier, e-mail, PDF, comparer) sur une
+  ligne ; unité APL sur sa ligne ; scorecard six tuiles + détail dépliable
+  (icône Material rétablie) ; cartes de recommandation sans bloc vide ;
+  secteurs non répétés.
+- Communes : deux lectures explicites — « besoin d'accès » (classes de temps
+  de trajet) et « priorité d'action » (score inchangé : besoin 45 %,
+  population 35 %, faisabilité 20 %). Carte et Top 10 suivent la même lecture ;
+  les communes avec offre sur place (temps 0) ne sont pas classées ; le seuil
+  de population du classement (max(2 000, médiane)) est supprimé — c'est lui
+  qui faisait remonter des villes à 0 min.
+- Veille (levier « maintien ») : mentionne les communes à plus de 15 min
+  (nombre, habitants, part) quand le seuil de 3 % des leviers de proximité
+  n'est pas atteint (ex. Côte-d'Or : 62 communes, 5 706 hab., 1 %).
+- Comparateur : lien direct `?view=comparer&depts=18,75,23`.
+- Vérification : captures Playwright (1440, 1920, 390 px) avant/après ;
+  `tests/test_moteur.py::TestInterface` (49 tests au total).
