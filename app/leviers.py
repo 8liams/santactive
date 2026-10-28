@@ -127,7 +127,7 @@ def profils_departements(data: dict) -> pd.DataFrame:
     # Percentiles nationaux (100 = valeur la plus élevée)
     for c in ([f"dens_{k}" for k in POSTES] + ["dens_sages_femmes", "centres_sante_100k", "had_100k",
               "med_gen_pour_100k", "structures_pour_100k", "pct_plus_65", "pct_moins_25",
-              "part_pop_apl_inf_2_5", "part_pop_communes_critiques", "temps_acces_median"]
+              "part_pop_apl_inf_2_5", "part_pop_communes_critiques", "temps_acces_median"]  # communes_critiques_source : conservée telle quelle
              + [f"prevstd_{k}" for k in PATHOS] + [f"prev_{k}" for k in PATHOS]):
         if c in p.columns:
             p[f"pct_{c}"] = pd.to_numeric(p[c], errors="coerce").rank(pct=True) * 100
@@ -138,8 +138,38 @@ def profils_departements(data: dict) -> pd.DataFrame:
     return p
 
 
+def _communes_eloignees_insee(dept: str, n: int) -> list[tuple[str, int, float]] | None:
+    """Communes dont le temps moyen en voiture vers un généraliste dépasse 15 min (INSEE 2025),
+    les plus peuplées (population municipale API Géo) : (nom, habitants, minutes). None si le
+    département n'est pas couvert (Guadeloupe, Guyane, Mayotte)."""
+    from pathlib import Path
+    from .commune_opportunity import load_acces_insee_communes
+    from .config import DATA_DIR
+    ins = load_acces_insee_communes()
+    d = ins[ins["dep"].astype(str) == str(dept)]
+    if d.empty:
+        return None
+    loin = d[pd.to_numeric(d["temps_acces"], errors="coerce") > 15]
+    if loin.empty:
+        return []
+    path = DATA_DIR / "communes_population_geoapi.csv"
+    if Path(path).exists():
+        ref = pd.read_csv(path, dtype={"code_insee": str, "dept": str}).drop_duplicates("code_insee").set_index("code_insee")
+        loin = loin.merge(ref[["nom", "population"]], left_on="code_insee", right_index=True, how="left")
+    else:
+        loin = loin.assign(nom=loin["code_insee"], population=loin["pop_localisee"])
+    loin["population"] = pd.to_numeric(loin["population"], errors="coerce").fillna(pd.to_numeric(loin["pop_localisee"], errors="coerce"))
+    loin = loin.dropna(subset=["nom"]).sort_values(["population", "temps_acces"], ascending=[False, False])
+    return [(str(r["nom"]), int(r["population"]) if pd.notna(r["population"]) else 0, float(r["temps_acces"])) for _, r in loin.head(n).iterrows()]
+
+
 def _communes_eloignees(dept: str, data: dict, n: int = 4) -> list[tuple[str, int, float]]:
-    """Communes à plus de 15 min les plus peuplées : (nom, habitants, minutes)."""
+    """Communes à plus de 15 min d'un généraliste les plus peuplées : (nom, habitants, minutes).
+    Source INSEE 2025 (temps moyen communal) lorsque le département est couvert ; fichier interne
+    sinon (Guadeloupe, Guyane : indicateur historique, 0 = présence)."""
+    insee = _communes_eloignees_insee(dept, n)
+    if insee is not None:
+        return insee
     temps = data.get("temps")
     if temps is None or temps.empty:
         return []
@@ -299,6 +329,12 @@ def _rural(p):
     return p.get("typologie") in ("rural", "peri_urbain")
 
 
+def _src_15(p) -> str:
+    """Précision de source pour les comptes « à plus de 15 min » : INSEE 2025 (temps moyen communal
+    et habitants des carreaux) ou, hors champ INSEE, indicateur interne historique."""
+    return " · INSEE 2025" if p.get("communes_critiques_source", "insee") == "insee" else " · indicateur interne, hors champ INSEE"
+
+
 def _urbain(p):
     return p.get("typologie") in ("urbain", "urbain_dense")
 
@@ -410,12 +446,12 @@ def _t_consult_avancees(p):
 
 def _t_equipes_mobiles(p):
     return {
-        "probleme": f"{_n(p['pop_communes_critiques'])} habitants {p['nom_de']} vivent dans des communes "
-                    f"à plus de 15 minutes de l'offre de soins ({_pc(p['part_pop_communes_critiques'])} de la population, "
-                    f"{int(p['nb_communes_critiques'])} communes).",
-        "indicateurs": [f"{int(p['nb_communes_critiques'])} communes à plus de 15 min",
-                        f"{_n(p['pop_communes_critiques'])} habitants concernés",
-                        f"temps d'accès médian {_f(p['temps_acces_median'], '.0f')} min"],
+        "probleme": f"{_n(p['pop_communes_critiques'])} habitants {p['nom_de']} vivent à plus de 15 minutes en voiture "
+                    f"d'un médecin généraliste ({_pc(p['part_pop_communes_critiques'])} de la population ; "
+                    f"{int(p['nb_communes_critiques'])} communes dépassent 15 min en moyenne{_src_15(p)}).",
+        "indicateurs": [f"{int(p['nb_communes_critiques'])} communes à plus de 15 min en moyenne",
+                        f"{_n(p['pop_communes_critiques'])} habitants à plus de 15 min",
+                        f"temps médian {_f(p['temps_acces_median'], '.1f')} min (médiane des départements {_f(p['med'].get('temps_acces_median'), '.1f')})"],
         "action": "Déployer des équipes mobiles de soins primaires et de prévention (bus santé, "
                   "permanences itinérantes) sur les secteurs les plus éloignés.",
         "pourquoi": "Quand l'isolement est concentré sur quelques communes peuplées, une offre "
@@ -429,10 +465,11 @@ def _t_equipes_mobiles(p):
 def _t_teleconsultation(p):
     return {
         "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {_pc(p['part_pop_apl_inf_2_5'])} des habitants sont sous le repère APL "
-                    f"et le temps d'accès médian atteint {_f(p['temps_acces_median'], '.0f')} min.",
+                    f"et le temps médian vers un généraliste ({_f(p['temps_acces_median'], '.1f')} min) dépasse la médiane des "
+                    f"départements ({_f(p['med'].get('temps_acces_median'), '.1f')} min).",
         "indicateurs": [f"{_pc(p['part_pop_apl_inf_2_5'])} de la population dans une commune sous le repère APL 2,5",
-                        f"temps d'accès médian {_f(p['temps_acces_median'], '.0f')} min",
-                        f"{int(p['nb_communes_critiques'])} communes à plus de 15 min"],
+                        f"temps médian {_f(p['temps_acces_median'], '.1f')} min (médiane des départements {_f(p['med'].get('temps_acces_median'), '.1f')})",
+                        f"{int(p['nb_communes_critiques'])} communes à plus de 15 min en moyenne{_src_15(p)}"],
         "action": "Installer des points de téléconsultation assistée (pharmacies, MSP, mairies) "
                   "avec un professionnel présent auprès du patient.",
         "pourquoi": "La téléconsultation assistée répond aux soins non programmés et au suivi des "
@@ -597,11 +634,11 @@ def _t_chroniques(p):
 
 def _t_mobilite(p):
     return {
-        "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {_n(p['pop_communes_critiques'])} habitants sont à plus de 15 min de "
-                    f"l'offre de soins et {_f(p['pct_plus_65'])} % de la population a 65 ans ou plus.",
-        "indicateurs": [f"{int(p['nb_communes_critiques'])} communes à plus de 15 min",
-                        f"{_n(p['pop_communes_critiques'])} habitants concernés",
-                        f"{_f(p['pct_plus_65'])} % de 65 ans et plus"],
+        "probleme": f"{p['nom_dans'][0].upper() + p['nom_dans'][1:]}, {_n(p['pop_communes_critiques'])} habitants sont à plus de 15 min en voiture "
+                    f"d'un généraliste{_src_15(p)} et {_f(p['pct_plus_65'])} % de la population a 65 ans ou plus.",
+        "indicateurs": [f"{int(p['nb_communes_critiques'])} communes à plus de 15 min en moyenne",
+                        f"{_n(p['pop_communes_critiques'])} habitants à plus de 15 min",
+                        f"{_f(p['pct_plus_65'])} % de 65 ans et plus"],
         "action": "Organiser le transport solidaire et des navettes vers les lieux de soins "
                   "(transport à la demande, bénévolat encadré, conventions avec les taxis).",
         "pourquoi": "Pour les personnes âgées sans véhicule, le trajet est le premier motif de "

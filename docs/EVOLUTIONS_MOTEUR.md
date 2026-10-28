@@ -431,3 +431,40 @@ département. Non intégré au score.
   déjà quasi inertes avec l'indicateur interne (1 et 99 départements), inertes avec
   l'INSEE (0 et 98) ; à remplacer par un critère relatif (au-dessus du 3ᵉ quartile,
   3,3 min) si l'on souhaite conserver ces mentions.
+
+## 19. Communes critiques et secteurs des leviers : INSEE 2025 (28 octobre 2026, validé par William)
+
+- **Règle** : `nb_communes_critiques` (communes dont le temps moyen vers un généraliste
+  dépasse 15 min), `pop_communes_critiques` (habitants des carreaux à plus de 15 min)
+  et `part_pop_communes_critiques` viennent de l'INSEE 2025 lorsque le département est
+  couvert (98) ; Guadeloupe et Guyane gardent le fichier interne, avec la colonne
+  `communes_critiques_source` = « interne » et une mention « indicateur interne, hors
+  champ INSEE » dans les textes. Les valeurs internes restent disponibles sous
+  `*_interne`. Secteurs cités dans les leviers et l'audio : communes INSEE dont le temps
+  moyen dépasse 15 min, les plus peuplées (population municipale API Géo).
+- **Volumes** : 1 937 communes et 531 480 habitants (dont 9 communes et 17 k habitants
+  internes pour 971/973) contre 1 228 communes et 219 218 habitants avec l'ancien
+  fichier. Départements à 3 % ou plus de la population à plus de 15 min : 18 (7 avant).
+- **Leviers** (règles inchangées : « ≥ 3 % de la population à plus de 15 min » requis
+  pour les équipes mobiles et le transport solidaire, « ≥ 15 communes », « ≥ 10 communes »
+  pour le repérage gériatrique) : 13 départements modifiés, tous ruraux ou péri-urbains,
+  tous entre 3,1 % et 6,4 % de population éloignée selon l'INSEE alors que l'ancien
+  fichier les plaçait sous 3 % (Dordogne 0,3 % → 3,1 %, Gers 0,9 % → 4,5 %, Lot
+  1,9 % → 6,4 %). Ajouts : équipes mobiles (Allier, Hautes-Alpes, Ardèche, Ariège,
+  Aveyron, Corrèze, Dordogne, Gers, Lot, Haute-Marne, Nièvre), transport solidaire
+  (Hautes-Alpes, Ariège, Aveyron, Corrèze, Dordogne, Gers, Lot, avec 65 ans et plus au-dessus
+  de la médiane), repérage gériatrique (Var, Vosges : plus de 10 communes éloignées et
+  65 ans et plus > médiane + 2 points). Retraits par plafonnement à quatre leviers et
+  deux par famille : téléconsultation (Ardèche), repérage gériatrique (Aveyron, Corrèze,
+  Dordogne, Haute-Marne), MSP (Nièvre), « maintien » (Vosges). Détail :
+  `data_corrections/references/audit_migration/leviers_avant_apres_insee.csv`.
+- **Seuils absolus retirés** (pilotage régional) : « temps > 12 min » et « ≤ 10 min »
+  n'avaient plus de sens à l'échelle INSEE (médianes de 1 à 6 min ; 1 et 99 départements
+  concernés avec l'ancien indicateur). Remplacés par des comparaisons statistiques :
+  temps médian au-dessus du troisième quartile des départements (`temps_acces_national_p75`,
+  3,3 min) → « temps d'accès élevé » ; au plus égal à la médiane nationale → « temps d'accès
+  correct ». Seuil de politique publique conservé : 15 min (convention de lecture
+  Sant'active, même valeur que la part INSEE affichée partout). Libellés « vers
+  l'établissement le plus proche » corrigés en « vers un généraliste ».
+- **Distinction maintenue** : temps de trajet (INSEE), présence d'un généraliste (BPE),
+  disponibilité effective des soins (non mesurée : délais, capacité).

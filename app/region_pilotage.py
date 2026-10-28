@@ -137,23 +137,25 @@ def _generate_raisons(row: pd.Series, patho_info: dict | None) -> list[str]:
     if pd.notna(apl):
         if apl < APL_SEUIL_DESERT:
             reasons.append(
-                f"{APL_LABEL} de {apl:.1f}\u202f/hab., sous le repère de sous-densité (2,5)."
+                f"{APL_LABEL} de {f'{apl:.1f}'.replace('.', ',')}\u202f/hab., sous le repère de sous-densité (2,5)."
             )
         elif apl < 3.0:
-            reasons.append(f"{APL_LABEL} de {apl:.1f}\u202f/hab., proche du repère de 2,5.")
+            reasons.append(f"{APL_LABEL} de {f'{apl:.1f}'.replace('.', ',')}\u202f/hab., proche du repère de 2,5.")
 
     nb_crit = int(_num(row.get("nb_communes_critiques"), 0) or 0)
     if nb_crit > 0:
         label = "commune" if nb_crit == 1 else "communes"
-        reasons.append(f"{nb_crit} {label} à plus de 15\u202fmin d'un établissement.")
+        reasons.append(f"{nb_crit} {label} à plus de 15\u202fmin en moyenne d'un généraliste.")
 
     pct65 = _num(row.get("pct_plus_65"))
     if pd.notna(pct65) and pct65 > 22:
         reasons.append(f"{pct65:.1f}\u202f% de 65 ans et plus, avec une pression démographique élevée.")
 
     temps = _num(row.get("temps_acces_median"))
-    if pd.notna(temps) and temps > 12:
-        reasons.append(f"Temps d'accès médian de {temps:.0f}\u202fmin vers l'établissement le plus proche.")
+    p75 = _num(row.get("temps_acces_national_p75"))
+    if pd.notna(temps) and pd.notna(p75) and temps > p75:
+        reasons.append(f"Temps médian de {str(round(temps, 1)).replace('.', ',')}\u202fmin en voiture vers un généraliste, "
+                       "au-dessus de trois départements sur quatre (INSEE 2025).")
 
     med = _num(row.get("med_gen_pour_100k"))
     if pd.notna(med) and med < 90:
@@ -296,7 +298,8 @@ def build_territoire_card(
         fragilites.append("Faible offre hospitalière")
 
     temps = _num(row.get("temps_acces_median"))
-    if pd.notna(temps) and temps > 12:
+    p75 = _num(row.get("temps_acces_national_p75"))
+    if pd.notna(temps) and pd.notna(p75) and temps > p75:
         fragilites.append("Temps d'accès élevé")
 
     hop = int(_num(row.get("nb_hopitaux"), 0) or 0)
@@ -321,7 +324,8 @@ def build_territoire_card(
     if pd.notna(prix) and pd.notna(prix_med) and prix <= prix_med * 0.85:
         atouts.append("Foncier favorable")
 
-    if pd.notna(temps) and temps <= 10:
+    med_nat = _num(row.get("temps_acces_national_med"))
+    if pd.notna(temps) and pd.notna(med_nat) and temps <= med_nat:
         atouts.append("Temps d'accès correct")
 
     if patho_info and patho_info.get("prev_max", 0) > 0:
@@ -543,7 +547,7 @@ def compute_region_summary(
             f"département{'s' if nb_desert > 1 else ''} sur {len(region_depts)}"
         )
     elif nb_communes >= 10:
-        tension = "communes avec un temps d'accès supérieur à 15 min"
+        tension = "communes à plus de 15 min en moyenne d'un généraliste"
     elif pd.notna(pct65_med) and pct65_med > 22:
         tension = "vieillissement démographique et pression sur les parcours de soins"
     elif delais_region is not None and not delais_region.empty:
@@ -809,7 +813,8 @@ def _compute_leviers_action_legacy(
     desert_depts = _names(desert_mask, "apl_dept", True)
 
     iso_depts = _names(_col("nb_communes_critiques") > 3, "nb_communes_critiques", False)
-    temps_depts = _names(_col("temps_acces_median") > 12, "temps_acces_median", False)
+    _p75 = pd.to_numeric(region_depts.get("temps_acces_national_p75"), errors="coerce").max() if "temps_acces_national_p75" in region_depts.columns else float("nan")
+    temps_depts = _names(_col("temps_acces_median") > _p75, "temps_acces_median", False) if pd.notna(_p75) else []
 
     def _n_dept(n: int) -> str:
         return f"{n} département" + ("s" if n > 1 else "")
@@ -939,7 +944,7 @@ def _compute_leviers_action_legacy(
             depts_prox,
             "Habitants éloignés des établissements",
             "Communes isolées ou temps d'accès médian élevé",
-            "Données communes critiques et temps de trajet vers les établissements.",
+            "Communes à plus de 15 min d'un généraliste et temps médian (INSEE 2025).",
             0.70,
         ))
         if iso_depts:
@@ -947,7 +952,7 @@ def _compute_leviers_action_legacy(
                 "Accès de proximité", "Navettes santé",
                 iso_depts,
                 "Personnes sans mobilité vers les soins",
-                f"{int(region_depts['nb_communes_critiques'].fillna(0).sum())} communes éloignées des établissements",
+                f"{int(region_depts['nb_communes_critiques'].fillna(0).sum())} communes à plus de 15 min en moyenne d'un généraliste",
                 "Isolement géographique recensé dans la région.",
                 0.65,
             ))

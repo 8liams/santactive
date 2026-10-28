@@ -537,7 +537,7 @@ _IMPLICATIONS: dict[str, tuple[str, str, str]] = {
     "structures_pour_100k": ("structures hospitalières", " /100k", "les consultations avancées et la coordination ville-hôpital y dépendent de sites moins nombreux"),
     "prix_m2_moyen": ("prix médian au m²", " €", "le coût du foncier peut y freiner l'installation (à l'inverse, un prix bas est un levier)"),
     "pct_plus_65": ("part des 65 ans et plus", " %", "la demande de soins liée à l'âge y est plus forte (parcours gériatriques, autonomie)"),
-    "nb_communes_critiques": ("communes à plus de 15 min", "", "l'isolement y concerne davantage de communes (transport solidaire, permanences itinérantes)"),
+    "nb_communes_critiques": ("communes à plus de 15 min d'un généraliste (temps moyen, INSEE 2025)", "", "l'isolement y concerne davantage de communes (transport solidaire, permanences itinérantes)"),
     "acces_mg_part_sup_15_pct": ("part d'habitants à plus de 15 min d'un généraliste", " %", "l'éloignement géographique y justifie des réponses de proximité (antennes, permanences, transport solidaire) — mesure INSEE 2025, hors Guadeloupe, Guyane et Mayotte"),
 }
 

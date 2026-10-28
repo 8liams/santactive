@@ -120,21 +120,10 @@ def _region_national_rank(region_code: str, master: pd.DataFrame) -> tuple[int |
 
 
 def _critical_commune_names(data: dict, dept_code: str, *, limit: int = 5) -> list[str]:
-    temps = data.get("temps")
-    if temps is None or getattr(temps, "empty", True):
-        return []
-    df = temps[temps["code_departement"].astype(str).str.zfill(2) == dept_code].copy()
-    df["temps_acces"] = pd.to_numeric(df["temps_acces"], errors="coerce")
-    df = df[df["temps_acces"] > 15].sort_values("temps_acces", ascending=False)
-    seen: set[str] = set()
-    names: list[str] = []
-    for name in df["commune"].dropna().astype(str):
-        if name not in seen:
-            seen.add(name)
-            names.append(name)
-        if len(names) >= limit:
-            break
-    return names
+    """Communes à plus de 15 min d'un généraliste (même source que les leviers : INSEE 2025,
+    repli sur le fichier interne hors champ INSEE)."""
+    from .leviers import _communes_eloignees
+    return [nom for nom, _hab, _t in _communes_eloignees(str(dept_code).zfill(2), data, limit)]
 
 
 def _top_opportunity_commune_names(

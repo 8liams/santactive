@@ -335,7 +335,8 @@ class TestInterface(unittest.TestCase):
 
         recos = selectionner(profil("21", DATA), n=4)
         self.assertEqual([r["id"] for r in recos], ["maintien"])
-        self.assertIn("62 communes", recos[0]["probleme"])
+        self.assertIn("71 communes", recos[0]["probleme"])   # INSEE 2025 (62 avec l'ancien fichier interne)
+        self.assertIn("INSEE 2025", recos[0]["probleme"]) if "INSEE" in recos[0]["probleme"] else None
         self.assertTrue(recos[0]["secteurs"])
 
 

@@ -202,8 +202,8 @@ def render(data: dict) -> None:
         ["Champ", "34 863 communes ; 25,5 % à 0 ; 1 241 communes à plus de 15 min",
          "34 833 communes, 64,1 M d’habitants localisés ; hors Guadeloupe, Guyane, Mayotte"],
         ["Résultat national", "Médiane des départements : 6 min", "0,8 % de la population à plus de 15 min d’un généraliste (514 000 habitants), 0,18 % à plus de 20 min"],
-        ["Usage dans l’outil", "Aucun dans le produit depuis le 28 octobre 2026 ; conservé pour l’audit historique (option SANTACTIVE_TEMPS_SOURCE=interne)",
-         "Dimension « temps » du score (médiane pondérée), diagnostics (accueil, fiches, comparaison, PDF), lecture communale, situation actuelle du simulateur ; la part à plus de 15 min est un repère complémentaire"],
+        ["Usage dans l’outil", "Repli pour la Guadeloupe et la Guyane (hors champ INSEE), signalé comme tel ; conservé pour l’audit historique (option SANTACTIVE_TEMPS_SOURCE=interne)",
+         "Dimension « temps » du score (médiane pondérée) ; diagnostics (accueil, fiches, comparaison, PDF) ; lecture communale ; situation actuelle du simulateur ; « communes critiques » des leviers et du pilotage régional (communes dont le temps moyen dépasse 15 min, habitants à plus de 15 min) ; secteurs cités dans les leviers"],
     ])
     _prose(
         "<strong>Ce que l’audit a montré.</strong> Les zéros de l’indicateur interne ne sont pas des temps nuls mais une présence : sur les "
@@ -220,6 +220,16 @@ def render(data: dict) -> None:
         "<strong>Lecture communale.</strong> Sur les fiches, la carte « besoin d’accès » et le classement communal utilisent désormais le temps moyen "
         "INSEE par commune lorsque le département est couvert (repli explicite sur l’indicateur interne sinon, par exemple en Guyane) ; la présence "
         "d’un généraliste vient de la BPE.",
+        "<strong>Communes critiques et secteurs des leviers (28 octobre 2026).</strong> Les comptes « communes à plus de 15 min » (communes dont le "
+        "temps moyen vers un généraliste dépasse 15 min), « habitants à plus de 15 min » (habitants des carreaux) et les secteurs cités dans les "
+        "leviers reposent sur l’INSEE 2025 : 1 928 communes et 514 254 habitants en France, contre 1 228 communes et 219 218 habitants avec l’ancien "
+        "fichier, qui comptait au niveau de la commune entière et ignorait une partie de la population. Les règles des leviers sont inchangées "
+        "(« au moins 3 % de la population à plus de 15 min », « au moins 15 communes ») ; appliquées à la mesure INSEE, elles déclenchent les leviers de "
+        "proximité (équipes mobiles, transport solidaire) dans des départements ruraux où l’ancien fichier sous-comptait l’éloignement. Le pilotage "
+        "régional compare le temps médian au troisième quartile des départements (temps élevé) et à la médiane (temps correct) : des seuils fixes "
+        "de 10 ou 12 min, hérités de l’ancien indicateur, n’avaient plus de sens à l’échelle INSEE (médianes départementales de 1 à 6 min). "
+        "Le seuil de 15 min est une convention de lecture de Sant’active ; il distingue le temps de trajet de la présence d’un généraliste "
+        "(BPE) et de la disponibilité effective des soins (délais, capacité), que rien ici ne mesure.",
     )
     _hr()
 
@@ -278,7 +288,7 @@ def render(data: dict) -> None:
         ["Délais d’attente (enquête)", "DREES", "2016-2017", "France entière", "Délais indicatifs par spécialité (modulés par l’APL)", "Estimation, pas mesure"],
         ["Isochrones routières", "IGN Géoplateforme (BD TOPO, Valhalla)", "temps réel, cache 24 h", "Point", "Scénario du simulateur", "Un point par commune (mairie) ; quotas du service"],
         ["Contours et population des communes", "API Géo (Etalab)", "2026", "Commune", "Cartes communales, simulateur (centre, mairie = point d’implantation)", "—"],
-        ["Temps d’accès interne (historique)", "Équipe Sant’active", "2026", "Commune", "Aucun usage actif ; audit et repli communal hors champ INSEE", "Méthode non documentée ; 0 = présence"],
+        ["Temps d’accès interne (historique)", "Équipe Sant’active", "2026", "Commune", "Repli pour la Guadeloupe et la Guyane (communes critiques, secteurs) ; audit", "Méthode non documentée ; 0 = présence"],
         ["Professionnels (fichier équipe)", "Équipe Sant’active", "2026", "Code postal", "Présence locale d’une spécialité", "Pas d’effectifs ; lignes démultipliées par code postal"],
         ["Score environnemental", "SPF / DREAL", "variable", "Région", "Information seule", "Hors score"],
     ])
@@ -337,6 +347,8 @@ def render(data: dict) -> None:
          "Corrélation 0,99 ; 4 changements de zone ; 1 sortie des priorités (Vosges)"],
         ["28 oct. 2026", "Les deux changements réunis (production actuelle)", "—",
          "Corrélation 0,97 ; 18 départements déplacés de 10 rangs ou plus ; 14 changements de zone ; 25 départements prioritaires (27 avant) ; leviers modifiés pour 15 départements"],
+        ["28 oct. 2026", "Communes critiques, habitants à plus de 15 min et secteurs des leviers : INSEE 2025 (fichier interne en repli hors champ) ; seuils de pilotage régional relatifs (3ᵉ quartile, médiane)",
+         "Une seule source de temps d’accès dans les diagnostics ; seuils de 10 et 12 min inopérants à l’échelle INSEE", "Voir docs/EVOLUTIONS_MOTEUR.md §19"],
         ["oct. 2026", "APL départemental : moyenne pondérée par la population standardisée (méthode DREES) au lieu de la médiane communale",
          "Consigne DREES pour tout APL agrégé", "Documenté dans docs/EVOLUTIONS_MOTEUR.md §12"],
         ["oct. 2026", "Densité de généralistes : effectifs DREES/RPPS 2026 au lieu des lignes du fichier de l’équipe", "Effectifs de personnes plutôt que présences", "Idem"],
@@ -357,7 +369,7 @@ def render(data: dict) -> None:
         ("04", "Décalages temporels", f"INSEE RP 2021, CNAM 2023, APL {cfg['apl_millesime']}, BPE 2025, RPPS 2026, FINESS 2026, DVF 2025, délais 2016-2017."),
         ("05", "Outre-mer", "Mayotte hors score ; Guadeloupe, Guyane et Mayotte hors champ de la base INSEE d’accès (repli sur l’indicateur interne) ; "
                             "La Réunion et la Martinique couvertes, y compris par le simulateur."),
-        ("06", "Outre-mer et temps d’accès", "Guadeloupe et Guyane n’ont pas de temps INSEE : leur score repose sur cinq dimensions (poids redistribué) ; leur lecture communale se replie sur l’indicateur interne, signalé comme tel."),
+        ("06", "Outre-mer et temps d’accès", "Guadeloupe et Guyane n’ont pas de temps INSEE : leur score repose sur cinq dimensions (poids redistribué) ; leur lecture communale, leurs communes critiques et les secteurs de leurs leviers se replient sur l’indicateur interne, signalé comme tel."),
         ("07", "Simulation", "Gain de proximité théorique : pas de capacité, pas de rendez-vous, pas de flux interdépartementaux ; deux distanciers."),
         ("08", "Priorités et leviers", "Aides à la décision fondées sur des règles transparentes ; elles ne remplacent ni l’expertise locale ni une évaluation de politique publique."),
         ("09", "Capacité théorique (ETP)", "Les ETP de la simulation de capacité convertissent un déficit de consultations sous un seuil d’APL (5 400 actes par ETP, convention DREES) : "

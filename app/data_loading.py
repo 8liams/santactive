@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
@@ -315,6 +316,21 @@ def load_all_data():
     if TEMPS_SOURCE == "insee":
         master["temps_acces_interne_median"] = master["temps_acces_median"]
         master["temps_acces_median"] = master["acces_mg_t_med"]
+    # Communes critiques (28 octobre 2026, validation William) : mesure INSEE 2025 lorsque le
+    # département est couvert — communes dont le temps moyen vers un généraliste dépasse 15 min,
+    # habitants des carreaux à plus de 15 min, part correspondante — ; fichier interne conservé
+    # sous *_interne (audit) et utilisé en repli pour Guadeloupe et Guyane (hors champ INSEE).
+    _couvert = master["acces_mg_nb_communes_sup_15"].notna()
+    for _a, _b in (("nb_communes_critiques", "acces_mg_nb_communes_sup_15"),
+                   ("pop_communes_critiques", "acces_mg_pop_sup_15"),
+                   ("part_pop_communes_critiques", "acces_mg_part_sup_15")):
+        master[f"{_a}_interne"] = master[_a]
+        master[_a] = master[_b].where(_couvert, master[_a])
+    master["communes_critiques_source"] = np.where(_couvert, "insee", "interne")
+    # Repères nationaux du temps d'accès actif (comparaisons relatives dans le pilotage régional)
+    _t = pd.to_numeric(master["temps_acces_median"], errors="coerce")
+    master["temps_acces_national_med"] = float(_t.median())
+    master["temps_acces_national_p75"] = float(_t.quantile(0.75))
 
     # ── Indicateurs dérivés ───────────────────────────────────────────────────
     # Couverture du fichier temps d'accès : communes présentes / référentiel geo.api
