@@ -19,6 +19,7 @@ import streamlit as st
 from ..config import APL_SOURCE_LABEL, TEMPS_LABEL_COURT
 
 from .. import territoire as T
+from ..components.aide import aide_methodo
 from ..components.nav import internal_href
 from ..config import PALETTE, PLOTLY_TEMPLATE
 from ..router import navigate
@@ -186,7 +187,7 @@ def render(data: dict) -> None:
         '<div class="fiche-title-row"><h1 class="fiche-title">Comparer <em>des territoires</em></h1></div>'
         '<p class="fiche-header-lead">Deux à quatre départements, ou deux à quatre régions, côte à côte : '
         'où sont les écarts, qui est le mieux et le moins bien placé sur chaque dimension, et ce que cela implique.</p>'
-        '</div>', unsafe_allow_html=True)
+        f'{aide_methodo("comparer")}</div>', unsafe_allow_html=True)
 
     kinds = {"dept": "Départements", "region": "Régions"}
     kind = st.radio("Niveau de comparaison", list(kinds), format_func=kinds.get, horizontal=True,

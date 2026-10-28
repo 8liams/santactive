@@ -7,6 +7,7 @@ import html
 import pandas as pd
 import streamlit as st
 
+from ..components.aide import aide_methodo
 from ..components.nav import internal_href
 from ..components.tooltip import info_tooltip
 from ..config import APL_LABEL_COURT, APL_SOURCE_LABEL, TEMPS_LABEL_COURT
@@ -221,7 +222,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
                + f' · <a href="{internal_href("home", t="fr")}" target="_self">France entière</a>')
     st.markdown(
         f'<div class="map-header"><div class="map-title">Accessibilité aux soins en France</div>'
-        f'<div class="map-sub">{sub} {info_tooltip("score_global") if col_key == "score_global" else ""}{ctx}</div></div>',
+        f'<div class="map-sub">{sub} {info_tooltip("score_global") if col_key == "score_global" else ""}{ctx} {aide_methodo("score")}</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -251,16 +252,20 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             unsafe_allow_html=True,
         )
     else:
-        vals = pd.to_numeric(master[col_key], errors="coerce").dropna()
-        stops = ", ".join(reversed(COLORMAPS[cmap_name]) if reverse_scale else COLORMAPS[cmap_name])
-        unit = {"apl_dept": "/hab.", "temps_acces_median": "min", "med_gen_pour_100k": "/100k",
+        # Légende = classes de quantiles de la carte (mêmes bornes, mêmes couleurs)
+        from ..components.maps import national_legend_classes
+        unit = {"apl_dept": "/hab.", "temps_acces_median": "min", "med_gen_pour_100k": "/100k hab.",
                 "prix_m2_moyen": "€/m²", "pct_plus_65": "%"}.get(col_key, "")
-        if not vals.empty:
+        dec = {"apl_dept": 1, "pct_plus_65": 1}.get(col_key, 0)
+        fmt = lambda v: f"{v:,.{dec}f}".replace(",", "\u202f").replace(".", ",")
+        classes = national_legend_classes(master, col_key, cmap_name, reverse_scale)
+        if classes:
+            items = "".join(
+                f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>'
+                f'{fmt(lo)} – {fmt(hi)}</span>' for lo, hi, c in classes)
             st.markdown(
-                '<div class="map-legend map-legend--gradient">'
-                f'<span class="count">{vals.min():,.0f} {unit}</span>'
-                f'<span class="gradient" style="background:linear-gradient(90deg,{stops});"></span>'
-                f'<span class="count">{vals.max():,.0f} {unit}</span></div>'.replace(",", " "),
+                f'<div class="map-legend map-legend--classes">{items}'
+                f'<span class="legend-unit">{unit} · {len(classes)} classes de même effectif de départements</span></div>',
                 unsafe_allow_html=True,
             )
     st.session_state["_home_map_choice"] = (col_key, cmap_name, reverse_scale)

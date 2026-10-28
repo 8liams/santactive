@@ -44,6 +44,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
+from ..components.aide import aide_methodo
 from ..components.maps import TILE_ATTR, TILE_URL
 from ..components.nav import NavCrumb, internal_href, render_breadcrumb
 
@@ -485,9 +486,9 @@ def render(data: dict) -> None:
         '<div class="fiche-header"><div class="fiche-eyebrow"><span class="code">SIMULATEUR</span>'
         '<span class="dot"></span><span class="region">Carreaux INSEE 2025 · isochrones IGN · gain de proximité théorique</span></div>'
         '<div class="fiche-title-row"><h1 class="fiche-title">Simuler une implantation <em>de médecine générale</em></h1></div>'
-        '</div>', unsafe_allow_html=True)
+        f'{aide_methodo("simuler")}</div>', unsafe_allow_html=True)
     if not pilotes:
-        st.info("Aucun département préparé (scripts/donnees/preparer_simulateur.py).")
+        st.info("Aucun département n’est préparé pour le simulateur.")
         return
 
     dept, message = _resolve_dept(data, pilotes)

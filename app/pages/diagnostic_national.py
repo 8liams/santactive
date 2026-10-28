@@ -14,6 +14,7 @@ import html
 import pandas as pd
 import streamlit as st
 
+from ..components.aide import aide_methodo
 from ..components.nav import NavCrumb, dept_link_html, internal_href, render_breadcrumb
 from ..config import APL_MILLESIME
 from ..scoring import get_score_breakdown
@@ -29,7 +30,7 @@ def render(data: dict) -> None:
     nb = int(master["score_global"].notna().sum())
     st.markdown(
         '<div class="fiche-header"><div class="fiche-eyebrow"><span class="code">FRANCE ENTIÈRE</span>'
-        f'<span class="dot"></span><span class="region">{nb} départements analysés · Mayotte hors score</span></div>'
+        f'<span class="dot"></span><span class="region">{nb} départements analysés · Mayotte hors score</span>{aide_methodo("score")}</div>'
         '<div class="fiche-title-row"><h1 class="fiche-title">Diagnostic <em>national</em></h1></div>'
         '<p class="fiche-header-lead">Ce qui se mesure à l’échelle de la France : accessibilité potentielle aux généralistes, '
         'éloignement routier, densités, et la répartition des départements selon le score Sant’active. Choisissez un territoire '

@@ -7,6 +7,7 @@ import html
 import pandas as pd
 import streamlit as st
 
+from ..components.aide import aide_methodo
 from ..components import render_national_choropleth
 from ..components.share_bar import region_share_context, render_fiche_share_bar
 from ..pdf_export import generate_region_pdf
@@ -250,6 +251,7 @@ def render_hero(
         f'<div class="fiche-header">'
         f'<div class="fiche-eyebrow">'
         f'<span class="code">RÉGION</span>'
+        f'{aide_methodo("prioriser")}'
         f'</div>'
         f'<div class="fiche-title-row">'
         f'<h1 class="fiche-title">{region_name}</h1>'

@@ -16,6 +16,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from .. import territoire as T
+from ..components.aide import aide_methodo
 from ..components.nav import NavCrumb, dept_link_html, internal_href, render_breadcrumb
 from ..indices import QUADRANTS, calculer_indices, expliquer
 
@@ -52,7 +53,7 @@ def render(data: dict) -> None:
         '<div class="fiche-title-row"><h1 class="fiche-title">Prioriser <em>les territoires</em></h1></div>'
         '<p class="fiche-header-lead">Où l’offre de soins est-elle faible alors que les besoins sont élevés ? '
         'Chaque département est situé par rapport aux autres sur deux indices : ce qu’il offre, ce dont sa population a besoin.</p>'
-        '</div>', unsafe_allow_html=True)
+        f'{aide_methodo("prioriser")}</div>', unsafe_allow_html=True)
 
     ind = calculer_indices(master, data.get("patho"))
     o_med, b_med = ind.attrs["medianes"]

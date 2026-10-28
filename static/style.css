@@ -1741,7 +1741,9 @@ div[data-testid="stRadio"] label:hover {
 div[data-testid="stRadio"] input[type="radio"] { position: absolute !important; opacity: 0 !important; width: 1px !important; height: 1px !important; margin: 0 !important; pointer-events: none !important; }
 div[data-testid="stRadio"] svg { display: none !important; }
 /* Le cercle du bouton radio (premier enfant du label, hors texte) est masqué : toute la surface est cliquable */
-div[data-testid="stRadio"] label > div:first-child:not([data-testid="stMarkdownContainer"]) { display: none !important; }
+div[data-testid="stRadio"] label[data-baseweb="radio"] > div:first-child,
+div[data-testid="stRadio"] label[data-baseweb="radio"] > div:first-of-type:not(:has([data-testid="stMarkdownContainer"])) { display: none !important; }
+div[data-testid="stRadio"] label[data-baseweb="radio"] { display: inline-flex !important; align-items: center !important; gap: 0 !important; }
 div[data-testid="stRadio"] label:has(input:focus-visible) { outline: 2px solid #1A3D8F !important; outline-offset: 2px !important; }
 div[data-testid="stRadio"] label p { margin: 0 !important; }
 
@@ -2922,6 +2924,9 @@ img[alt="ESData, ESD Paris"] {
 
 /* ─── Accueil : légende dégradée, section DOM, focus tooltip ───────────── */
 .map-legend--gradient { align-items: center; gap: 10px; }
+.map-legend--classes { align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+.map-legend--classes .legend-item { font-variant-numeric: tabular-nums; }
+.map-legend .legend-unit { font-size: 11px; color: #6B6B68; flex-basis: 100%; }
 .map-legend .gradient { flex: 0 0 180px; height: 10px; border-radius: 5px; display: inline-block; }
 .map-section-eyebrow {
     font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
@@ -2958,18 +2963,32 @@ img[alt="ESData, ESD Paris"] {
 /* Sticky : Streamlit enveloppe chaque élément dans un stLayoutWrapper de la hauteur de la barre ;
    un sticky posé sur la barre elle-même n'aurait aucune marge de déplacement. C'est donc
    l'enveloppe qui est collante (le bloc vertical parent fait toute la hauteur de la page). */
+/* Les blocs d'injection CSS (st.markdown « <style> ») occupent un emplacement vide au-dessus de la barre :
+   on les retire du flux (la feuille de style reste appliquée). */
+.block-container > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child),
+.block-container > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:first-child:last-child) {
+    display: none !important;
+}
 [data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav) {
     position: sticky; top: 0; z-index: 80;
     background: var(--bg-paper, #FAFAF8);
-    box-shadow: 0 1px 0 rgba(10, 25, 56, 0.06), 0 4px 12px -8px rgba(10, 25, 56, 0.18);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 1px 0 rgba(10, 25, 56, 0.05), 0 6px 14px -10px rgba(10, 25, 56, 0.22);
 }
 .st-key-sa_topnav {
     position: relative; z-index: 80;
     background: var(--bg-paper, #FAFAF8);
     border: none;
-    margin: 0 0 16px; padding: 8px 0;
+    margin: 0 0 18px; padding: 10px 0 12px;
     gap: 0 !important;
 }
+/* Alignement vertical précis : logo, liens et recherche centrés sur la même ligne */
+.st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center !important; }
+.st-key-sa_topnav [data-testid="stColumn"], .st-key-sa_topnav [data-testid="column"] { display: flex; align-items: center; }
+.st-key-sa_topnav [data-testid="stColumn"] > div, .st-key-sa_topnav [data-testid="column"] > div { width: 100%; }
+.st-key-sa_topnav [data-testid="stElementContainer"], .st-key-sa_topnav [data-testid="stMarkdown"] { margin: 0 !important; padding: 0 !important; }
+.st-key-sa_topnav [data-testid="stVerticalBlock"] { gap: 0 !important; }
+.st-key-sa_topnav .sa-nav { min-height: 48px; }
 .st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center; }
 .st-key-sa_topnav [data-testid="stMarkdownContainer"] p { margin: 0; }
 .sa-nav { display: flex; align-items: center; gap: 24px; min-height: 44px; }
@@ -3366,3 +3385,35 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .ign-synth { font-size: 15px; line-height: 1.55; color: #2B2B2B; margin: 10px 0 12px; max-width: 980px; }
 .ign-synth strong { color: #0A1938; }
 .ign-synth .sa-dim { color: #6B6B68; font-size: 13px; }
+
+/* ─── Lien d'aide méthodologique « ? Comprendre cette analyse » ───────────── */
+.sa-aide { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 12px; font-weight: 600;
+    color: #1A3D8F !important; text-decoration: none !important; white-space: nowrap; vertical-align: middle; }
+.sa-aide-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid #1A3D8F; font-size: 11px; font-weight: 700; line-height: 1; }
+.sa-aide:hover .sa-aide-icon, .sa-aide:focus-visible .sa-aide-icon { background: #1A3D8F; color: #fff; }
+.sa-aide:focus-visible { outline: 2px solid #1A3D8F; outline-offset: 2px; border-radius: 4px; }
+.fiche-header .sa-aide { margin-top: 8px; margin-left: 0; }
+.fiche-eyebrow .sa-aide { margin-top: 0; margin-left: 12px; }
+/* Sommaire et sections de la Méthodologie */
+.meth-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.meth-toc a { font-size: 12.5px; font-weight: 600; color: #1A3D8F !important; text-decoration: none !important; border: 1px solid #C9D3EA;
+    border-radius: 6px; padding: 6px 12px; background: #fff; }
+.meth-toc a:hover { background: #E8EDF8; border-color: #1A3D8F; }
+.meth-q { font-size: 15px; font-weight: 700; color: #0A1938; margin: 4px 0 10px; }
+.meth-steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 6px 0 16px; }
+.meth-step { flex: 1 1 150px; background: #fff; border: 1px solid #E0DDD4; border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; color: #2B2B2B; position: relative; }
+.meth-step b { display: block; color: #1A3D8F; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+.meth-step + .meth-step::before { content: "→"; position: absolute; left: -12px; top: 50%; transform: translateY(-50%); color: #9C9A92; font-size: 14px; }
+.meth-formula { font-family: "Marianne", Inter, sans-serif; font-size: 14px; background: #F7F9FD; border: 1px solid #C9D3EA; border-radius: 6px;
+    padding: 10px 14px; margin: 6px 0 14px; color: #0A1938; display: inline-block; }
+.meth-formula small { color: #6B6B68; font-size: 12px; }
+.meth-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid #E0DDD4; margin: 6px 0 4px; max-width: 760px; }
+.meth-bar span { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+.meth-bar-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #4B4B48; margin-bottom: 16px; max-width: 760px; }
+.meth-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 6px 0 16px; max-width: 860px; }
+.meth-grid2 > div { background: #fff; border: 1px solid #E0DDD4; border-radius: 6px; padding: 12px 14px; font-size: 13px; line-height: 1.55; color: #2B2B2B; }
+.meth-grid2 b { color: #0A1938; }
+.meth-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-width: 520px; margin: 6px 0 16px; }
+.meth-quad div { border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; border: 1px solid #E0DDD4; }
+@media (max-width: 640px) { .meth-grid2, .meth-quad { grid-template-columns: 1fr; } .meth-step + .meth-step::before { display: none; } }

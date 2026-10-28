@@ -6,7 +6,7 @@ import requests
 import folium
 import pandas as pd
 import streamlit as st
-from branca.colormap import LinearColormap
+from branca.colormap import LinearColormap, StepColormap
 from streamlit_folium import st_folium
 
 from ..config import APL_LABEL_COURT, PALETTE
@@ -73,6 +73,30 @@ COLORMAPS: dict[str, list[str]] = {
     "pros":  ["#A51C30", "#E5B04A", "#A3C282", "#1B5E3F"],
     "age":   ["#E8EDF8", "#C5D4EE", "#5A85C3", "#1A3D8F"],
 }
+
+
+def quantile_bins(values, n_classes: int) -> list[float]:
+    """Bornes de classes de quantiles (n_classes couleurs → n_classes + 1 bornes), strictement croissantes."""
+    import numpy as np
+    arr = np.asarray([float(v) for v in values if pd.notna(v)], dtype=float)
+    if arr.size == 0:
+        return [0.0, 1.0]
+    qs = np.quantile(arr, np.linspace(0, 1, n_classes + 1))
+    out = [float(qs[0])]
+    for q in qs[1:]:
+        q = float(q)
+        out.append(q if q > out[-1] else out[-1] + 1e-9)
+    return out
+
+
+def national_legend_classes(master: pd.DataFrame, metric: str, colormap_name: str, reverse: bool = False) -> list[tuple[float, float, str]]:
+    """Classes (borne basse, borne haute, couleur) identiques à celles de la carte nationale pour un indicateur."""
+    colors = COLORMAPS[colormap_name]
+    if reverse:
+        colors = list(reversed(colors))
+    vals = pd.to_numeric(master[metric], errors="coerce").dropna().tolist() if metric in master.columns else []
+    bins = quantile_bins(vals, len(colors))
+    return [(bins[i], bins[i + 1], colors[i]) for i in range(len(colors))]
 
 
 def _tooltip_style() -> str:
@@ -146,7 +170,13 @@ def render_national_choropleth(
     colors = COLORMAPS[colormap_name]
     if reverse:
         colors = list(reversed(colors))
-    cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
+    if metric == "score_global":
+        cmap = LinearColormap(colors=colors, vmin=vmin, vmax=vmax)
+    else:
+        # Classes de quantiles : chaque couleur couvre le même nombre de départements, les valeurs
+        # extrêmes (Paris pour l'immobilier) n'écrasent plus l'échelle ; la légende reprend ces bornes.
+        bins = quantile_bins(clean_values, len(colors))
+        cmap = StepColormap(colors=colors, index=bins, vmin=bins[0], vmax=bins[-1])
 
     # Label et format du tooltip selon l'indicateur sélectionné
     _metric_meta: dict[str, tuple[str, str]] = {

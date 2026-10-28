@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from ..audio_diagnostic import build_audio_diagnostic_text, render_audio_diagnostic_button
+from ..components.aide import aide_methodo
 from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
 from ..config import CMAP, PALETTE, PATHOS_EXCLUDED, APL_MILLESIME
@@ -159,6 +160,7 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         f'<span class="region">{pop_str}</span>'
         '<span class="dot"></span>'
         f'<span class="region">{typologie_str}</span>'
+        f'{aide_methodo("diagnostic")}'
         '</div>'
         '<div class="fiche-title-row">'
         f'<h1 class="fiche-title">{r["Nom du département"]}</h1>'
