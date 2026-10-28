@@ -213,6 +213,17 @@ def render(data: dict) -> None:
            ("4 · Gain", "Les habitants aujourd’hui à plus de 15 minutes d’un généraliste qui passeraient sous ce seuil."))
     _formula("Gain = population des carreaux (temps actuel > 15 min) ∩ isochrone 15 min du nouveau cabinet",
              f"disponible pour {nb_sim} départements ; le même calcul est donné pour 10 et 20 minutes.")
+    try:
+        from .acces_ign import departements_continu
+        nb_continu = len(departements_continu())
+    except Exception:
+        nb_continu = 0
+    _prose("<strong>Deux fonds de carte.</strong> Les habitants, les temps d’accès actuels et les gains viennent toujours des carreaux "
+           "INSEE de 200 m. Pour la lecture visuelle, la carte affiche, lorsqu’elle existe, une <strong>surface continue des temps de "
+           "trajet</strong> calculée sur le réseau routier (maille de 500 m, cabinets de la base permanente des équipements 2025, "
+           "y compris ceux des départements voisins) et contrôlée contre les carreaux INSEE : elle n’est utilisée que si la classe de "
+           "temps concorde pour au moins 80 % des habitants et si l’accord au seuil de 15 minutes atteint 90 %. "
+           f"Aujourd’hui : {nb_continu} départements avec surface continue ; les autres affichent les zones habitées INSEE.")
     _grid2(("Comment lire", "Le gain compare des sites candidats : un gain élevé signale une commune bien placée pour desservir des habitants "
                             "éloignés. Il se lit avec la population totale desservie et le temps d’accès actuel de la commune."),
            ("Limites", "Le simulateur mesure une distance, pas une capacité : il ne dit ni si un médecin viendra, ni combien de patients il "
