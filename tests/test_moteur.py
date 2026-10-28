@@ -415,7 +415,7 @@ class TestParcoursEtSimulation(unittest.TestCase):
         self.assertIn("Zones bien et mal desservies", html)      # vue départementale d'abord, sans commune
         from app.pages.acces_ign import pilotes_disponibles
         labels = [sb.label for sb in at.selectbox]
-        self.assertIn("Commune d’implantation", labels)
+        self.assertIn("Simuler une implantation dans la commune", labels)
         self.assertNotIn("Département pilote", labels, "pas de sélecteur géographique redondant : le territoire vient de la barre")
         self.assertGreater(len(pilotes_disponibles()), 1)
         self.assertNotIn("Nouvellement couverts", html)        # pas de scénario tant qu'aucune commune n'est choisie
