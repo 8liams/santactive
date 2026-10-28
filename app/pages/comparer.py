@@ -378,7 +378,8 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
             lecture = "tous mieux placés que la référence nationale"
         else:
             lecture = ""
-        li += (f"<li><strong>{lib_fr.get(col, label).capitalize()}</strong> : {serie}. "
+        lib_txt = lib_fr.get(col, label); lib_txt = lib_txt[0].upper() + lib_txt[1:]
+        li += (f"<li><strong>{lib_txt}</strong> : {serie}. "
                f"Écart de {_ecart_txt(vals[mieux], vals[pire], fmt, unit)} entre {html.escape(mieux)} (le plus favorable) et "
                f"{html.escape(pire)} (le moins favorable)"
                + (f" ; référence nationale {_fr(nat, fmt)}{unit}" if nat is not None else "") + (f", {lecture}" if lecture else "") + ".</li>")

@@ -1,0 +1,103 @@
+{
+ "dept": "36",
+ "pas_m": 500,
+ "carreaux_apparies": 18385,
+ "carreaux_total": 18385,
+ "non_calcules_sur_carreaux_habites": 0,
+ "approches_sur_carreaux_habites": 62,
+ "statuts_grille": {
+  "calcule": 24410,
+  "approche": 3897
+ },
+ "global": {
+  "carreaux": 18385,
+  "habitants": 210179,
+  "concordance_classe": 0.8374,
+  "concordance_pop": 0.9062,
+  "ecart_median_min": 0.21,
+  "ecart_moyen_min": 0.42,
+  "ecart_p90_abs_min": 1.92,
+  "ecart_une_classe_ou_moins": 0.1103,
+  "seuil_10": {
+   "accord": 0.9141,
+   "insee_sup_grille_inf_hab": 2578,
+   "insee_inf_grille_sup_hab": 6760
+  },
+  "seuil_15": {
+   "accord": 0.9614,
+   "insee_sup_grille_inf_hab": 1440,
+   "insee_inf_grille_sup_hab": 1862
+  },
+  "seuil_20": {
+   "accord": 0.9977,
+   "insee_sup_grille_inf_hab": 164,
+   "insee_inf_grille_sup_hab": 58
+  }
+ },
+ "rural": {
+  "carreaux": 17537,
+  "habitants": 129444,
+  "concordance_classe": 0.8313,
+  "concordance_pop": 0.8654,
+  "ecart_median_min": 0.21,
+  "ecart_moyen_min": 0.42,
+  "ecart_p90_abs_min": 1.95,
+  "ecart_une_classe_ou_moins": 0.1144,
+  "seuil_10": {
+   "accord": 0.9106,
+   "insee_sup_grille_inf_hab": 2457,
+   "insee_inf_grille_sup_hab": 6110
+  },
+  "seuil_15": {
+   "accord": 0.9596,
+   "insee_sup_grille_inf_hab": 1440,
+   "insee_inf_grille_sup_hab": 1716
+  },
+  "seuil_20": {
+   "accord": 0.9976,
+   "insee_sup_grille_inf_hab": 164,
+   "insee_inf_grille_sup_hab": 58
+  }
+ },
+ "urbain": {
+  "carreaux": 848,
+  "habitants": 80735,
+  "concordance_classe": 0.9634,
+  "concordance_pop": 0.9718,
+  "ecart_median_min": 0.28,
+  "ecart_moyen_min": 0.39,
+  "ecart_p90_abs_min": 1.46,
+  "ecart_une_classe_ou_moins": 0.0248,
+  "seuil_10": {
+   "accord": 0.9858,
+   "insee_sup_grille_inf_hab": 121,
+   "insee_inf_grille_sup_hab": 650
+  },
+  "seuil_15": {
+   "accord": 0.9976,
+   "insee_sup_grille_inf_hab": 0,
+   "insee_inf_grille_sup_hab": 146
+  },
+  "seuil_20": {
+   "accord": 1.0,
+   "insee_sup_grille_inf_hab": 0,
+   "insee_inf_grille_sup_hab": 0
+  }
+ },
+ "test_k": {
+  "points": 600,
+  "k5_pas_le_plus_rapide": 1,
+  "part": 0.0017,
+  "gain_median_min_quand_different": 1.11,
+  "gain_max_min": 1.11
+ },
+ "offres": {
+  "dans_rayon": 532,
+  "dans_departement": 126
+ },
+ "duree_calcul_s": 20,
+ "tailles_ko": {
+  "grille_mg_36.csv.gz": 304,
+  "continu_mg_36.json": 921
+ }
+}

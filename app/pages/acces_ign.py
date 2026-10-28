@@ -425,13 +425,46 @@ def _union_squares(df: pd.DataFrame, half_m: float = 100.0):
     return g if not g.is_empty else None
 
 
+# Seuils de validation d'un département pour la carte continue (contrôle contre les carreaux INSEE 2025) :
+# en deçà, l'application retombe automatiquement sur la cartographie V1 (zones INSEE habitées).
+CONTINU_SEUILS = {"concordance_pop": 0.80, "accord_15": 0.90, "ecart_15_max": 0.05, "non_calcules_max": 0.02}
+
+
+def continu_valide(dept: str) -> tuple[bool, str]:
+    """(valide, motif) : le département dispose d'une carte continue dont le contrôle respecte les seuils."""
+    c = charger_controle_continu(dept)
+    if not c or not (GEO_DIR / f"continu_mg_{dept}.json").exists():
+        return False, "non calculé"
+    g = c.get("global") or {}
+    hab = max(1, float(g.get("habitants", 0) or 0)); s15 = g.get("seuil_15") or {}
+    conc = float(g.get("concordance_pop", 0) or 0); acc = float(s15.get("accord", 0) or 0)
+    over = float(s15.get("insee_inf_grille_sup_hab", 0) or 0) / hab; under = float(s15.get("insee_sup_grille_inf_hab", 0) or 0) / hab
+    nc = float(c.get("non_calcules_sur_carreaux_habites", 0) or 0) / max(1, float(c.get("carreaux_apparies", 1) or 1))
+    if conc < CONTINU_SEUILS["concordance_pop"]:
+        return False, f"concordance avec l'INSEE {conc:.0%} < {CONTINU_SEUILS['concordance_pop']:.0%}"
+    if acc < CONTINU_SEUILS["accord_15"]:
+        return False, f"accord au seuil de 15 min {acc:.0%} < {CONTINU_SEUILS['accord_15']:.0%}"
+    if max(over, under) > CONTINU_SEUILS["ecart_15_max"]:
+        return False, f"écart de classe à 15 min sur {max(over, under):.1%} des habitants"
+    if nc > CONTINU_SEUILS["non_calcules_max"]:
+        return False, f"{nc:.1%} des carreaux habités sans maille calculée"
+    return True, "validé"
+
+
+def departements_continu() -> list[str]:
+    """Départements dont la carte continue est calculée et validée."""
+    return sorted(p.name[len("continu_mg_"):-5] for p in GEO_DIR.glob("continu_mg_*.json") if continu_valide(p.name[len("continu_mg_"):-5])[0])
+
+
 @st.cache_data(show_spinner=False)
 def charger_continu(dept: str) -> dict | None:
-    """Carte continue des temps d'accès (grille routière OSRM, scripts/donnees/carte_continue.py) ;
-    None si l'option SANTACTIVE_CARTE_CONTINUE est « off » (V1) ou si le département n'a pas été
-    calculé (la carte retombe alors sur les zones INSEE habitées)."""
+    """Carte continue des temps d'accès (grille routière OSRM) ; None si l'option SANTACTIVE_CARTE_CONTINUE
+    est « off », si le département n'est pas calculé ou si son contrôle contre les carreaux INSEE échoue :
+    la carte retombe alors sur les zones INSEE habitées (V1)."""
     from ..config import CARTE_CONTINUE
     if CARTE_CONTINUE != "on":
+        return None
+    if not continu_valide(dept)[0]:
         return None
     p = GEO_DIR / f"continu_mg_{dept}.json"
     return json.loads(p.read_text()) if p.exists() else None
@@ -656,7 +689,8 @@ def _note_continu(dept: str, continu: dict | None) -> None:
     g = c.get("global") or {}
     txt = ("Les surfaces colorées sont une grille routière de 500 m : pour chaque maille, temps en voiture (OSRM, réseau OpenStreetMap) "
            "depuis la route la plus proche vers le cabinet de médecine générale le plus rapide (BPE 2025, y compris les départements voisins). "
-           "Les mailles sans route à moins de 2 km restent grises. Les habitants et les gains sont toujours comptés sur les carreaux INSEE.")
+           "Les mailles sans route à moins de 2 km restent grises. Les habitants et les gains sont toujours comptés sur les carreaux INSEE ; "
+           "la carte continue n'est affichée que lorsque son contrôle contre ces carreaux est satisfaisant, sinon les zones INSEE sont utilisées.")
     if g:
         txt += (f" Contrôle sur les {g.get('carreaux', 0):,} carreaux habités du département : même classe de temps pour "
                 f"{g.get('concordance_pop', 0) * 100:.0f} % des habitants, écart médian {str(g.get('ecart_median_min', 0)).replace('.', ',')} min"

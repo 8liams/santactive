@@ -46,9 +46,10 @@ TEMPS_SOURCE = _option("SANTACTIVE_TEMPS_SOURCE", "insee", ("interne", "insee"))
 #             commune, sinon minutes vers la commune équipée la plus proche) — mode
 #             historique, conservé pour l'audit (docs/EVOLUTIONS_MOTEUR.md §17)
 APL_MILLESIME = _option("SANTACTIVE_APL_MILLESIME", "2024", ("2023", "2024"))
-CARTE_CONTINUE = _option("SANTACTIVE_CARTE_CONTINUE", "off", ("off", "on"))
+CARTE_CONTINUE = _option("SANTACTIVE_CARTE_CONTINUE", "on", ("off", "on"))
 #   off : V1 — cartographie INSEE (zones habitées) pour tous les départements, présentation homogène ;
-#   on  : V2 — grille routière continue (scripts/donnees/carte_continue.py) là où static/geo/continu_mg_<dept>.json existe
+#   on  : V2 (défaut depuis le 28 octobre 2026) — grille routière continue là où static/geo/continu_mg_<dept>.json existe
+#         ET où le contrôle contre les carreaux INSEE respecte les seuils (acces_ign.continu_valide) ; sinon repli V1 automatique
 #   2024 : millésime actif depuis le 28 octobre 2026 (même définition DREES : APL aux
 #          médecins généralistes tous âges, population standardisée) ; 2023 : historique
 

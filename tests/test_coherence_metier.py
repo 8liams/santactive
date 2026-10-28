@@ -168,5 +168,20 @@ class TestArrondisEtFormats(unittest.TestCase):
                 self.assertNotIn("· prototype", txt)
 
 
+class TestCarteContinue(unittest.TestCase):
+    """Chaque carte continue livrée passe le contrôle INSEE ; sans fichier, repli V1."""
+
+    def test_departements_livres_valides(self):
+        from app.pages.acces_ign import GEO_DIR, continu_valide, departements_continu
+
+        livres = sorted(p.name[len("continu_mg_"):-5] for p in GEO_DIR.glob("continu_mg_*.json"))
+        self.assertGreaterEqual(len(livres), 3)
+        for d in livres:
+            ok, motif = continu_valide(d)
+            self.assertTrue(ok, f"{d} : {motif}")
+        self.assertEqual(departements_continu(), livres)
+        self.assertEqual(continu_valide("22"), (False, "non calculé"))  # Côtes-d'Armor : hors graphe routier calculé
+
+
 if __name__ == "__main__":
     unittest.main()
