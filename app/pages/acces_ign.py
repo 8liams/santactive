@@ -73,8 +73,8 @@ def render(data: dict) -> None:
     st.markdown(
         f'<p class="section-lead" style="max-width:900px;">Temps de trajet en voiture (itinéraire le plus rapide, '
         f'IGN) depuis le centre de chaque commune vers la commune la plus proche où une offre de médecine générale est '
-        f'recensée ({d["nb_points_offre"]} points d’offre). Calcul du {d["date_calcul"]}, pré-calculé et mis en cache. '
-        f'Les communes d’offre sont à 0 par construction (présence, pas trajet).</p>', unsafe_allow_html=True)
+        f'recensée ({d["nb_points_offre"]} points d’offre). Pré-calculé le {d["date_calcul"]}. '
+        f'Prototype : ne remplace pas l’indicateur national de temps d’accès.</p>', unsafe_allow_html=True)
 
     c = st.columns(5)
     for col, s in zip(c, ("10", "15", "20", "30")):
@@ -112,34 +112,61 @@ def render(data: dict) -> None:
             st.warning("Isochrone indisponible pour le moment (service IGN).")
 
     # ── Carte ─────────────────────────────────────────────────────────────────
+    st.markdown('<h4 class="subsection-title" style="margin-top:18px;">Carte d\u2019accessibilité routière</h4>',
+                unsafe_allow_html=True)
     m = folium.Map(location=[com["lat"].mean(), com["lon"].mean()], zoom_start=9, tiles=TILE_URL, attr=TILE_ATTR,
                    scrollWheelZoom=False)
+    m.get_root().header.add_child(folium.Element(
+        "<style>.leaflet-container{background:#F4F3EE!important;}"
+        ".sa-ign-legend{font-family:Marianne,Inter,sans-serif;font-size:11px;background:rgba(255,255,255,.94);"
+        "padding:10px 12px;border-radius:4px;border:1px solid #C9C6BA;line-height:1.7;}"
+        ".sa-ign-legend b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#6B6B68;margin-bottom:4px;}"
+        ".sa-ign-legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:middle;}"
+        ".sa-ign-legend i.pt{border-radius:50%;width:10px;height:10px;}</style>"))
+    # Isochrones : du plus large au plus proche, remplissage semi-transparent, contour net
     for s in ("30", "20", "15", "10"):
         g = d["isochrones"].get(s)
         if g:
             folium.GeoJson({"type": "Feature", "geometry": g}, name=f"≤ {s} min",
-                           style_function=lambda f, c=_COULEURS[s]: {"fillColor": c, "color": c, "weight": 0.5, "fillOpacity": 0.25}).add_to(m)
+                           style_function=lambda f, c=_COULEURS[s]: {"fillColor": c, "color": c, "weight": 1.2,
+                                                                     "fillOpacity": 0.30}).add_to(m)
     if sim_geom:
         folium.GeoJson({"type": "Feature", "geometry": sim_geom}, name="Simulation",
-                       style_function=lambda f: {"fillColor": "#1A3D8F", "color": "#1A3D8F", "weight": 2, "fillOpacity": 0.15, "dashArray": "4"}).add_to(m)
+                       style_function=lambda f: {"fillColor": "#1A3D8F", "color": "#1A3D8F", "weight": 2.5,
+                                                 "fillOpacity": 0.18, "dashArray": "6 4"}).add_to(m)
+    # Communes : éloignées (> 15 min) mises en avant, points d'offre distincts
     for _, r in com.iterrows():
         t = r["temps_ign_min"]
-        col = "#9C9A92" if pd.isna(t) else "#1B5E3F" if t <= 10 else "#7DBE8F" if t <= 15 else "#E8A838" if t <= 20 else "#D9772B" if t <= 30 else "#A51C30"
+        tip = f"{r['nom']} · "
         if t == 0:
-            etat = "offre sur place"
-        elif pd.isna(t):
-            etat = "non joignable"
+            tip += "offre de médecine générale recensée"
+            folium.CircleMarker([r["lat"], r["lon"]], radius=4.5, color="#FFFFFF", fill=True, fill_color="#0A1938",
+                                fill_opacity=1, weight=1.2, tooltip=tip).add_to(m)
+            continue
+        if pd.isna(t):
+            tip += "non joignable par la route"; col, rad = "#9C9A92", 3
         else:
-            etat = f"{t:.0f} min vers {r['offre_cible']}"
-        tip = f"{r['nom']} · {etat} · {int(r['population']):,} hab.".replace(",", "\u202f")
-        folium.CircleMarker([r["lat"], r["lon"]], radius=3 if t != 0 else 4, color=col, fill=True,
-                            fill_opacity=0.9, weight=0.5, tooltip=tip).add_to(m)
+            tip += f"{t:.0f} min vers {r['offre_cible']}"
+            col = "#1B5E3F" if t <= 10 else "#7DBE8F" if t <= 15 else "#E8A838" if t <= 20 else "#D9772B" if t <= 30 else "#A51C30"
+            rad = 3 if t <= 15 else 5
+        tip += f" · {int(r['population']):,} hab.".replace(",", "\u202f")
+        folium.CircleMarker([r["lat"], r["lon"]], radius=rad, color="#FFFFFF" if t > 15 else col, fill=True,
+                            fill_color=col, fill_opacity=0.95, weight=1 if t > 15 else 0.5, tooltip=tip).add_to(m)
+    legend = ('<div class="sa-ign-legend"><b>Zones de trajet (voiture)</b>'
+              + "".join(f'<div><i style="background:{_COULEURS[s]};opacity:.75;"></i>≤ {s} min</div>' for s in ("10", "15", "20", "30"))
+              + '<b style="margin-top:6px;">Communes</b>'
+              '<div><i class="pt" style="background:#0A1938;"></i>offre de médecine générale</div>'
+              '<div><i class="pt" style="background:#D9772B;"></i>à plus de 15 min (taille = éloignement)</div>'
+              '<div><i class="pt" style="background:#9C9A92;"></i>non joignable</div>'
+              + ('<div><i style="border:2px dashed #1A3D8F;background:transparent;"></i>simulation</div>' if sim_geom else "")
+              + '</div>')
+    m.get_root().html.add_child(folium.Element(
+        '<div class="leaflet-bottom leaflet-left" style="pointer-events:none;">'
+        f'<div class="leaflet-control" style="margin:0 0 24px 12px;">{legend}</div></div>'))
     folium.LayerControl(collapsed=True).add_to(m)
-    st_folium(m, use_container_width=True, height=520, returned_objects=[], key=f"ign_map_{dept}_{choix}_{minutes}")
-    st.markdown('<div class="map-legend">' + "".join(
-        f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>{lab}</span>'
-        for lab, c in (("≤ 10 min", "#1B5E3F"), ("≤ 15", "#7DBE8F"), ("≤ 20", "#E8A838"), ("≤ 30", "#D9772B"), ("> 30", "#A51C30"), ("non joignable", "#9C9A92"))) + '</div>',
-        unsafe_allow_html=True)
+    st_folium(m, use_container_width=True, height=560, returned_objects=[], key=f"ign_map_{dept}_{choix}_{minutes}")
+    st.caption(f"{int(ok.sum())} itinéraires calculés sur {len(com)} communes · {d['nb_points_offre']} points d\u2019offre · "
+               "fond de carte neutre, isochrones IGN Géoplateforme.")
 
     # ── Comparaison avec l'indicateur interne ─────────────────────────────────
     both = com[ok & com["temps_interne_min"].notna()]
@@ -171,7 +198,7 @@ def render(data: dict) -> None:
                        f"(communes hors offre sur place).")
     st.markdown(
         '<div style="margin-top:12px;font-size:11px;color:#9C9A92;line-height:1.6;">Source : IGN Géoplateforme '
-        '(itinéraire bdtopo-osrm, isochrone bdtopo-valhalla), API Géo (centres et population des communes), '
+        '(itinéraire et isochrone bdtopo-valhalla), API Géo (centres et population des communes), '
         'Licence Ouverte. Limites : origine et destination au centre de la commune (pas l’adresse du cabinet) ; '
         'destination = présence d’une offre recensée, pas sa capacité ; voiture uniquement ; les communes '
         'non joignables par la route restent sans valeur (jamais 0). La simulation ignore la capacité du cabinet '

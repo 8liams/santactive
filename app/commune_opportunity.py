@@ -40,6 +40,33 @@ def action_priority_legend_items() -> list[tuple[str, str]]:
     return [(label, color) for _, label, color in _PRIORITY_LEVELS]
 
 
+# Lecture « besoin d'accès » : classes de temps de trajet (minutes), factuelles
+_BESOIN_CLASSES: list[tuple[float, str, str]] = [
+    (30.0, "Plus de 30 min", "#A51C30"),
+    (15.0, "15 à 30 min", "#D4663B"),
+    (10.0, "10 à 15 min", "#E5B04A"),
+    (0.0,  "10 min ou moins", "#A3C282"),
+]
+OFFRE_SUR_PLACE = ("Offre dans la commune", "#D9E3D4")
+
+
+def besoin_class(temps) -> tuple[str, str]:
+    """(libellé, couleur) de la classe de temps d'accès ; 0 = offre sur place."""
+    if pd.isna(temps):
+        return "N/D", "#E8E6DD"
+    t = float(temps)
+    if t <= 0:
+        return OFFRE_SUR_PLACE
+    for seuil, label, color in _BESOIN_CLASSES:
+        if t > seuil:
+            return label, color
+    return _BESOIN_CLASSES[-1][1], _BESOIN_CLASSES[-1][2]
+
+
+def besoin_legend_items() -> list[tuple[str, str]]:
+    return [(label, color) for _, label, color in _BESOIN_CLASSES] + [OFFRE_SUR_PLACE]
+
+
 # Alias compatibilité interne
 opportunite_level = action_priority_level
 opportunity_legend_items = action_priority_legend_items
@@ -177,8 +204,6 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
         cmp = (f" ({(prix / prix_med - 1) * 100:+.0f}\u202f% vs département)"
                if pd.notna(prix_med) and prix_med > 0 else "")
         parts.append(f"{prix:,.0f}\u202f€/m²{cmp}".replace(",", "\u202f"))
-    if pd.notna(temps) and temps > 15:
-        parts.append("commune au-delà de 15 min")
     if not parts:
         return "Données communales insuffisantes pour justifier le classement."
     return " · ".join(parts[0:1]) + (" · " + " · ".join(parts[1:]) if len(parts) > 1 else "") + "."
@@ -261,12 +286,23 @@ def build_commune_opportunity_df(
         axis=1,
     )
 
+    # Lecture « priorité d'action » : niveau du score ; les communes qui
+    # disposent déjà d'une offre (temps 0) ne sont pas classées — elles sont
+    # affichées comme telles sur la carte, et exclues du Top 10.
+    temps_num = pd.to_numeric(df["temps_acces"], errors="coerce")
     level_data = df["score_action"].apply(
         lambda s: action_priority_level(float(s)) if pd.notna(s) else ("N/D", "#E8E6DD")
     )
     df["niveau"] = level_data.apply(lambda x: x[0])
     df["color_hex"] = level_data.apply(lambda x: x[1])
+    sur_place = temps_num.notna() & (temps_num <= 0)
+    df.loc[sur_place, "niveau"] = OFFRE_SUR_PLACE[0]
+    df.loc[sur_place, "color_hex"] = OFFRE_SUR_PLACE[1]
     df["value"] = df["score_action"]
+    # Lecture « besoin d'accès » : classe de temps de trajet
+    besoin = temps_num.apply(besoin_class)
+    df["besoin_label"] = besoin.apply(lambda x: x[0])
+    df["besoin_color"] = besoin.apply(lambda x: x[1])
     return df
 
 
@@ -282,24 +318,30 @@ def top_communes_for_action(
     comm_data: pd.DataFrame,
     *,
     limit: int = 10,
+    mode: str = "priorite",
 ) -> pd.DataFrame:
-    """Top communes pour l'action — exclut les micro-communes du classement."""
+    """Top communes, selon la lecture choisie — même règle que la carte.
+
+    - « priorite » : score d'action décroissant (besoin 45 %, population 35 %,
+      faisabilité 20 %, inchangé) ;
+    - « besoin » : temps de trajet décroissant, puis population.
+    Dans les deux cas, les communes qui disposent déjà d'une offre de médecine
+    générale (temps 0) ne sont pas classées : une action d'accès n'y a pas
+    d'objet. Aucun seuil de population : la population est déjà un facteur du
+    score, et la lecture « besoin » doit pouvoir faire remonter de petites
+    communes isolées (leur population est affichée).
+    """
     score_col = "score_action" if "score_action" in comm_data.columns else "score_opportunite"
     if comm_data.empty or score_col not in comm_data.columns:
         return pd.DataFrame()
-
-    candidates = comm_data.dropna(subset=[score_col]).copy()
+    temps = pd.to_numeric(comm_data.get("temps_acces"), errors="coerce")
+    candidates = comm_data[temps.notna() & (temps > 0)].dropna(subset=[score_col]).copy()
     if candidates.empty:
         return pd.DataFrame()
-
-    if "population" in candidates.columns and candidates["population"].notna().any():
-        seuil = min_population_for_action_ranking(candidates["population"])
-        candidates = candidates[
-            pd.to_numeric(candidates["population"], errors="coerce").fillna(0) >= seuil
-        ]
-
-    return (
-        candidates.sort_values(score_col, ascending=False)
-        .head(limit)
-        .reset_index(drop=True)
-    )
+    if mode == "besoin":
+        candidates["_pop"] = pd.to_numeric(candidates.get("population"), errors="coerce").fillna(0)
+        candidates["_t"] = pd.to_numeric(candidates["temps_acces"], errors="coerce")
+        out = candidates.sort_values(["_t", "_pop"], ascending=[False, False]).drop(columns=["_pop", "_t"])
+    else:
+        out = candidates.sort_values(score_col, ascending=False)
+    return out.head(limit).reset_index(drop=True)

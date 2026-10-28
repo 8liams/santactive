@@ -103,11 +103,7 @@ def render(data: dict) -> None:
 # ── Bloc 1 — Contexte régional ───────────────────────────────────────────────
 
 def render_topbar(region_name: str) -> None:
-    render_breadcrumb([
-        NavCrumb("Accueil", "home"),
-        NavCrumb(region_name),
-    ], key_prefix="region_bc")
-
+    """Fil d'Ariane : désormais rendu dans la ligne d'actions (render_share_section)."""
 
 def render_share_section(
     region_name: str,
@@ -133,16 +129,19 @@ def render_share_section(
         .replace("-", "_")
         .replace("'", "")
     )
+    def _breadcrumb() -> None:
+        render_breadcrumb([NavCrumb("Accueil", "home"), NavCrumb(region_name)],
+                          key_prefix=f"region_bc_{region_code}")
+
     render_fiche_share_bar(
         fiche_url=share["fiche_url"],
         email_subject=share["email_subject"],
         email_body=share["email_body"],
-        share_title=share["share_title"],
         pdf_bytes=pdf_bytes,
         pdf_filename=f"santactive_region_{slug}.pdf",
         pdf_error=pdf_error,
-        compact=True,
         key_prefix=f"region_share_{region_code}",
+        breadcrumb=_breadcrumb,
     )
 
 

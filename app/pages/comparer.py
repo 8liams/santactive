@@ -121,6 +121,13 @@ def render(data: dict) -> None:
     if "comparer_territory_kind" not in st.session_state:
         st.session_state["comparer_territory_kind"] = "dept"
 
+    # Lien direct partageable : ?view=comparer&depts=18,75,23
+    qp_depts = st.query_params.get("depts")
+    if qp_depts and "comparer_preselect" not in st.session_state \
+            and st.session_state.get("_comparer_qp_applied") != qp_depts:
+        st.session_state["_comparer_qp_applied"] = qp_depts
+        st.session_state["comparer_preselect"] = [c.strip() for c in str(qp_depts).split(",") if c.strip()][:4]
+
     if "comparer_preselect" in st.session_state:
         codes = st.session_state.pop("comparer_preselect")
         st.session_state["comparer_territory_kind"] = "dept"
@@ -201,7 +208,8 @@ def render(data: dict) -> None:
     selected: list[str] = st.multiselect(
         f"Sélectionnez 2 à 4 {_territory_label(kind, plural=True)}",
         options=options,
-        default=default,
+        # Une valeur déjà en session (pré-sélection) ne doit pas être doublée d'un défaut
+        default=None if f"comparer_selection_{kind}" in st.session_state else default,
         max_selections=4,
         placeholder=placeholder,
         key=f"comparer_selection_{kind}",

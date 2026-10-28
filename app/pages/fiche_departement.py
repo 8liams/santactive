@@ -72,12 +72,6 @@ def render_topbar(r: pd.Series, data: dict) -> None:
     dept_name = str(r["Nom du département"])
     dept_code = str(r.get("dept", "")).zfill(2)
 
-    render_breadcrumb([
-        NavCrumb("Accueil", "home"),
-        NavCrumb(region_name, "region", {"region_code": region_code}),
-        NavCrumb(dept_name),
-    ], key_prefix=f"dept_bc_{dept_code}")
-
     share = dept_share_context(r)
     pdf_bytes: bytes | None = None
     pdf_error: str | None = None
@@ -89,8 +83,16 @@ def render_topbar(r: pd.Series, data: dict) -> None:
 
     dept_slug = dept_name.lower().replace(" ", "_").replace("'", "")
 
+    def _breadcrumb() -> None:
+        render_breadcrumb([
+            NavCrumb("Accueil", "home"),
+            NavCrumb(region_name, "region", {"region_code": region_code}),
+            NavCrumb(dept_name),
+        ], key_prefix=f"dept_bc_{dept_code}")
+
     def _compare_btn() -> None:
-        if st.button("Comparer avec…", use_container_width=True, key="dept_compare_btn"):
+        if st.button("Comparer", use_container_width=True, key="dept_compare_btn",
+                     help="Comparer ce département à d'autres territoires"):
             st.session_state["compare_base"] = r["dept"]
             navigate("comparer")
 
@@ -98,13 +100,12 @@ def render_topbar(r: pd.Series, data: dict) -> None:
         fiche_url=share["fiche_url"],
         email_subject=share["email_subject"],
         email_body=share["email_body"],
-        share_title=share["share_title"],
         pdf_bytes=pdf_bytes,
         pdf_filename=f"santactive_{dept_slug}.pdf",
         pdf_error=pdf_error,
         extra_col=_compare_btn,
         key_prefix=f"dept_share_{dept_code}",
-        compact=True,
+        breadcrumb=_breadcrumb,
     )
 
 
@@ -528,9 +529,9 @@ SINGLE_COMMUNE_DEPTS = {"75"}  # extensible si d'autres identifiés
 def render_carte_communale(r: pd.Series, data: dict) -> None:
     from ..commune_opportunity import (
         action_priority_legend_items,
+        besoin_legend_items,
         build_commune_code_lookup,
         build_commune_opportunity_df,
-        top_communes_for_action,
     )
     from ..components import render_commune_choropleth
     from ..components.maps import _fetch_communes_geojson, fetch_communes_population
@@ -541,10 +542,10 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         '<h2 class="section-title">Communes prioritaires pour une '
         '<em>action de santé.</em></h2>'
         '<p class="section-lead">'
-        "Cette carte identifie les communes où une action de santé pourrait "
-        "avoir le plus d\u2019impact, en croisant l\u2019éloignement aux soins, "
-        "la population concernée et les conditions de déploiement. "
-        "Survolez une commune pour voir le détail."
+        "Deux lectures distinctes, au choix : le <strong>besoin d\u2019accès</strong> (temps de trajet "
+        "vers une offre de médecine générale, donnée observée) et la <strong>priorité d\u2019action</strong> "
+        "(score qui croise ce besoin, la population de la commune et les conditions de déploiement). "
+        "La carte et le classement suivent la même lecture."
         '</p>'
         '</div>',
         unsafe_allow_html=True,
@@ -571,9 +572,7 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         st.warning("Découpage communal indisponible (API geo.api.gouv.fr).")
         return
 
-    name_to_code, code_to_name = build_commune_code_lookup(
-        communes_gj.get("features", [])
-    )
+    name_to_code, code_to_name = build_commune_code_lookup(communes_gj.get("features", []))
     population_by_code = fetch_communes_population(dept_code)
     if not population_by_code:
         for feat in communes_gj.get("features", []):
@@ -590,9 +589,6 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     temps_f = temps[temps["code_departement"].astype(str).str.zfill(2) == dept_code]
     immo_f = immo[immo["code_departement"].astype(str).str.zfill(2) == dept_code]
 
-    if temps_f.empty and immo_f.empty:
-        st.info("Données communales indisponibles pour ce département.")
-        return
     if temps_f.empty:
         st.info("Données de temps d'accès indisponibles pour ce département.")
         return
@@ -601,34 +597,44 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         return
 
     comm_data = build_commune_opportunity_df(
-        temps_f,
-        immo_f,
-        name_to_code,
-        code_to_name=code_to_name,
+        temps_f, immo_f, name_to_code, code_to_name=code_to_name,
         population_by_code=population_by_code or None,
     )
     if comm_data.empty:
-        nb_temps = temps_f["commune"].nunique()
-        nb_immo = immo_f["commune"].nunique()
         st.warning(
             f"Impossible de croiser les données pour ce département "
-            f"({nb_temps} communes avec temps d'accès, {nb_immo} avec prix immobilier, "
-            f"mais aucune commune commune identifiée sur les deux sources). "
-            "Les libellés diffèrent probablement entre les fichiers sources."
+            f"({temps_f['commune'].nunique()} communes avec temps d'accès, "
+            f"{immo_f['commune'].nunique()} avec prix immobilier, aucune commune commune aux deux sources)."
         )
         return
 
-    comm_data["tt_score"] = comm_data["score_action"].apply(
-        lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "N/D"
-    )
-    comm_data["tt_pop"] = comm_data["population"].apply(
-        lambda x: f"{int(x):,}".replace(",", "\u202f") if pd.notna(x) else "N/D"
-    )
-    comm_data["tt_temps"] = comm_data["temps_acces"].apply(
-        lambda x: f"{float(x):.1f} min" if pd.notna(x) else "N/D"
-    )
-    comm_data["tt_niveau"] = comm_data["niveau"]
-    matched = len(comm_data)
+    # ── Choix de la lecture ──────────────────────────────────────────────────
+    modes = {"Besoin d\u2019accès (temps de trajet)": "besoin",
+             "Priorité d\u2019action (besoin × population × faisabilité)": "priorite"}
+    choix = st.radio("Lecture", list(modes), horizontal=True, key=f"commune_mode_{dept_code}",
+                     label_visibility="collapsed")
+    mode = modes[choix]
+
+    temps_num = pd.to_numeric(comm_data["temps_acces"], errors="coerce")
+    nb_sur_place = int((temps_num <= 0).sum())
+    nb_15 = int((temps_num > 15).sum())
+    pop_15 = pd.to_numeric(comm_data.loc[temps_num > 15, "population"], errors="coerce").sum()
+    if mode == "besoin":
+        note = (f"<strong>Besoin d\u2019accès.</strong> Temps de trajet communal vers l\u2019offre de médecine générale "
+                f"la plus proche (indicateur interne, 0 = offre dans la commune). {nb_15} communes sont à plus de "
+                f"15 min, soit {int(pop_15):,} habitants. Le classement liste les communes les plus éloignées, "
+                f"avec leur population : il mesure une distance, pas un volume.").replace(",", "\u202f")
+    else:
+        note = (f"<strong>Priorité d\u2019action.</strong> Score 0–100 qui croise le besoin d\u2019accès (45\u202f%), "
+                f"la population de la commune (35\u202f%) et les conditions de déploiement mesurées par le prix "
+                f"au m² (20\u202f%), en rangs percentiles au sein du département. Les {nb_sur_place} communes qui "
+                f"disposent déjà d\u2019une offre ne sont pas classées. La population affichée est celle de la "
+                f"commune (INSEE), pas un impact sanitaire.")
+    st.markdown(f'<p class="dim-switch-note">{note}</p>', unsafe_allow_html=True)
+
+    comm_data["tt_score"] = comm_data["score_action"].apply(lambda x: f"{float(x):.0f} /100" if pd.notna(x) else "N/D")
+    comm_data["tt_pop"] = comm_data["population"].apply(lambda x: f"{int(x):,}".replace(",", "\u202f") if pd.notna(x) else "N/D")
+    comm_data["tt_temps"] = comm_data["temps_acces"].apply(lambda x: f"{float(x):.0f} min" if pd.notna(x) else "N/D")
 
     etabs: pd.DataFrame = data["etabs"]
     etabs_f = etabs[etabs["code_departement"].astype(str).str.zfill(2) == dept_code]
@@ -638,60 +644,52 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         etabs_overlay.columns = ["lat", "lon", "nom"]
         etabs_overlay = etabs_overlay.dropna(subset=["lat", "lon"]).head(50)
 
+    if mode == "besoin":
+        comm_data["map_color"] = comm_data["besoin_color"]
+        comm_data["map_value"] = temps_num
+        label, legend = "Besoin d\u2019accès (temps de trajet)", besoin_legend_items()
+        fields = ["nom", "tt_temps", "besoin_label", "tt_pop"]
+        aliases = ["Commune", "Temps d\u2019accès", "Classe", "Habitants"]
+    else:
+        comm_data["map_color"] = comm_data["color_hex"]
+        comm_data["map_value"] = comm_data["score_action"]
+        label, legend = "Priorité d\u2019action", action_priority_legend_items() + [("Offre dans la commune", "#D9E3D4")]
+        fields = ["nom", "tt_score", "niveau", "tt_temps", "tt_pop"]
+        aliases = ["Commune", "Score d\u2019action", "Niveau", "Temps d\u2019accès", "Habitants"]
+
     render_commune_choropleth(
-        dept_code=dept_code,
-        data_by_commune=comm_data,
-        value_col="value",
-        metric_label="Priorité d'action locale",
-        unit="",
-        colormap_name="action_priority",
-        etabs_overlay=etabs_overlay,
-        height=540,
-        key=f"commune_map_{dept_code}_action",
-        discrete=True,
-        color_col="color_hex",
-        tooltip_fields=["nom", "tt_score", "tt_pop", "tt_temps", "tt_niveau"],
-        tooltip_aliases=[
-            "Commune",
-            "Score d'action",
-            "Population",
-            "Temps d'accès",
-            "Niveau de priorité",
-        ],
-        legend_items=action_priority_legend_items(),
+        dept_code=dept_code, data_by_commune=comm_data, value_col="map_value", metric_label=label,
+        unit="", colormap_name="action_priority", etabs_overlay=etabs_overlay, height=540,
+        key=f"commune_map_{dept_code}_{mode}", discrete=True, color_col="map_color",
+        tooltip_fields=fields, tooltip_aliases=aliases, legend_items=legend,
     )
-
-    score_uses_pop = (
-        "score_inclut_population" in comm_data.columns
-        and bool(comm_data["score_inclut_population"].any())
-    )
-    st.caption(
-        f"{matched} communes analysées · score d\u2019opportunité d\u2019action "
-        f"(besoin sanitaire, population concernée, faisabilité"
-        + ("" if score_uses_pop else ", population non disponible")
-        + ") · survolez pour afficher le détail."
-    )
-
-    _render_top_communes_action(comm_data)
+    _render_top_communes_action(comm_data, mode)
 
 
-def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
-    """Top 10 communes où une action pourrait avoir le plus d'impact."""
+def _render_top_communes_action(comm_data: pd.DataFrame, mode: str = "priorite") -> None:
+    """Top 10 des communes, selon la même lecture que la carte."""
     from ..commune_opportunity import top_communes_for_action
 
-    top = top_communes_for_action(comm_data, limit=10)
+    top = top_communes_for_action(comm_data, limit=10, mode=mode)
     if top.empty:
+        st.info("Aucune commune sans offre sur place : pas de classement.")
         return
 
+    if mode == "besoin":
+        titre = 'Top 10 des communes <em>les plus éloignées</em> d\u2019une offre.'
+        lead = "Temps de trajet décroissant, puis population. Habitants = population municipale INSEE."
+        col4 = "Classe de besoin"
+    else:
+        titre = 'Top 10 des communes où une action <em>serait prioritaire</em>.'
+        lead = ("Score d\u2019action décroissant (besoin, population, faisabilité). "
+                "Hors communes disposant déjà d\u2019une offre.")
+        col4 = "Niveau de priorité"
+
     st.markdown(
-        '<div class="section-header" style="margin-top:32px;">'
-        '<div class="section-eyebrow">PRIORISATION LOCALE</div>'
-        '<h2 class="section-title">Top 10 des communes où une action '
-        'pourrait avoir le plus d\u2019<em>impact.</em></h2>'
-        '<p class="section-lead">'
-        "Synthèse d\u2019aide à la décision pour cibler une intervention "
-        "de santé à l\u2019échelle communale."
-        '</p>'
+        '<div class="section-header" style="margin-top:28px;">'
+        '<div class="section-eyebrow">CLASSEMENT</div>'
+        f'<h2 class="section-title">{titre}</h2>'
+        f'<p class="section-lead">{lead}</p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -699,50 +697,46 @@ def _render_top_communes_action(comm_data: pd.DataFrame) -> None:
     rows_html = ""
     for i, row in top.iterrows():
         pop = row.get("population")
-        impact = row.get("impact_population")
-        niveau = str(row.get("niveau", "N/D"))
+        temps = row.get("temps_acces")
         facteur = html.escape(str(row.get("facteur_principal", "N/D")))
         commune_name = html.escape(str(row.get("commune", "N/D")))
-        pop_str = (
-            f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "N/D"
-        )
-        impact_str = (
-            f"{int(impact):,}".replace(",", "\u202f") if pd.notna(impact) else "N/D"
-        )
+        pop_str = f"{int(pop):,}".replace(",", "\u202f") if pd.notna(pop) else "N/D"
+        temps_str = f"{float(temps):.0f} min" if pd.notna(temps) else "N/D"
+        if mode == "besoin":
+            cls, color = str(row.get("besoin_label", "N/D")), str(row.get("besoin_color", "#E8E6DD"))
+        else:
+            sc = row.get("score_action")
+            cls = f'{str(row.get("niveau", "N/D"))} · {float(sc):.0f}/100' if pd.notna(sc) else "N/D"
+            color = str(row.get("color_hex", "#E8E6DD"))
         rows_html += (
             f'<tr>'
             f'<td class="cell-rank" data-label="Rang">{i + 1}</td>'
             f'<td class="metric-label">{commune_name}</td>'
-            f'<td data-label="Population concernée">{pop_str}</td>'
-            f'<td data-label="Population INSEE">{impact_str}</td>'
-            f'<td data-label="Niveau de priorité">{niveau}</td>'
-            f'<td data-label="Facteurs principaux" '
-            f'style="font-size:13px;color:#4A4A4A;line-height:1.45;">'
-            f'{facteur}</td>'
+            f'<td data-label="Habitants (INSEE)">{pop_str}</td>'
+            f'<td data-label="Temps d\u2019accès">{temps_str}</td>'
+            f'<td class="cell-class" data-label="{col4}"><span class="dot" style="background:{color};"></span>{html.escape(cls)}</td>'
+            f'<td data-label="Facteurs observés" style="font-size:13px;color:#4A4A4A;line-height:1.45;">{facteur}</td>'
             f'</tr>'
         )
 
     st.markdown(
         '<div class="sa-tbl-scroll">'
         '<table class="comparison-table-v2 commune-action-table">'
-        '<thead>'
-        '<tr>'
+        '<thead><tr>'
         '<th class="metric-col">Rang</th>'
         '<th class="metric-col">Commune</th>'
-        '<th class="metric-col">Population concernée</th>'
-        '<th class="metric-col">Population (INSEE)</th>'
-        '<th class="metric-col">Niveau de priorité</th>'
-        '<th class="metric-col">Facteurs principaux</th>'
-        '</tr>'
-        '</thead>'
+        '<th class="metric-col">Habitants (INSEE)</th>'
+        '<th class="metric-col">Temps d\u2019accès</th>'
+        f'<th class="metric-col">{col4}</th>'
+        '<th class="metric-col">Facteurs observés</th>'
+        '</tr></thead>'
         f'<tbody>{rows_html}</tbody>'
         '</table>'
         '</div>'
         '<p class="commune-action-meth-note">'
-        "Le classement identifie les communes où une action pourrait avoir "
-        "le plus d\u2019impact au regard des données disponibles. "
-        "Il ne constitue pas une recommandation d\u2019implantation médicale "
-        "et doit être complété par l\u2019expertise des acteurs locaux."
+        "Le classement signale des communes où une action d\u2019accès aux soins peut être étudiée. "
+        "Il ne constitue pas une recommandation d\u2019implantation et doit être complété par "
+        "l\u2019expertise des acteurs locaux."
         "</p>",
         unsafe_allow_html=True,
     )
@@ -779,16 +773,22 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
         '<div class="section-header">'
         '<div class="section-eyebrow">PLAN D\'ACTION</div>'
         '<h2 class="section-title">Leviers d\'action <em>recommandés</em>.</h2>'
-        '<p class="section-lead">Leviers sélectionnés par un catalogue de règles explicites '
-        '(conditions vérifiées sur les indicateurs observés du département, au plus deux par famille). '
-        'Pistes d\'action argumentées, pas des prescriptions.</p>'
+        '<p class="section-lead">Leviers sélectionnés par un catalogue de règles explicites, '
+        'vérifiées sur les indicateurs observés du département (au plus deux par famille). '
+        '<span class="lead-note">Pistes argumentées, pas des prescriptions ; les volumes affichés sont des '
+        'populations observées, pas des impacts sanitaires.</span></p>'
         '</div>'
     )
 
-    st.markdown(
-        f'<p class="reco-impact-meth-note">{_IMPACT_METH_NOTE}</p>',
-        unsafe_allow_html=True,
-    )
+    # Les mêmes communes éloignées reviennent dans plusieurs leviers : on ne les
+    # affiche qu'une fois (le zoom territorial en donne le détail complet).
+    vus: set[str] = set()
+    for reco in recos:
+        sect = (reco.get("secteurs") or "").strip()
+        if sect in vus:
+            reco["secteurs"] = ""
+        elif sect:
+            vus.add(sect)
 
     if nb == 1:
         _render_reco_card(recos[0], r, data)
@@ -832,32 +832,51 @@ def _generate_recommendations(
 
 
 def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
-    """Carte structurée : problème → indicateurs → action → pourquoi → public / secteurs / conditions."""
+    """Carte lisible : titre → constat → données → action → public / communes →
+    conditions de mise en œuvre (dépliable). Aucun bloc vide : une information
+    absente (« n.d. ») n'est pas affichée."""
     impact = project_levier_impact(reco, r, data)
     esc = html.escape
     chips = "".join(f'<span class="reco-chip">{esc(str(v))}</span>' for v in reco.get("indicateurs", [])[:4])
     conds = reco.get("conditions") or []
     conds_html = "".join(
-        f'<li>{"✓" if ok else "–"} {esc(lab)}</li>' for lab, ok in conds
+        f'<li class="{"ok" if ok else "ko"}">{"✓" if ok else "–"} {esc(lab)}</li>' for lab, ok in conds
     )
     disp = ", ".join(reco.get("dispositifs", []))
-    secteurs = reco.get("secteurs") or ""
+    secteurs = (reco.get("secteurs") or "").strip()
+    public = (reco.get("public") or "").strip()
+    pop_obs = getattr(impact, "population", "") or ""
+    if pop_obs.strip().lower() in ("", "n.d.", "n/d"):
+        pop_obs = ""
+
+    def block(label, text):
+        return (f'<div class="reco-block"><div class="reco-block-lbl">{label}</div>{esc(text)}</div>'
+                if text else "")
+
+    meta = ""
+    if public:
+        meta += f'<div class="reco-meta-item"><span class="lbl">Public ciblé</span><span class="val">{esc(public)}</span></div>'
+    if pop_obs:
+        meta += f'<div class="reco-meta-item"><span class="lbl">Population observée</span><span class="val">{esc(pop_obs)}</span></div>'
+    if secteurs:
+        meta += f'<div class="reco-meta-item wide"><span class="lbl">Communes et secteurs concernés</span><span class="val">{esc(secteurs)}</span></div>'
+
     st.html(
         '<div class="reco-card reco-card-neutral">'
-        f'<div class="reco-famille">{esc(reco.get("famille", ""))} · {esc(reco.get("horizon", ""))}</div>'
+        f'<div class="reco-famille"><span>{esc(reco.get("famille", ""))}</span>'
+        f'<span class="reco-horizon">{esc(reco.get("horizon", ""))}</span></div>'
         f'<div class="reco-title">{esc(reco["title"])}</div>'
-        f'<div class="reco-prose"><strong>Constat.</strong> {esc(reco.get("probleme", ""))}</div>'
-        f'<div class="reco-chips">{chips}</div>'
-        f'<div class="reco-prose"><strong>Action.</strong> {esc(reco.get("action", ""))}</div>'
-        f'<div class="reco-prose reco-pourquoi"><strong>Pourquoi ici.</strong> {esc(reco.get("pourquoi", ""))}</div>'
-        + (f'<div class="reco-prose"><strong>Secteurs.</strong> {esc(secteurs)}</div>' if secteurs else "")
-        + render_impact_html(impact)
-        + '<details class="reco-details"><summary>Conditions, dispositifs et mise en œuvre</summary>'
-        f'<ul class="reco-conds">{conds_html}</ul>'
-        + (f'<div class="reco-prose"><strong>Dispositifs.</strong> {esc(disp)}</div>' if disp else "")
-        + (f'<div class="reco-prose"><strong>Mise en œuvre.</strong> {esc(reco.get("mise_en_oeuvre", ""))}</div>'
+        + block("Constat", reco.get("probleme", ""))
+        + (f'<div class="reco-block-lbl">Données</div><div class="reco-chips">{chips}</div>' if chips else "")
+        + block("Action proposée", reco.get("action", ""))
+        + block("Pourquoi ici", reco.get("pourquoi", ""))
+        + (f'<div class="reco-meta">{meta}</div>' if meta else "")
+        + '<details class="reco-details"><summary>Conditions de mise en œuvre</summary>'
+        + (f'<ul class="reco-conds">{conds_html}</ul>' if conds_html else "")
+        + (f'<div class="reco-block"><div class="reco-block-lbl">Dispositifs existants</div>{esc(disp)}</div>' if disp else "")
+        + (f'<div class="reco-block"><div class="reco-block-lbl">Mise en œuvre</div>{esc(reco.get("mise_en_oeuvre", ""))}</div>'
            if reco.get("mise_en_oeuvre") else "")
-        + f'<div class="reco-score">Score de correspondance {reco.get("score", 0):.2f}</div>'
+        + f'<div class="reco-score">Correspondance aux conditions du catalogue : {reco.get("score", 0):.2f}</div>'
         '</details>'
         '</div>'
     )
