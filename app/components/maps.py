@@ -70,7 +70,7 @@ HOVER_COLOR  = "#0A1938"
 # terciles pour le score (les trois zones), cinq classes pour les autres indicateurs. Les clés historiques
 # (« score », « prix », « temps », « age ») restent disponibles pour les autres cartes de l'application.
 COLORMAPS: dict[str, list[str]] = {
-    "score_dsfr":  ["#B6404E", "#D5B36A", "#438067"],                        # divergente : critique → intermédiaire → favorable
+    "score_dsfr":  ["#AE4055", "#D67181", "#E9A3AE", "#F4CED4", "#FBEFF1"],  # rouge/rose séquentiel : score faible = rouge soutenu, élevé = rose pâle
     "apl":         ["#E7F3EC", "#B6DCC5", "#77B695", "#3F8A68", "#176448"],  # vert profond
     "eloignement": ["#FBEFEE", "#F4CBC7", "#E99E96", "#D56A65", "#A52E3A"],  # rouge progressif
     "medecins":    ["#E9F4F5", "#BBDDE1", "#80BDC5", "#428E9B", "#206475"],  # bleu turquoise

@@ -253,27 +253,19 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
                 st.session_state["_home_map_last_click"] = (code, str(event.get("last_object_clicked")))
                 navigate("dept", dept_code=str(code))
 
-    if col_key == "score_global" and "zone_short" in master.columns:
-        counts = master["zone_short"].value_counts()
-        st.markdown(
-            '<div class="map-legend">'
-            + "".join(
-                f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>'
-                f'{lab} <span class="count">({int(counts.get(lab, 0))})</span></span>'
-                for lab, c in ZONE_COLORS.items())
-            + '</div>',
-            unsafe_allow_html=True,
-        )
+    if False:  # le score suit la même légende par classes que les autres indicateurs (cinq classes de scores)
+        pass
     else:
         # Légende = classes de quantiles de la carte (mêmes bornes, mêmes couleurs)
         from ..components.maps import decimales_legende, national_legend_classes
-        unit = {"apl_dept": "consult./hab.", "acces_mg_part_sup_10_pct": "% des habitants", "med_gen_pour_100k": "généralistes /100 000 hab.",
+        unit = {"score_global": "score sur 100 (rouge soutenu = le moins bien placé)", "apl_dept": "consult./hab.",
+                "acces_mg_part_sup_10_pct": "% des habitants", "med_gen_pour_100k": "généralistes /100 000 hab.",
                 "prix_m2_moyen": "€/m²", "pct_plus_65": "% de 65 ans et plus"}.get(col_key, "")
         fixes = BINS_FIXES.get(col_key)
         classes = national_legend_classes(master, col_key, cmap_name, reverse_scale, bins=fixes)
         if classes:
             bornes = [classes[0][0]] + [hi for _, hi, _ in classes]
-            dec = decimales_legende(bornes, minimum={"apl_dept": 1, "pct_plus_65": 1}.get(col_key, 0))
+            dec = decimales_legende(bornes, minimum={"apl_dept": 1, "pct_plus_65": 1, "score_global": 1}.get(col_key, 0))
             fmt = lambda v: f"{v:,.{dec}f}".replace(",", "\u202f").replace(".", ",")
             def lib(i, lo, hi):
                 if fixes:
