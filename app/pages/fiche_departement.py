@@ -379,7 +379,7 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
             delta = f"{d:+d} pts vs médiane"
             val = f"{int(sc)}"
         tiles += (
-            f'<div class="sc-tile" style="border-top:3px solid {col};">'
+            f'<div class="sc-tile" style="--sem:{col};">'
             f'<div class="sc-tile-label">{b["label"]} <span class="sc-tile-w">{int(b["weight"] * 100)}\u202f%</span></div>'
             f'<div class="sc-tile-val" style="color:{col};">{val}</div>'
             f'<div class="sc-tile-delta">{delta}</div></div>'

@@ -211,7 +211,7 @@ def render(data: dict) -> None:
     counts = sel["quadrant"].value_counts()
     cols = st.columns(4)
     for col, (q, lab) in zip(cols, QUADRANTS.items()):
-        col.markdown(f'<div class="diagnostic-kpi" style="padding:10px 12px;border-top:3px solid {_COULEURS[q]};">'
+        col.markdown(f'<div class="diagnostic-kpi" style="padding:10px 12px;--sem:{_COULEURS[q]};">'
                      f'<div class="diagnostic-kpi-label">{q} · {lab}</div>'
                      f'<div class="diagnostic-kpi-value" style="font-size:24px;margin-bottom:4px;">{int(counts.get(q, 0))}</div>'
                      f'<div style="font-size:11px;color:#6B6B68;line-height:1.4;">{_QUADRANT_LECTURE[q]}</div></div>',
@@ -263,7 +263,7 @@ def render(data: dict) -> None:
         rangs_o = " · ".join(f"{_LIBS_OFFRE.get(k, k)} {v:.0f}" for k, v in e["offre"].items())
         rangs_b = " · ".join(f"{k} {v:.0f}" for k, v in e["besoins"].items())
         st.markdown(
-            f'<div class="reco-card reco-card-neutral" style="border-left:4px solid {_COULEURS[q]};">'
+            f'<div class="reco-card reco-card-neutral" style="--sem:{_COULEURS[q]};">'
             f'<div class="reco-famille"><span>{html.escape(e["quadrant"])}</span><span class="reco-horizon">{html.escape(str(r["region"]))}</span></div>'
             f'<div class="reco-title">{html.escape(e["nom"])}</div>'
             f'<div class="reco-block">{html.escape(e["nom"])} {conclusion}.</div>'

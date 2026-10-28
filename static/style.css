@@ -3478,3 +3478,25 @@ html, [data-testid="stMain"], section.main { scroll-padding-top: 100px; }
     html, [data-testid="stMain"], section.main { scroll-padding-top: 136px; }
     [id], h1, h2, h3, .section-header { scroll-margin-top: 136px; }
 }
+
+/* ─── Cartes KPI : bordure fine uniforme, coins arrondis, ombre discrète ; la couleur sémantique devient une
+   pastille (variable --sem posée sur la carte), plus une bande décorative ───────────────────────── */
+.diagnostic-kpi, .sc-tile, .kpi-card, .reco-card { border: 1px solid #E8E6DD !important; border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(10, 25, 56, 0.04); }
+.diagnostic-kpi[style*="--sem"] > :first-child::before, .sc-tile[style*="--sem"] > :first-child::before,
+.reco-card[style*="--sem"] .reco-title::before {
+    content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--sem);
+    margin-right: 7px; vertical-align: middle; position: relative; top: -1px; }
+/* Espacement vertical entre blocs empilés : Streamlit compense son écart de 1 rem par une marge négative sur
+   chaque bloc Markdown ; les cartes se touchaient. Chaque carte porte désormais sa propre respiration. */
+.diagnostic-kpi, .sc-tiles, .kpi-card, .reco-card, .cap-conclusion, .ign-def, .prio-intro, .meth-grid2 { margin-bottom: 14px !important; }
+@media screen and (max-width: 768px) {
+    .block-container [data-testid="stHorizontalBlock"] { row-gap: 16px !important; }
+    .block-container [data-testid="stColumn"] { margin: 0 !important; }
+    .block-container [data-testid="stColumn"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+    .diagnostic-kpi, .sc-tile, .kpi-card, .reco-card, .cap-conclusion { height: auto !important; min-height: 0 !important; margin-bottom: 16px !important; }
+    .sc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
+    .sc-tile-label { min-height: 0 !important; }
+    .prio-intro, .prio-intro--4 { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .reco-card-neutral { min-height: 0 !important; }
+}

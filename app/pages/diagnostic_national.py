@@ -45,7 +45,7 @@ def render(data: dict) -> None:
     apl_med = num("apl_dept").median(); med_med = num("med_gen_pour_100k").median()
 
     def kpi(label, value, unit, ctx, color="#1A3D8F"):
-        return (f'<div class="diagnostic-kpi" style="padding:12px 14px;border-top:3px solid {color};">'
+        return (f'<div class="diagnostic-kpi" style="padding:12px 14px;--sem:{color};">'
                 f'<div class="diagnostic-kpi-label">{label}</div>'
                 f'<div class="diagnostic-kpi-value" style="font-size:26px;margin-bottom:6px;">{value}<span class="max"> {unit}</span></div>'
                 f'<div style="font-size:11px;color:#6B6B68;line-height:1.4;">{ctx}</div></div>')

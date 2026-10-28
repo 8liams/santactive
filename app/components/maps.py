@@ -70,7 +70,7 @@ HOVER_COLOR  = "#0A1938"
 # terciles pour le score (les trois zones), cinq classes pour les autres indicateurs. Les clés historiques
 # (« score », « prix », « temps », « age ») restent disponibles pour les autres cartes de l'application.
 COLORMAPS: dict[str, list[str]] = {
-    "score_dsfr":  ["#DCE8F6", "#739BCB", "#173B78"],                        # bleu institutionnel, 3 terciles
+    "score_dsfr":  ["#B6404E", "#D5B36A", "#438067"],                        # divergente : critique → intermédiaire → favorable
     "apl":         ["#E7F3EC", "#B6DCC5", "#77B695", "#3F8A68", "#176448"],  # vert profond
     "eloignement": ["#FBEFEE", "#F4CBC7", "#E99E96", "#D56A65", "#A52E3A"],  # rouge progressif
     "medecins":    ["#E9F4F5", "#BBDDE1", "#80BDC5", "#428E9B", "#206475"],  # bleu turquoise
@@ -84,7 +84,7 @@ COLORMAPS: dict[str, list[str]] = {
     "age":   ["#E7EDF7", "#BCCBE6", "#7F9BD0", "#3A5DA8"],
 }
 # Légende des zones de la carte nationale : les trois terciles du score, dans le bleu institutionnel
-ZONE_COLORS = {"Critique": "#DCE8F6", "Intermédiaire": "#739BCB", "Favorable": "#173B78"}
+ZONE_COLORS = {"Critique": "#B6404E", "Intermédiaire": "#D5B36A", "Favorable": "#438067"}
 
 
 def quantile_bins(values, n_classes: int) -> list[float]:

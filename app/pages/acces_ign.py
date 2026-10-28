@@ -295,7 +295,7 @@ def _fmt(n) -> str:
 
 
 def _kpi(label: str, value: str, ctx: str, color: str = "#1A3D8F") -> str:
-    return (f'<div class="diagnostic-kpi" style="padding:12px 14px;border-top:3px solid {color};">'
+    return (f'<div class="diagnostic-kpi" style="padding:12px 14px;--sem:{color};">'
             f'<div class="diagnostic-kpi-label">{label}</div>'
             f'<div class="diagnostic-kpi-value" style="font-size:26px;margin-bottom:6px;">{value}</div>'
             f'<div style="font-size:11px;color:#6B6B68;line-height:1.4;">{ctx}</div></div>')
