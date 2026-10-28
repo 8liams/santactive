@@ -252,7 +252,7 @@ def render(data: dict) -> None:
             "par les leviers reposent aussi sur l’INSEE (1 928 communes, 514 254 habitants, contre 1 228 et 219 218 avec l’ancien "
             "fichier) ; les règles des leviers étant inchangées, 13 départements ruraux ont vu leurs leviers de proximité "
             "modifiés. L’ancien indicateur reste disponible pour l’audit et sert de repli, signalé, pour la Guadeloupe et la Guyane. "
-            "Détail : docs/EVOLUTIONS_MOTEUR.md, §14 à §19."
+            "Détail : <a href=\"https://github.com/8liams/santactive/blob/main/docs/EVOLUTIONS_MOTEUR.md\" target=\"_blank\">journal technique des évolutions du moteur (GitHub, §14 à §19)</a>."
         )
     _hr()
 
@@ -397,7 +397,8 @@ def render(data: dict) -> None:
     # ══════════════════════════════════════════════════════════════════════════
     # 9. GLOSSAIRE
     # ══════════════════════════════════════════════════════════════════════════
-    _section("9 · GLOSSAIRE", "Les termes <em>en une phrase.</em>")
+    st.markdown('<div id="glossaire"></div>', unsafe_allow_html=True)
+    _section("9 · GLOSSAIRE", "Les termes et les sigles <em>en une phrase.</em>")
     _table(["Terme", "Définition"], [
         ["APL", "Accessibilité potentielle localisée (DREES) : consultations de médecine générale accessibles par an et par habitant, pondérées par l’activité des médecins, l’âge de la population et la distance."],
         ["RPPS", "Répertoire partagé des professionnels de santé : effectifs officiels des médecins en activité."],
@@ -413,6 +414,16 @@ def render(data: dict) -> None:
         ["Standardisation sur l’âge", "Recalcul d’une prévalence comme si tous les départements avaient la même pyramide des âges, pour les comparer à âge égal."],
         ["ETP", "Équivalent temps plein : unité de volume d’activité (5 400 consultations par an dans la convention DREES), pas une personne."],
         ["Prévalence", "Part des assurés pris en charge pour une pathologie (CNAM)."],
+        ["DREES", "Direction de la recherche, des études, de l’évaluation et des statistiques : service statistique des ministères sociaux (APL, RPPS, diffusion de FINESS)."],
+        ["CNAM", "Caisse nationale de l’Assurance Maladie : cartographie des pathologies et des dépenses."],
+        ["DGFiP", "Direction générale des Finances publiques : base DVF (demandes de valeurs foncières) des transactions immobilières."],
+        ["IGN Géoplateforme", "Services géographiques de l’Institut national de l’information géographique et forestière : isochrones du simulateur."],
+        ["API Géo", "Service de l’État (geo.api.gouv.fr) : référentiel, population et contours des communes et départements."],
+        ["ARS", "Agence régionale de santé : pilotage régional de l’offre de soins, zonage des généralistes."],
+        ["CPTS", "Communauté professionnelle territoriale de santé : organisation des professionnels de ville d’un territoire."],
+        ["MSP", "Maison de santé pluriprofessionnelle : exercice coordonné de plusieurs professionnels de premier recours."],
+        ["CH, CHR, SSR, MCO", "Centre hospitalier, centre hospitalier régional, soins de suite et de réadaptation, médecine-chirurgie-obstétrique (court séjour)."],
+        ["Zone critique, intermédiaire, favorable", "Terciles du classement des départements au score Sant’active ; une position, pas une évolution."],
     ])
     _hr()
 
@@ -427,7 +438,7 @@ def render(data: dict) -> None:
         ["28 oct. 2026", "APL : millésime 2024 (remplace 2023)", "Millésime le plus récent, définition inchangée", "Corrélation 0,99 ; 4 changements de zone ; Vosges sort des priorités"],
         ["28 oct. 2026", "Communes et habitants à plus de 15 min, secteurs des leviers : INSEE 2025 ; seuils régionaux relatifs",
          "Une seule source de temps dans les diagnostics", "Leviers de proximité modifiés dans 13 départements ruraux"],
-        ["oct. 2026", "APL départemental : moyenne pondérée par la population standardisée (méthode DREES)", "Consigne DREES pour tout APL agrégé", "Documenté dans docs/EVOLUTIONS_MOTEUR.md"],
+        ["oct. 2026", "APL départemental : moyenne pondérée par la population standardisée (méthode DREES)", "Consigne DREES pour tout APL agrégé", "Documenté dans le journal technique des évolutions du moteur (GitHub)"],
         ["oct. 2026", "Densité de généralistes : effectifs DREES/RPPS 2026", "Effectifs de personnes plutôt que présences", "Idem"],
     ])
     with st.expander("Détails d’audit (comparaisons techniques)"):
@@ -442,13 +453,14 @@ def render(data: dict) -> None:
 
     st.markdown(
         '<div class="section-header"><div class="section-eyebrow">CONTACT</div>'
-        '<h2 class="section-title">Une question, <em>une erreur ?</em></h2>'
-        '<p class="section-lead">Signalez toute erreur de données ou incohérence à l’équipe.</p></div>'
+        '<h2 class="section-title">Une question sur la méthode, <em>une erreur repérée ?</em></h2>'
+        '<p class="section-lead">L’équipe répond par e-mail et corrige les données ou les textes lorsqu’une erreur est confirmée.</p></div>'
         '<div style="margin-top:20px;padding:20px 24px;background:#F3F2EC;border-radius:6px;display:flex;align-items:center;'
         'justify-content:space-between;flex-wrap:wrap;gap:16px;">'
         '<div style="font-size:14px;color:#0A1938;">Questions sur les données, les calculs ou la méthode :</div>'
         '<a href="mailto:santactive.esdata@gmail.com" style="padding:12px 24px;background:#1A3D8F;color:white;border-radius:6px;text-decoration:none;'
         'font-size:14px;font-weight:500;white-space:nowrap;">santactive.esdata@gmail.com</a></div>'
-        f'<p class="sa-couverture" style="margin-top:16px;">Documentation technique : docs/EVOLUTIONS_MOTEUR.md · '
-        f'<a href="{internal_href("about")}" target="_self">À propos →</a></p>',
+        f'<p class="sa-couverture" style="margin-top:16px;">Pour aller plus loin : '
+        f'<a href="{internal_href("about")}" target="_self">À propos (projet, équipe, sources, contact) →</a> · '
+        f'<a href="https://github.com/8liams/santactive/blob/main/docs/EVOLUTIONS_MOTEUR.md" target="_blank" rel="noopener noreferrer">journal technique des évolutions du moteur (GitHub) →</a></p>',
         unsafe_allow_html=True)

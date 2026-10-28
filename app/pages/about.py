@@ -1,4 +1,9 @@
-"""Page À propos — Sant'active."""
+"""Page À propos — Sant'active.
+
+Présente le projet (objectif, publics), son origine et l'équipe, les sources publiques et leur
+provenance, les engagements de transparence avec leurs limites, les contacts et ressources.
+Les explications techniques détaillées (calculs, hypothèses, glossaire) sont dans la Méthodologie.
+"""
 from __future__ import annotations
 
 import base64
@@ -6,10 +11,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from ..components.nav import NavCrumb, render_breadcrumb
-from ..router import navigate
+from ..components.nav import NavCrumb, internal_href, render_breadcrumb
+from ..config import APL_MILLESIME
 
-from ..router import navigate
+CONTACT_EMAIL = "santactive.esdata@gmail.com"
+DEPOT_GITHUB = "https://github.com/8liams/santactive"
 
 
 def _get_image_b64(path: str) -> str:
@@ -20,8 +26,7 @@ def _get_image_b64(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
-def _remove_dark_background(image_path: str, output_path: str,
-                             threshold: int = 30) -> str:
+def _remove_dark_background(image_path: str, output_path: str, threshold: int = 30) -> str:
     """Supprime le fond noir/sombre d'un PNG via PIL."""
     try:
         import numpy as np
@@ -32,442 +37,231 @@ def _remove_dark_background(image_path: str, output_path: str,
         r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
         dark_mask = (r.astype(int) + g.astype(int) + b.astype(int)) < (threshold * 3)
         data[:, :, 3] = np.where(dark_mask, 0, a)
-        result = Image.fromarray(data)
-        result.save(output_path, "PNG")
+        Image.fromarray(data).save(output_path, "PNG")
         return output_path
     except ImportError:
         return image_path
 
 
+def _section(eyebrow: str, title_html: str, lead: str | None = None, top: int = 48) -> None:
+    st.markdown(
+        f'<div class="section-header" style="margin-top:{top}px;">'
+        f'<div class="section-eyebrow">{eyebrow}</div>'
+        f'<h2 class="section-title">{title_html}</h2>'
+        + (f'<p class="section-lead">{lead}</p>' if lead else "")
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _prose(html: str) -> None:
+    st.markdown(f'<div style="max-width:760px;font-size:15px;line-height:1.8;color:#2B2B2B;">{html}</div>',
+                unsafe_allow_html=True)
+
+
+# Sources réellement utilisées par l'application (producteur · millésime · rôle · lien de référence).
+# Trois statuts distinguent la donnée publique, l'agrégat calculé par Sant'active et l'estimation propre au projet.
+SOURCES: list[tuple[str, str, str, str]] = [
+    ("INSEE · Recensement de la population 2021", "Population municipale, âge, densité par commune et par département.",
+     "https://www.insee.fr/fr/statistiques?categorie=1&debut=0&idprec=5650720", "Donnée publique"),
+    ("INSEE · Accès aux équipements 2025 (BPE 2025, distancier Metric-OSRM)",
+     "Temps de trajet en voiture, par carreau habité de 200 m, vers le médecin généraliste le plus proche ; "
+     "habitants à plus de 15 minutes ; dimension temps du score et lecture communale.",
+     "https://www.insee.fr/fr/metadonnees/source/serie/s1161", "Donnée publique"),
+    ("DREES · Accessibilité potentielle localisée (APL) aux médecins généralistes · millésime " + APL_MILLESIME,
+     "Consultations accessibles par an et par habitant, par commune ; valeur départementale pondérée par la population "
+     "standardisée ; habitants sous le repère 2,5.",
+     "https://data.drees.solidarites-sante.gouv.fr/explore/?q=APL", "Donnée publique · agrégat Sant'active"),
+    ("DREES · Répertoire RPPS des professionnels de santé · 1er janvier 2026",
+     "Médecins généralistes et spécialistes en activité, par département.",
+     "https://data.drees.solidarites-sante.gouv.fr/explore/?q=RPPS", "Donnée publique"),
+    ("FINESS · ministère chargé de la Santé (diffusion DREES) · mars 2026",
+     "Sites d'établissements de santé ; retenus dans le score : centres hospitaliers, centres hospitaliers régionaux, "
+     "établissements privés de soins de suite et de réadaptation. Les cliniques privées de court séjour ne sont pas comptées.",
+     "https://www.data.gouv.fr/fr/datasets/finess-extraction-du-fichier-des-etablissements/", "Donnée publique"),
+    ("CNAM · Cartographie des pathologies et des dépenses · 2023",
+     "Patients pris en charge par pathologie et par département ; prévalences brutes et standardisées sur l'âge.",
+     "https://data.ameli.fr/", "Donnée publique · standardisation Sant'active"),
+    ("DGFiP · Demandes de valeurs foncières (DVF) · 2025",
+     "Prix médian des transactions immobilières, indicateur de contexte (5 % du score).",
+     "https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres/", "Donnée publique"),
+    ("IGN · Géoplateforme · service d'isochrones",
+     "Zones atteignables en 10, 15 et 20 minutes en voiture depuis un point d'implantation ; simulateur.",
+     "https://geoservices.ign.fr/documentation/services/services-geoplateforme/itineraire", "Service public en ligne"),
+    ("API Géo (geo.api.gouv.fr) · contours et population des communes",
+     "Référentiel des communes, contours départementaux et communaux servis par l'État.",
+     "https://geo.api.gouv.fr/", "Service public en ligne"),
+]
+
+
 def render(data: dict) -> None:
+    render_breadcrumb([NavCrumb("Accueil", "home"), NavCrumb("À propos")], key_prefix="about_bc")
 
-    render_breadcrumb([
-        NavCrumb("Accueil", "home"),
-        NavCrumb("À propos"),
-    ], key_prefix="about_bc")
-
-    # ── SECTION 1 — LE PROJET ─────────────────────────────────────────────────
+    # ── 1. CE QU'EST SANT'ACTIVE ─────────────────────────────────────────────
+    _section("LE PROJET", "Sant'active : <em>l'accès aux soins, territoire par territoire.</em>",
+             "Un outil d'aide à la décision sur l'offre et l'accès aux soins de premier recours, construit à partir de "
+             "données publiques, pour les agences régionales de santé, les collectivités et les professionnels de santé.", top=8)
+    _prose(
+        "<p>Sant'active réunit, pour chacun des 100 départements analysés (Mayotte exclue, faute de sources complètes), "
+        "les données publiques qui décrivent l'offre de soins de premier recours et son accessibilité : accessibilité "
+        "potentielle aux généralistes (APL), temps de trajet vers un généraliste, effectifs de médecins, sites hospitaliers, "
+        "démographie, pathologies prises en charge et contexte immobilier.</p>"
+        "<p>Il en tire un <strong>diagnostic lisible</strong> (score Sant'active, zone, comparaison nationale), une "
+        "<strong>priorisation</strong> des territoires où l'écart entre offre et besoins est le plus préoccupant, des "
+        "<strong>leviers d'action</strong> issus de dispositifs existants et sélectionnés par des règles explicites, et un "
+        "<strong>simulateur</strong> de gain de proximité pour une implantation. Chaque fiche se partage en PDF et par e-mail.</p>"
+        "<p>Ses publics : directions et délégations départementales des ARS, élus et services des collectivités, "
+        "communautés professionnelles territoriales de santé (CPTS), professionnels de santé qui préparent un projet.</p>"
+    )
     st.markdown(
-        '<div class="section-header">'
-        '<div class="section-eyebrow">LE PROJET</div>'
-        '<h2 class="section-title">'
-        "Sant'active : <em>Cartographier la santé, territoire par territoire.</em>"
-        '</h2>'
-        '<p class="section-lead">'
-        "Un outil d'aide à la décision territoriale sur l'accès aux soins en France, "
-        "construit à partir de données ouvertes officielles."
-        '</p>'
-        '</div>',
-        unsafe_allow_html=True,
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 4px;">'
+        f'<a href="{internal_href("home")}" target="_self" class="reco-link">Ouvrir un diagnostic →</a>'
+        f'<a href="{internal_href("methodologie")}" target="_self" class="reco-link">Lire la méthodologie →</a>'
+        '</div>', unsafe_allow_html=True)
+
+    # ── 2. ORIGINE ET ÉQUIPE ──────────────────────────────────────────────────
+    _section("ORIGINE ET ÉQUIPE", "Un projet étudiant né d'un <em>défi open data.</em>")
+    _prose(
+        "<p>Sant'active a été conçu par les étudiants du Mastère 1 Data de l'ESD Paris (École Supérieure du Digital, "
+        "promotion 2025-2026) dans le cadre du challenge de l'Open Data University, programme porté par l'association "
+        "Latitudes, qui propose aux établissements de formation de mobiliser leurs élèves sur la réutilisation de données "
+        "ouvertes au service d'enjeux sociaux et environnementaux (semaine Open Data, avril 2026).</p>"
+        "<p>La question posée : <strong>comment rendre les données publiques sur l'accès aux soins lisibles et "
+        "actionnables pour les décideurs territoriaux ?</strong> La première version réalisée pendant le challenge a ensuite été "
+        "consolidé, audité et documenté jusqu'à la version 1 publiée ici. Sant'active est un travail pédagogique "
+        "indépendant : il n'engage ni les producteurs de données cités, ni les institutions mentionnées, et ne revendique "
+        "aucun partenariat officiel.</p>"
     )
 
-    st.markdown(
-        '<div style="max-width:720px;font-size:15px;line-height:1.8;color:#2B2B2B;">'
-        '<p>'
-        "La désertification médicale touche aujourd'hui près de "
-        '<strong>87\u202f% du territoire français</strong> et prive des millions '
-        "de personnes d'un accès équitable aux soins. Pourtant, les décideurs "
-        "(élus locaux, directeurs d'ARS, professionnels de santé) manquent "
-        "souvent d'un outil synthétique, lisible et fondé sur des données "
-        "officielles pour orienter leurs décisions."
-        '</p>'
-        '<p>'
-        "Sant'active agrège sept sources de données publiques pour produire, "
-        "pour chacun des 100 départements analysés (Mayotte exclue), un diagnostic complet\u202f: "
-        "accès aux médecins, établissements de santé, délais estimés, "
-        "démographie, pathologies chroniques et contexte immobilier. "
-        "L'objectif est de transformer des données brutes en signaux "
-        "actionnables : des recommandations chiffrées, localisées, hiérarchisées."
-        '</p>'
-        '<p>'
-        "Toutes les données utilisées sont en accès libre (open data). "
-        "Tous les calculs sont documentés et reproductibles."
-        '</p>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── SECTION 2 — LE DÉFI OPEN DATA ────────────────────────────────────────
-    st.markdown(
-        '<div class="section-header" style="margin-top:48px;">'
-        '<div class="section-eyebrow">CONTEXTE</div>'
-        '<h2 class="section-title">'
-        "Un projet né d'un <em>défi Open Data.</em>"
-        '</h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:28px;">'
-
-        '<div style="flex:1;min-width:260px;padding:24px;background:#F3F2EC;'
-        'border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:#6B6B68;margin-bottom:12px;">'
-        "L'ÉCOLE"
-        '</div>'
-        '<div style="font-size:17px;font-weight:600;color:#0A1938;margin-bottom:8px;">'
-        'ESD, École Supérieure du Digital'
-        '</div>'
-        '<div style="font-size:14px;color:#4B4B48;line-height:1.6;">'
-        'Mastère 1 Data · Promotion 2025-2026<br>Paris, France'
-        '</div>'
-        '</div>'
-
-        '<div style="flex:1;min-width:260px;padding:24px;background:#F3F2EC;'
-        'border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;'
-        'text-transform:uppercase;color:#6B6B68;margin-bottom:12px;">'
-        'LE CONCOURS'
-        '</div>'
-        '<div style="font-size:17px;font-weight:600;color:#0A1938;margin-bottom:8px;">'
-        'Open Data University × Latitudes'
-        '</div>'
-        '<div style="font-size:14px;color:#4B4B48;line-height:1.6;">'
-        'Challenge national · Semaine Open Data<br>Avril 2026'
-        '</div>'
-        '</div>'
-
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div style="max-width:720px;font-size:15px;line-height:1.8;color:#2B2B2B;'
-        'padding:24px;border-top:2px solid #E8E6DD;background:#F7F8FC;'
-        'border-radius:0 6px 6px 0;">'
-        '<em>'
-        "\u00ab\u202fL'Open Data University propose aux établissements de formation "
-        "à la data de mobiliser leurs élèves sur des challenges qui répondent "
-        "à des enjeux sociaux et environnementaux grâce à la réutilisation "
-        "de données ouvertes.\u202f\u00bb"
-        '</em>'
-        '<div style="margin-top:12px;font-size:12px;color:#6B6B68;">'
-        'Open Data University · '
-        '<a href="https://www.opendatauniversity.org/" target="_blank" '
-        'style="color:#1A3D8F;text-decoration:none;">'
-        'opendatauniversity.org'
-        '</a>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<div style="max-width:720px;font-size:14px;line-height:1.8;'
-        'color:#4B4B48;margin-top:20px;">'
-        "Sant'active a été conçu et développé en une semaine dans le cadre "
-        "de ce challenge. Le projet répond à la problématique\u202f: "
-        '<strong>\u00ab\u202fComment rendre l\'accès aux données de santé territoriale '
-        "lisible et actionnable pour les décideurs locaux\u202f?\u202f\u00bb</strong>"
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── SECTION 3 — L'ÉQUIPE ──────────────────────────────────────────────────
-    st.markdown("""
-<div class="section-header" style="margin-top:56px;">
-    <div class="section-eyebrow">L'ÉQUIPE</div>
-    <h2 class="section-title">
-        Mastère 1 Data <em>· ESD Paris.</em>
-    </h2>
-</div>
-""", unsafe_allow_html=True)
-
-    # Logo ESData — suppression du fond noir via PIL au premier chargement
     _clean_path = "static/brand/logo-esdata-clean.png"
     if not Path(_clean_path).exists():
         _remove_dark_background("static/brand/logo-esdata.png", _clean_path)
-
     _esdata_b64 = _get_image_b64(_clean_path) or _get_image_b64("static/brand/logo-esdata.png")
     if _esdata_b64:
-        st.markdown(f"""
-<div style="margin:8px 0 16px;">
-    <img src="data:image/png;base64,{_esdata_b64}"
-         style="width:160px;height:auto;
-                mix-blend-mode:multiply;
-                background:transparent;"
-         alt="ESData, ESD Paris">
-</div>
-""", unsafe_allow_html=True)
-    else:
-        st.markdown("""
-<div style="padding:12px 0;font-size:16px;font-weight:700;color:#0A1938;margin:8px 0 16px;">
-    ESData · ESD Paris
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(f'<div style="margin:16px 0 12px;"><img src="data:image/png;base64,{_esdata_b64}" '
+                    'style="width:150px;height:auto;mix-blend-mode:multiply;background:transparent;" alt="ESData, ESD Paris"></div>',
+                    unsafe_allow_html=True)
 
     membres = [
-        {"nom": "Sarah Aït Ouhmad",    "linkedin": "https://www.linkedin.com/in/sarah-ait-ouhmad-76947b220/"},
-        {"nom": "Nour Amri",           "linkedin": "https://www.linkedin.com/in/nour-amri-1b3071297/"},
-        {"nom": "Orelle Azoulay",      "linkedin": "https://www.linkedin.com/in/orelle-azoulay-742488254/"},
-        {"nom": "Anna Damour",         "linkedin": "https://www.linkedin.com/in/anna-damour-a1b586221/"},
-        {"nom": "Ackyl Junior Dangi",  "linkedin": "https://www.linkedin.com/in/ackyl-junior-d-872185244/"},
-        {"nom": "Jnaina Hakimi",       "linkedin": "https://www.linkedin.com/in/jnainahakimi/"},
-        {"nom": "Marwan Karabadja",    "linkedin": "https://www.linkedin.com/in/marwan-karabadja-107565297/"},
-        {"nom": "Simon Maurey",        "linkedin": "https://www.linkedin.com/in/simon-maurey/"},
-        {"nom": "Mchita Siham",        "linkedin": "https://www.linkedin.com/in/mchita-siham-97308a177/"},
-        {"nom": "Métira Merghem",      "linkedin": "https://www.linkedin.com/in/m%C3%A9tira-merghem-243548212/"},
-        {"nom": "William Milic",       "linkedin": "https://www.linkedin.com/in/william-milic-194654254/"},
-        {"nom": "Telina Ranaivoson",   "linkedin": "https://www.linkedin.com/in/telina-ranaivoson-448ba91b7/"},
-        {"nom": "Laura Sambafofolo",   "linkedin": "https://www.linkedin.com/in/laurasambafofolo/"},
-        {"nom": "Ryan Moyo",           "linkedin": "https://www.linkedin.com/in/ryan-moyo/"},
+        ("Sarah Aït Ouhmad", "https://www.linkedin.com/in/sarah-ait-ouhmad-76947b220/"),
+        ("Nour Amri", "https://www.linkedin.com/in/nour-amri-1b3071297/"),
+        ("Orelle Azoulay", "https://www.linkedin.com/in/orelle-azoulay-742488254/"),
+        ("Anna Damour", "https://www.linkedin.com/in/anna-damour-a1b586221/"),
+        ("Ackyl Junior Dangi", "https://www.linkedin.com/in/ackyl-junior-d-872185244/"),
+        ("Jnaina Hakimi", "https://www.linkedin.com/in/jnainahakimi/"),
+        ("Marwan Karabadja", "https://www.linkedin.com/in/marwan-karabadja-107565297/"),
+        ("Simon Maurey", "https://www.linkedin.com/in/simon-maurey/"),
+        ("Mchita Siham", "https://www.linkedin.com/in/mchita-siham-97308a177/"),
+        ("Métira Merghem", "https://www.linkedin.com/in/m%C3%A9tira-merghem-243548212/"),
+        ("William Milic", "https://www.linkedin.com/in/william-milic-194654254/"),
+        ("Telina Ranaivoson", "https://www.linkedin.com/in/telina-ranaivoson-448ba91b7/"),
+        ("Laura Sambafofolo", "https://www.linkedin.com/in/laurasambafofolo/"),
+        ("Ryan Moyo", "https://www.linkedin.com/in/ryan-moyo/"),
     ]
-
-    cards_html = '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;">'
-    for m in membres:
-        initiales = "".join(
-            [p[0].upper() for p in m["nom"].split() if p and p[0].isalpha()]
-        )[:2]
-
-        if m.get("linkedin"):
-            nom_rendu = (
-                f'<a href="{m["linkedin"]}" target="_blank" '
-                f'rel="noopener noreferrer" '
-                f'style="color:#0A1938;text-decoration:none;font-size:14px;'
-                f'font-weight:600;border-bottom:1px solid #1A3D8F;">'
-                f'{m["nom"]}</a>'
-            )
-        else:
-            nom_rendu = (
-                f'<span style="font-size:14px;font-weight:600;'
-                f'color:#0A1938;">{m["nom"]}</span>'
-            )
-
-        cards_html += (
-            '<div style="display:flex;align-items:center;gap:12px;'
-            'padding:14px 18px;background:white;'
-            'border:1px solid #E8E6DD;border-radius:6px;'
-            'min-width:200px;flex:1;max-width:280px;">'
-            '<div style="width:38px;height:38px;border-radius:50%;'
-            'background:#1A3D8F;color:white;flex-shrink:0;'
-            'display:flex;align-items:center;justify-content:center;'
-            'font-size:13px;font-weight:700;">'
-            f'{initiales}'
-            '</div>'
-            f'<div>{nom_rendu}</div>'
-            '</div>'
-        )
-    cards_html += "</div>"
-    st.markdown(cards_html, unsafe_allow_html=True)
-
+    cards = '<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#6B6B68;margin:6px 0 10px;">Équipe étudiante · Mastère 1 Data, ESD Paris</div>'
+    cards += '<div style="display:flex;flex-wrap:wrap;gap:10px;">'
+    for nom, url in membres:
+        initiales = "".join(p[0].upper() for p in nom.split() if p and p[0].isalpha())[:2]
+        cards += ('<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border:1px solid #E8E6DD;'
+                  'border-radius:6px;min-width:190px;flex:1;max-width:260px;">'
+                  '<div style="width:32px;height:32px;border-radius:50%;background:#1A3D8F;color:white;flex-shrink:0;display:flex;'
+                  f'align-items:center;justify-content:center;font-size:12px;font-weight:700;">{initiales}</div>'
+                  f'<a href="{url}" target="_blank" rel="noopener noreferrer" style="color:#0A1938;text-decoration:none;font-size:14px;'
+                  f'font-weight:600;border-bottom:1px solid #1A3D8F;">{nom}</a></div>')
+    cards += "</div>"
+    st.markdown(cards, unsafe_allow_html=True)
     st.markdown(
-        '<div style="margin-top:32px;padding:20px 24px;'
-        'background:#F3F2EC;border-radius:6px;'
-        'display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'
-        '<div style="width:44px;height:44px;border-radius:50%;'
-        'background:#0A1938;color:white;flex-shrink:0;'
-        'display:flex;align-items:center;justify-content:center;'
-        'font-size:15px;font-weight:700;">'
-        'CD'
-        '</div>'
-        '<div>'
-        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;'
-        'text-transform:uppercase;color:#6B6B68;margin-bottom:4px;">'
-        'INTERVENANTE · ENCADRANTE DU PROJET'
-        '</div>'
-        '<a href="https://www.linkedin.com/in/caroline-dias-4805489a/" '
-        'target="_blank" rel="noopener noreferrer" '
-        'style="font-size:16px;font-weight:700;color:#0A1938;'
-        'text-decoration:none;border-bottom:1px solid #1A3D8F;">'
-        'Caroline Dias'
-        '</a>'
-        '<div style="font-size:13px;color:#4B4B48;margin-top:3px;">'
-        "Cheffe de Projet DSI · Plateformisation d'un système d'information"
-        '</div>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        '<div style="margin-top:18px;padding:16px 20px;background:#F3F2EC;border-radius:6px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+        '<div style="width:40px;height:40px;border-radius:50%;background:#0A1938;color:white;flex-shrink:0;display:flex;align-items:center;'
+        'justify-content:center;font-size:14px;font-weight:700;">CD</div><div>'
+        '<div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6B6B68;margin-bottom:3px;">Encadrement pédagogique</div>'
+        '<a href="https://www.linkedin.com/in/caroline-dias-4805489a/" target="_blank" rel="noopener noreferrer" '
+        'style="font-size:15px;font-weight:700;color:#0A1938;text-decoration:none;border-bottom:1px solid #1A3D8F;">Caroline Dias</a>'
+        '<div style="font-size:13px;color:#4B4B48;margin-top:2px;">Intervenante ESD Paris · cheffe de projet DSI</div></div></div>',
+        unsafe_allow_html=True)
 
-    # ── SECTION 4 — DONNÉES OPEN DATA ────────────────────────────────────────
+    # ── 3. SOURCES PUBLIQUES ─────────────────────────────────────────────────
+    _section("SOURCES", "Des données publiques <em>au service de la décision.</em>",
+             "Sant'active ne produit aucune donnée de santé : il réutilise des données diffusées par leurs producteurs "
+             "publics et des services en ligne de l'État. Trois statuts sont distingués dans toute l'application.")
     st.markdown(
-        '<div class="section-header" style="margin-top:48px;">'
-        '<div class="section-eyebrow">TRANSPARENCE</div>'
-        '<h2 class="section-title">'
-        '100\u202f% de données <em>ouvertes et officielles.</em>'
-        '</h2>'
-        '<p class="section-lead">'
-        "Toutes les données utilisées dans Sant'active sont en accès libre. "
-        "Aucune donnée commerciale ou propriétaire."
-        '</p>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    sources = [
-        (
-            "INSEE · Recensement 2021",
-            "Population, âge, densité par commune et département",
-            "https://www.insee.fr",
-        ),
-        (
-            "RPPS · DREES · janv. 2026",
-            "Répertoire des professionnels de santé actifs par spécialité",
-            "https://www.data.gouv.fr/fr/datasets/annuaire-sante-medecin/",
-        ),
-        (
-            "FINESS · ministère chargé de la Santé (diffusion DREES) · mars 2026",
-            "Fichier national des établissements sanitaires et sociaux ; retenus dans le score : CH, CHR et SSR privés",
-            "https://www.data.gouv.fr/fr/datasets/finess-extraction-du-fichier-des-etablissements/",
-        ),
-        (
-            "APL · DREES · millésime 2024",
-            "Accessibilité Potentielle Localisée aux médecins généralistes",
-            "https://www.observatoire-des-territoires.gouv.fr/",
-        ),
-        (
-            "DVF · DGFiP · 2025",
-            "Demande de Valeurs Foncières (transactions immobilières)",
-            "https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres/",
-        ),
-        (
-            "CNAM · Ameli open data · 2023",
-            "Prévalence des pathologies chroniques par département "
-            "(diabète, cardio, cancers, respiratoire, psychiatrique...)",
-            "https://data.ameli.fr/",
-        ),
-        (
-            "DREES · Études et Résultats n°1085 · 2018",
-            "Enquête nationale sur les délais d'attente en médecine (40 000 personnes)",
-            "https://drees.solidarites-sante.gouv.fr/publications/etudes-et-resultats/"
-            "la-moitie-des-rendez-vous-sont-obtenus-en-2-jours-chez-le",
-        ),
-    ]
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 18px;">'
+        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#F7F8FC;border-radius:6px;">'
+        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1A3D8F;margin-bottom:6px;">Donnée publique</div>'
+        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Valeur reprise telle quelle de son producteur (INSEE, DREES, CNAM, DGFiP, FINESS), avec son millésime.</div></div>'
+        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#F3F2EC;border-radius:6px;">'
+        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0A1938;margin-bottom:6px;">Indicateur calculé</div>'
+        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Agrégat ou rapport construit par Sant\'active à partir de ces données : APL départemental pondéré, densités, prévalences standardisées, score, zones, indices offre × besoins.</div></div>'
+        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#FDF8EC;border-radius:6px;">'
+        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#8A5A00;margin-bottom:6px;">Estimation ou simulation</div>'
+        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Calcul propre au projet, toujours signalé comme tel : équivalents temps plein théoriques, gain de proximité du simulateur, leviers d\'action.</div></div>'
+        '</div>', unsafe_allow_html=True)
 
     rows_html = ""
-    for nom, desc, url in sources:
+    for nom, desc, url, statut in SOURCES:
         rows_html += (
-            '<div style="display:flex;align-items:flex-start;gap:16px;'
-            'padding:14px 0;border-bottom:1px solid #E8E6DD;">'
-            '<div style="width:8px;height:8px;border-radius:50%;'
-            'background:#1A3D8F;flex-shrink:0;margin-top:6px;"></div>'
-            '<div>'
-            f'<a href="{url}" target="_blank" '
-            'style="font-size:14px;font-weight:600;color:#1A3D8F;text-decoration:none;">'
-            f'{nom}'
-            '</a>'
-            f'<div style="font-size:13px;color:#6B6B68;margin-top:3px;">{desc}</div>'
-            '</div>'
-            '</div>'
-        )
+            '<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid #E8E6DD;">'
+            '<div style="width:8px;height:8px;border-radius:50%;background:#1A3D8F;flex-shrink:0;margin-top:7px;"></div>'
+            '<div style="flex:1;">'
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer" style="font-size:14px;font-weight:600;color:#1A3D8F;text-decoration:none;">{nom}</a>'
+            f'<span style="font-size:11px;color:#6B6B68;margin-left:8px;letter-spacing:0.04em;text-transform:uppercase;">{statut}</span>'
+            f'<div style="font-size:13px;color:#4B4B48;margin-top:3px;line-height:1.55;">{desc}</div>'
+            '</div></div>')
     st.markdown(rows_html, unsafe_allow_html=True)
+    st.markdown(
+        '<p style="max-width:760px;font-size:13px;color:#6B6B68;line-height:1.7;margin-top:12px;">'
+        "Les données tabulaires sont diffusées par leurs producteurs sur leurs portails ou sur data.gouv.fr ; les services "
+        "d'isochrones et de référentiel géographique sont des services en ligne de l'État, interrogés à la demande. Les fonds de "
+        "carte proviennent d'OpenStreetMap et de ses contributeurs. Les conditions d'utilisation applicables sont celles indiquées "
+        "par chaque producteur. L'enquête DREES de 2016-2017 sur les délais de rendez-vous, utilisée dans les premières versions, "
+        "n'intervient plus dans les diagnostics ; elle reste citée dans l'historique de la Méthodologie."
+        '</p>', unsafe_allow_html=True)
 
-    # VOC — sigles (sous les sources)
-    _voc: list[tuple[str, str, str | None]] = [
-        (
-            "FINESS",
-            "Fichier National des Établissements Sanitaires et Sociaux",
-            None,
-        ),
-        (
-            "DREES",
-            "Direction de la Recherche, des Études, de l'Évaluation et des "
-            "Statistiques",
-            "c'est la direction statistique du ministère de la Santé",
-        ),
-        (
-            "RPPS",
-            "Répertoire Partagé des Professionnels de Santé",
-            None,
-        ),
-        (
-            "DVF",
-            "Demandes de Valeurs Foncières",
-            None,
-        ),
-        (
-            "DGFiP",
-            "Direction Générale des Finances Publiques",
-            "c'est la direction du ministère des Finances qui gère la fiscalité "
-            "et le cadastre",
-        ),
-        (
-            "APL",
-            "Accessibilité Potentielle Localisée",
-            None,
-        ),
-        (
-            "ANCT",
-            "Agence Nationale de la Cohésion des Territoires",
-            None,
-        ),
-        (
-            "CNAM",
-            "Caisse Nationale d'Assurance Maladie",
-            None,
-        ),
-        (
-            "ANSM",
-            "Agence Nationale de Sécurité du Médicament",
-            None,
-        ),
-        (
-            "INSEE",
-            "Institut National de la Statistique et des Études Économiques",
-            None,
-        ),
-        (
-            "IRDES",
-            "Institut de Recherche et Documentation en Économie de la Santé",
-            None,
-        ),
+    # ── 4. TRANSPARENCE ET LIMITES ───────────────────────────────────────────
+    _section("TRANSPARENCE", "Ce que nous nous <em>engageons à dire.</em>")
+    engagements = [
+        ("Des règles lisibles", "Le score, les zones, les priorités et les leviers reposent sur des règles écrites, publiées dans la "
+                                "Méthodologie et reproductibles ; aucune intelligence artificielle générative n'intervient dans les résultats."),
+        ("Des sources nommées", "Chaque indicateur affiche son producteur et son millésime ; les changements de méthode sont datés et "
+                                "justifiés dans l'historique de la Méthodologie."),
+        ("Des limites assumées", "Sant'active décrit l'offre et l'accessibilité géographique des soins de premier recours. Il ne mesure "
+                                 "ni la disponibilité réelle des rendez-vous, ni la qualité des soins, ni l'état de santé d'une population ; "
+                                 "le score situe un département parmi les autres, ce n'est pas une note de santé."),
+        ("Des pistes, pas des prescriptions", "Les leviers d'action sont des pistes à instruire avec les acteurs locaux ; ils ne "
+                                              "constituent ni une évaluation de politique publique ni un ordre de mise en œuvre."),
+        ("Un code ouvert", f"Le code de l'application et sa documentation technique sont publiés sur GitHub ({DEPOT_GITHUB.replace('https://', '')})."),
     ]
-    st.markdown(
-        '<div class="section-header" style="margin-top:40px;">'
-        '<div class="section-eyebrow">VOC</div>'
-        '<h2 class="section-title">Sigles <em>et acronymes.</em></h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    _voc_html = (
-        '<div style="max-width:720px;margin-top:8px;'
-        'font-size:14px;line-height:1.75;color:#2B2B2B;">'
-    )
-    for abbr, label, extra in _voc:
-        _voc_html += (
-            '<div style="padding:10px 0;border-bottom:1px solid #E8E6DD;">'
-            f'<span style="font-weight:700;color:#0A1938;">{abbr}</span>'
-            f" : {label}"
-        )
-        if extra:
-            _voc_html += (
-                f'<span style="color:#6B6B68;"> · {extra}</span>'
-            )
-        _voc_html += "</div>"
-    _voc_html += "</div>"
-    st.markdown(_voc_html, unsafe_allow_html=True)
+    html = '<div style="max-width:760px;">'
+    for titre, texte in engagements:
+        html += ('<div style="padding:12px 0;border-bottom:1px solid #E8E6DD;">'
+                 f'<div style="font-size:14px;font-weight:700;color:#0A1938;">{titre}</div>'
+                 f'<div style="font-size:14px;color:#2B2B2B;line-height:1.7;margin-top:3px;">{texte}</div></div>')
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
-    # ── SECTION 5 — LIENS ─────────────────────────────────────────────────────
+    # ── 5. CONTACT ET RESSOURCES ─────────────────────────────────────────────
+    _section("CONTACT ET RESSOURCES", "Nous <em>écrire.</em>",
+             "Une question sur une donnée, une erreur repérée, une idée d'usage dans votre territoire : l'équipe répond par e-mail.")
     st.markdown(
-        '<div class="section-header" style="margin-top:48px;">'
-        '<div class="section-eyebrow">LIENS</div>'
-        '<h2 class="section-title">En savoir <em>plus.</em></h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.link_button(
-            "Open Data University →",
-            "https://www.opendatauniversity.org/",
-            use_container_width=True,
-            type="primary",
-        )
-    with c2:
-        if st.button(
-            "Notre méthodologie →",
-            key="about_methodo",
-            use_container_width=True,
-            type="secondary",
-        ):
-            navigate("methodologie")
-    with c3:
-        st.link_button(
-            "ESD Paris →",
-            "https://ecole-du-digital.com/",
-            use_container_width=True,
-            type="secondary",
-        )
+        '<div style="margin-top:4px;padding:18px 22px;background:#F3F2EC;border-radius:6px;display:flex;align-items:center;'
+        'justify-content:space-between;flex-wrap:wrap;gap:14px;">'
+        '<div style="font-size:14px;color:#0A1938;line-height:1.6;">Signalement d\'erreur, question méthodologique, demande d\'accompagnement</div>'
+        f'<a href="mailto:{CONTACT_EMAIL}?subject=Sant%27active%20%C2%B7%20question" style="padding:11px 22px;background:#1A3D8F;color:white;'
+        f'border-radius:6px;text-decoration:none;font-size:14px;font-weight:500;white-space:nowrap;">{CONTACT_EMAIL}</a></div>',
+        unsafe_allow_html=True)
+    ressources = [
+        (internal_href("methodologie"), "_self", "Méthodologie", "Ce que mesure l'outil, ses calculs, ses hypothèses, ses limites et son historique."),
+        (internal_href("methodologie") + "#glossaire", "_self", "Comprendre les sigles et indicateurs", "Glossaire : APL, RPPS, FINESS, BPE, carroyage, isochrone, standardisation, ETP…"),
+        (DEPOT_GITHUB, "_blank", "Code source et documentation technique (GitHub)", "Dépôt public : code de l'application, journal des évolutions du moteur, scripts d'audit."),
+        ("https://www.opendatauniversity.org/", "_blank", "Open Data University", "Le programme de challenges open data à l'origine du projet (association Latitudes)."),
+        ("https://ecole-du-digital.com/", "_blank", "ESD Paris", "École Supérieure du Digital, Mastère Data."),
+    ]
+    html = '<div style="max-width:760px;margin-top:16px;">'
+    for url, target, titre, texte in ressources:
+        html += ('<div style="padding:11px 0;border-bottom:1px solid #E8E6DD;">'
+                 f'<a href="{url}" target="{target}" rel="noopener noreferrer" style="font-size:14px;font-weight:600;color:#1A3D8F;text-decoration:none;">{titre} →</a>'
+                 f'<div style="font-size:13px;color:#4B4B48;margin-top:2px;line-height:1.55;">{texte}</div></div>')
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+    st.markdown('<p style="font-size:12px;color:#9C9A92;margin-top:18px;">Crédits : équipe Mastère 1 Data ESD Paris · Open Data University × Latitudes · '
+                'fonds de carte © OpenStreetMap · police Marianne (État français).</p>', unsafe_allow_html=True)

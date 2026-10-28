@@ -208,7 +208,12 @@ def _parse_pop_from_amplitude(population_str: str) -> int | None:
     """Extrait un entier depuis un libellé amplitude (« 125 000 habitants »)."""
     if not population_str or population_str == "n.d.":
         return None
-    digits = "".join(c for c in population_str if c.isdigit())
+    # Le libellé commence par le nombre ; la source entre parenthèses (« DREES 2024 ») ne doit pas être lue.
+    import re
+    m = re.match(r"\s*([\d\u202f\u00a0 ]+)", population_str)
+    if not m:
+        return None
+    digits = "".join(c for c in m.group(1) if c.isdigit())
     return int(digits) if digits else None
 
 

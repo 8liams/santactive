@@ -955,8 +955,6 @@ def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
     secteurs = (reco.get("secteurs") or "").strip()
     public = (reco.get("public") or "").strip()
     pop_obs = getattr(impact, "population", "") or ""
-    if pop_obs.strip().lower() in ("", "n.d.", "n/d"):
-        pop_obs = ""
 
     def block(label, text):
         return (f'<div class="reco-block"><div class="reco-block-lbl">{label}</div>{esc(text)}</div>'
@@ -966,7 +964,7 @@ def _render_reco_card(reco: dict, r: pd.Series, data: dict) -> None:
     if public:
         meta += f'<div class="reco-meta-item"><span class="lbl">Public ciblé</span><span class="val">{esc(public)}</span></div>'
     if pop_obs:
-        meta += f'<div class="reco-meta-item"><span class="lbl">Population observée</span><span class="val">{esc(pop_obs)}</span></div>'
+        meta += f'<div class="reco-meta-item"><span class="lbl">Population cible observée</span><span class="val">{esc(pop_obs)}</span></div>'
     if secteurs:
         meta += f'<div class="reco-meta-item wide"><span class="lbl">Communes et secteurs concernés</span><span class="val">{esc(secteurs)}</span></div>'
     from .acces_ign import pilotes_disponibles

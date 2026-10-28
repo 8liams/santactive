@@ -1,9 +1,20 @@
 """Publics et volumes OBSERVÉS associés aux leviers d'action territoriaux.
 
-Aucun coefficient forfaitaire : chaque volume est une quantité mesurée dans
-les données chargées (population INSEE des communes à plus de 15 min, part de
-population sous le repère APL 2,5 selon la DREES, seniors et jeunes INSEE,
-patients CNAM). Ce n'est pas une prédiction d'effet de l'action.
+Règles (révision du 28 octobre 2026) :
+- la population cible est déduite de l'identifiant du levier du catalogue (``app/leviers.py``),
+  jamais d'un mot du titre ;
+- chaque volume est une quantité mesurée dans les données chargées, nommée avec sa source :
+  habitants des communes sous le repère APL 2,5 (DREES), habitants à plus de 15 minutes d'un
+  généraliste (INSEE 2025), personnes de 65 ans et plus ou de moins de 25 ans (INSEE RP 2021),
+  patients pris en charge pour une pathologie (CNAM 2023) ;
+- lorsqu'aucune donnée chargée ne décrit le public du levier (patients nécessitant un avis
+  spécialisé, personnes de 50 à 74 ans, femmes enceintes, patientèle, personnes âgées sans
+  véhicule…), la population est déclarée « non quantifiable avec les données disponibles »
+  plutôt qu'approchée par une autre population ;
+- arrondi à l'entier le plus proche, identique à celui des textes des leviers, des PDF et des
+  e-mails (``round``), jamais une troncature.
+
+Ce n'est jamais une prédiction d'effet de l'action.
 """
 
 from __future__ import annotations
@@ -12,32 +23,37 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from .config import PATHOS_EXCLUDED
+from .config import APL_MILLESIME, PATHOS_EXCLUDED
 
 HORIZON_COURT = "Court terme"
 HORIZON_MOYEN = "Moyen terme"
 HORIZON_LONG = "Long terme"
 
+NON_QUANTIFIABLE = "population cible non quantifiable avec les données disponibles"
+
 
 @dataclass(frozen=True)
 class LevierImpactProjection:
-    """Projection d'échelle pour un levier sur un territoire."""
+    """Public et volume observé pour un levier sur un département."""
 
     public: str
-    population: str  # libellé affiché, ex. « 18 500 personnes » ou « n.d. »
+    population: str   # libellé affiché, ex. « 7 880 patients suivis pour troubles psychiatriques (CNAM 2023) »
     horizon: str
+    quantifie: bool = True
 
 
 @dataclass(frozen=True)
 class LevierAmplitudeRegion:
-    """Projection territoriale indicative pour un levier à l'échelle régionale."""
+    """Public et volume observé pour un levier à l'échelle régionale."""
 
     territoires: str
     public: str
-    population: str  # ex. « 125 000 habitants », « n.d. »
+    population: str
     horizon: str
+    quantifie: bool = True
 
 
+# ── Helpers numériques ────────────────────────────────────────────────────────
 def _num(val, default: float = 0.0) -> float:
     try:
         v = float(val)
@@ -46,18 +62,52 @@ def _num(val, default: float = 0.0) -> float:
         return default
 
 
-def _fmt_pop(n: int | None) -> str:
-    if n is None or n <= 0:
-        return "n.d."
-    return f"{int(n):,}".replace(",", "\u202f") + " personnes"
+def arrondi(v) -> int | None:
+    """Entier le plus proche (jamais une troncature) ; None si absent ou nul."""
+    x = _num(v, default=float("nan"))
+    if pd.isna(x) or x <= 0:
+        return None
+    return int(round(x))
 
 
-def _dept_patho_ntop(
-    patho: pd.DataFrame | None,
-    dept: str,
-    fragment: str,
-) -> int | None:
-    """Somme Ntop CNAM pour un fragment patho_niv1 sur un département."""
+def _fmt_n(n: int) -> str:
+    return f"{int(n):,}".replace(",", " ")
+
+
+def _fmt(n: int | None, unite: str) -> str:
+    return NON_QUANTIFIABLE if n is None else f"{_fmt_n(n)} {unite}"
+
+
+# ── Volumes observés par département ─────────────────────────────────────────
+def pop_sous_apl(r: pd.Series) -> int | None:
+    """Habitants des communes dont l'APL est sous le repère 2,5 (DREES) : population × part, arrondie."""
+    pop = _num(r.get("population_num"))
+    part = _num(r.get("part_pop_apl_inf_2_5"), default=float("nan"))
+    if pop <= 0 or pd.isna(part) or part <= 0:
+        return None
+    return arrondi(pop * part)
+
+
+def pop_plus_15_min(r: pd.Series) -> int | None:
+    """Habitants à plus de 15 minutes en voiture d'un généraliste : INSEE 2025 ; repli sur l'indicateur interne."""
+    v = arrondi(r.get("acces_mg_pop_sup_15"))
+    if v is None:
+        v = arrondi(r.get("pop_communes_critiques"))
+    return v
+
+
+def pop_seniors(r: pd.Series) -> int | None:
+    pop, pct = _num(r.get("population_num")), _num(r.get("pct_plus_65"))
+    return arrondi(pop * pct / 100) if pop > 0 and pct > 0 else None
+
+
+def pop_jeunes(r: pd.Series) -> int | None:
+    pop, pct = _num(r.get("population_num")), _num(r.get("pct_moins_25"))
+    return arrondi(pop * pct / 100) if pop > 0 and pct > 0 else None
+
+
+def patients_cnam(patho: pd.DataFrame | None, dept: str, fragment: str) -> int | None:
+    """Patients pris en charge (Ntop CNAM) pour les pathologies dont le libellé contient ``fragment``."""
     if patho is None or patho.empty or "_error" in patho.columns:
         return None
     from .pathologies import patho_agg
@@ -72,233 +122,102 @@ def _dept_patho_ntop(
     return total if total > 0 else None
 
 
-def _pop_seniors(r: pd.Series) -> int | None:
-    pop = _num(r.get("population_num"))
-    pct = _num(r.get("pct_plus_65"))
-    if pop <= 0 or pct <= 0:
+# ── Population cible par levier (source unique, département et région) ───────
+# Fragments de libellés CNAM (patho_niv1) utilisés pour les leviers de pathologie.
+FRAGMENT_CNAM = {"sante_mentale": "sychiatr", "cardio": "ardio", "diabete": "iabète"}
+
+# Unités affichées, avec la source, pour chaque mode de quantification.
+_UNITES = {
+    "apl": f"habitants de communes sous le repère APL 2,5 (DREES {APL_MILLESIME})",
+    "15min": "habitants à plus de 15 min d'un généraliste (INSEE 2025)",
+    "seniors": "personnes de 65 ans et plus (INSEE RP 2021)",
+    "jeunes": "personnes de moins de 25 ans (INSEE RP 2021)",
+    "sante_mentale": "patients suivis pour troubles psychiatriques (CNAM 2023)",
+    "cardio": "patients suivis pour maladies cardio-neuro-vasculaires (CNAM 2023)",
+    "diabete": "patients suivis pour diabète (CNAM 2023)",
+}
+
+# Mode de quantification par identifiant de levier ; None = non quantifiable.
+MODE_PAR_LEVIER: dict[str, str | None] = {
+    "msp": "apl",
+    "attractivite": "apl",
+    "teleconsultation": "apl",
+    "equipes_mobiles": "15min",
+    "autonomie": "seniors",
+    "pediatrie": "jeunes",
+    "sante_mentale": "sante_mentale",
+    "cardio": "cardio",
+    "diabete": "diabete",
+    # Publics que les données chargées ne décrivent pas : on ne substitue aucune autre population.
+    "assistants": None,       # patientèle des généralistes
+    "sas": None,              # population urbaine recourant aux soins non programmés
+    "consult_avancees": None, # patients nécessitant un avis spécialisé
+    "teleexpertise": None,    # patients en attente d'un avis spécialisé
+    "depistages": None,       # personnes de 50 à 74 ans (tranche absente du recensement chargé)
+    "perinatalite": None,     # femmes enceintes, jeunes enfants
+    "chroniques": None,       # patients chroniques toutes pathologies (doubles comptes CNAM)
+    "mobilite": None,         # personnes âgées sans véhicule des communes éloignées
+    "mediation": None,        # habitants des quartiers à faible recours
+    "ville_hopital": None,    # patients en parcours complexe
+    "dom": None,
+    "maintien": None,
+    "vigilance": None,
+}
+
+
+def _volume_dept(mode: str | None, r: pd.Series, patho: pd.DataFrame | None) -> int | None:
+    if mode is None:
         return None
-    return int(pop * pct / 100)
-
-
-def _pop_jeunes(r: pd.Series) -> int | None:
-    pop = _num(r.get("population_num"))
-    pct = _num(r.get("pct_moins_25"))
-    if pop <= 0 or pct <= 0:
-        return None
-    return int(pop * pct / 100)
-
-
-def _pop_communes_eloignees(r: pd.Series) -> int | None:
-    """Habitants des communes à plus de 15 min (population INSEE observée).
-
-    Calculé dans data_loading (rapprochement geo.api) ; None si non disponible.
-    """
-    v = _num(r.get("pop_communes_critiques"), default=float("nan"))
-    return int(v) if pd.notna(v) and v > 0 else None
-
-
-def _pop_acces_ville_contraint(r: pd.Series) -> int | None:
-    """Habitants des communes dont l'APL est sous le repère de 2,5 (DREES, observé)."""
-    pop = _num(r.get("population_num"))
-    part = _num(r.get("part_pop_apl_inf_2_5"), default=float("nan"))
-    if pop <= 0 or pd.isna(part) or part <= 0:
-        return None
-    return int(pop * part)
-
-
-def _pop_mobilite_limitee(r: pd.Series) -> int | None:
-    """Navettes : habitants des communes à plus de 15 min (observé).
-
-    Les publics « sans mobilité » ne sont pas mesurables avec les données
-    chargées : aucun coefficient n'est appliqué.
-    """
-    return _pop_communes_eloignees(r)
-
-
-def _classify_levier(title: str) -> str:
-    t = title.lower()
-    if "maison de santé" in t or "msp" in t:
-        return "msp"
-    if "télémédecine" in t or "telemedecine" in t or "consultations avancées" in t:
-        return "telemedecine"
-    if "attractivité" in t and "généralistes" in t:
-        return "attractivite_mg"
-    if "seniors isolés" in t or "santé numérique pour les seniors" in t:
-        return "seniors_numerique"
-    if "antennes" in t:
-        return "antennes"
-    if "navettes" in t:
-        return "navettes"
-    if "prévention" in t and "chroniques" in t:
-        return "prevention_chroniques"
-    if "pédiatrique" in t or "pediatrique" in t or "pmi" in t:
-        return "pediatrie"
-    if "foncier" in t:
-        return "foncier"
-    if "vigilance" in t:
-        return "vigilance"
-    if "maintenir" in t or "acquis" in t:
-        return "maintien"
-    return "generique"
-
-
-def _prevention_chroniques_public_and_pop(
-    reco: dict,
-    r: pd.Series,
-    patho: pd.DataFrame | None,
-) -> tuple[str, int | None]:
     dept = str(r.get("dept", "")).zfill(2)
-    title = reco.get("title", "").lower()
-    stats = reco.get("stats") or []
-
-    cardio_ntop = _dept_patho_ntop(patho, dept, "cardio")
-    diab_ntop = _dept_patho_ntop(patho, dept, "iabète")
-
-    # Inférer la pathologie dominante depuis les stats ou les volumes CNAM
-    patho_hint = ""
-    for val, lbl in stats:
-        lbl_l = str(lbl).lower()
-        if "cardio" in lbl_l:
-            patho_hint = "cardio"
-        elif "diab" in lbl_l:
-            patho_hint = "diabete"
-
-    if patho_hint == "cardio" or (cardio_ntop or 0) >= (diab_ntop or 0):
-        if cardio_ntop:
-            return "Patients cardiovasculaires", cardio_ntop
-        if diab_ntop:
-            return "Patients diabétiques", diab_ntop
-        return "Patients atteints de pathologies chroniques", None
-
-    if diab_ntop:
-        return "Patients diabétiques", diab_ntop
-    if cardio_ntop:
-        return "Patients cardiovasculaires", cardio_ntop
-    return "Patients atteints de pathologies chroniques", None
+    if mode == "apl":
+        return pop_sous_apl(r)
+    if mode == "15min":
+        return pop_plus_15_min(r)
+    if mode == "seniors":
+        return pop_seniors(r)
+    if mode == "jeunes":
+        return pop_jeunes(r)
+    if mode in FRAGMENT_CNAM:
+        return patients_cnam(patho, dept, FRAGMENT_CNAM[mode])
+    return None
 
 
-def project_levier_impact(
-    reco: dict,
-    r: pd.Series,
-    data: dict | None = None,
-) -> LevierImpactProjection:
-    """Projette public, population et horizon pour un levier recommandé.
+def population_cible(levier_id: str, r: pd.Series, patho: pd.DataFrame | None = None) -> tuple[str, bool]:
+    """(libellé, quantifié) de la population cible d'un levier pour un département."""
+    mode = MODE_PAR_LEVIER.get(levier_id)
+    if mode is None:
+        return NON_QUANTIFIABLE, False
+    n = _volume_dept(mode, r, patho)
+    if n is None:
+        return NON_QUANTIFIABLE, False
+    return _fmt(n, _UNITES[mode]), True
 
-    Parameters
-    ----------
-    reco : dict
-        Recommandation telle que retournée par ``_generate_recommendations``.
-    r : pd.Series
-        Ligne ``master`` du département.
-    data : dict, optional
-        Dictionnaire applicatif (``patho``, etc.).
 
-    Returns
-    -------
-    LevierImpactProjection
-    """
+def project_levier_impact(reco: dict, r: pd.Series, data: dict | None = None) -> LevierImpactProjection:
+    """Public (celui du catalogue), population cible observée et horizon d'un levier recommandé."""
     data = data or {}
-    patho = data.get("patho")
-    kind = reco.get("kind") or _classify_levier(reco.get("title", ""))
-
-    if kind == "msp":
-        return LevierImpactProjection(
-            public="Habitants des communes sous le repère APL 2,5",
-            population=_fmt_pop(_pop_acces_ville_contraint(r)),
-            horizon=HORIZON_LONG,
-        )
-
-    if kind == "telemedecine":
-        return LevierImpactProjection(
-            public="Habitants des communes sous le repère APL 2,5",
-            population=_fmt_pop(_pop_acces_ville_contraint(r)),
-            horizon=HORIZON_COURT,
-        )
-
-    if kind == "attractivite_mg":
-        pop_est = _pop_acces_ville_contraint(r)
-        return LevierImpactProjection(
-            public="Habitants des communes sous le repère APL 2,5",
-            population=_fmt_pop(pop_est),
-            horizon=HORIZON_LONG,
-        )
-
-    if kind == "seniors_numerique":
-        return LevierImpactProjection(
-            public="Seniors (65 ans et plus)",
-            population=_fmt_pop(_pop_seniors(r)),
-            horizon=HORIZON_MOYEN,
-        )
-
-    if kind == "antennes":
-        return LevierImpactProjection(
-            public="Habitants des communes à plus de 15 min",
-            population=_fmt_pop(_pop_communes_eloignees(r)),
-            horizon=HORIZON_MOYEN,
-        )
-
-    if kind == "navettes":
-        return LevierImpactProjection(
-            public="Habitants des communes à plus de 15 min",
-            population=_fmt_pop(_pop_mobilite_limitee(r)),
-            horizon=HORIZON_COURT,
-        )
-
-    if kind == "prevention_chroniques":
-        public, ntop = _prevention_chroniques_public_and_pop(reco, r, patho)
-        return LevierImpactProjection(
-            public=public,
-            population=_fmt_pop(ntop),
-            horizon=HORIZON_COURT,
-        )
-
-    if kind == "pediatrie":
-        return LevierImpactProjection(
-            public="Enfants et jeunes de moins de 25 ans",
-            population=_fmt_pop(_pop_jeunes(r)),
-            horizon=HORIZON_MOYEN,
-        )
-
-    if kind == "foncier":
-        return LevierImpactProjection(
-            public="Professionnels de santé candidats à l'installation",
-            population="n.d.",
-            horizon=HORIZON_LONG,
-        )
-
-    if kind == "vigilance":
-        return LevierImpactProjection(
-            public="Population du territoire",
-            population="n.d.",
-            horizon=HORIZON_MOYEN,
-        )
-
-    if kind == "maintien":
-        return LevierImpactProjection(
-            public="Population du territoire",
-            population="n.d.",
-            horizon=HORIZON_LONG,
-        )
-
+    levier_id = str(reco.get("id", "") or "")
+    label, ok = population_cible(levier_id, r, data.get("patho"))
     return LevierImpactProjection(
-        public="Population du territoire",
-        population="n.d.",
-        horizon=HORIZON_MOYEN,
+        public=str(reco.get("public") or "Population du territoire"),
+        population=label,
+        horizon=str(reco.get("horizon") or HORIZON_MOYEN),
+        quantifie=ok,
     )
 
 
 def render_impact_html(projection: LevierImpactProjection) -> str:
-    """HTML léger pour l'encart « Impact potentiel » (styles ``reco-impact``)."""
+    """HTML léger pour l'encart « Public et volume observés » (styles ``reco-impact``)."""
     return (
         '<div class="reco-impact">'
-        '<div class="reco-impact-title">Public et volume observés</div>'
+        '<div class="reco-impact-title">Public et population cible</div>'
         '<div class="reco-impact-grid">'
         '<div class="reco-impact-item">'
         '<span class="reco-impact-lbl">Public concerné</span>'
         f'<span class="reco-impact-val">{projection.public}</span>'
         '</div>'
         '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Population observée (INSEE / CNAM / DREES)</span>'
+        '<span class="reco-impact-lbl">Population cible observée</span>'
         f'<span class="reco-impact-val">{projection.population}</span>'
         '</div>'
         '<div class="reco-impact-item">'
@@ -311,48 +230,6 @@ def render_impact_html(projection: LevierImpactProjection) -> str:
 
 
 # ── Projection régionale ──────────────────────────────────────────────────────
-
-
-def _fmt_amplitude(n: int | None, suffix: str = "personnes") -> str:
-    if n is None or n <= 0:
-        return "n.d."
-    return f"{int(n):,}".replace(",", "\u202f") + f" {suffix}"
-
-
-def _classify_levier_region(intitule: str, famille: str = "") -> str:
-    """Identifie le type de levier régional à partir de son intitulé."""
-    t = intitule.lower()
-    if "cardiovasculaire" in t:
-        return "prevention_cardio"
-    if "diabète" in t or "diabete" in t:
-        return "depistage_diabete"
-    if "santé mentale" in t or "sante mentale" in t:
-        return "sante_mentale"
-    if "fragilité seniors" in t or "fragilite seniors" in t:
-        return "prevention_seniors"
-    if "respiratoire" in t:
-        return "prevention_respiratoire"
-    if "téléexpertise" in t or "teleexpertise" in t:
-        return "teleexpertise"
-    if "téléconsultation" in t or "teleconsultation" in t:
-        return "teleconsultation"
-    if "télésuivi des patients chroniques" in t or "telesuivi des patients" in t:
-        return "telesuivi_chroniques"
-    if "télésuivi seniors" in t or "telesuivi seniors" in t:
-        return "telesuivi_seniors"
-    if "parcours gériatrique" in t or "parcours geriatrique" in t:
-        return "parcours_geriatrique"
-    if "ville-hôpital" in t or "ville-hopital" in t:
-        return "parcours_ville_hopital"
-    if "maladies chroniques" in t:
-        return "parcours_chroniques"
-    if "consultations avancées" in t or "consultations avancees" in t:
-        return "consultations_avancees"
-    if "navettes" in t:
-        return "navettes"
-    return "generique"
-
-
 def _format_territoires_region(dept_names: list[str], nb_region_depts: int) -> str:
     if not dept_names:
         return "n.d."
@@ -362,150 +239,44 @@ def _format_territoires_region(dept_names: list[str], nb_region_depts: int) -> s
     return ", ".join(dept_names[:3])
 
 
-def _rows_for_levier_depts(
-    region_depts: pd.DataFrame,
-    dept_names: list[str],
-) -> pd.DataFrame:
+def _rows_for_levier_depts(region_depts: pd.DataFrame, dept_names: list[str]) -> pd.DataFrame:
     if not dept_names:
         return region_depts
-    matched = region_depts[
-        region_depts["Nom du département"].astype(str).isin(dept_names)
-    ]
+    matched = region_depts[region_depts["Nom du département"].astype(str).isin(dept_names)]
     return matched if not matched.empty else region_depts
 
 
-def _sum_patho_ntop(
-    patho: pd.DataFrame | None,
-    dept_codes: list[str],
-    fragment: str,
-) -> int | None:
-    total = 0
-    found = False
-    for code in dept_codes:
-        n = _dept_patho_ntop(patho, code, fragment)
-        if n:
-            total += n
-            found = True
-    return total if found else None
-
-
-def _sum_across_rows(
-    rows: pd.DataFrame,
-    fn,
-) -> int | None:
-    total = 0
-    found = False
+def population_cible_region(levier_id: str, rows: pd.DataFrame, patho: pd.DataFrame | None = None) -> tuple[str, bool]:
+    """Somme des volumes départementaux (même règle qu'au niveau département) sur les départements ciblés."""
+    mode = MODE_PAR_LEVIER.get(levier_id)
+    if mode is None:
+        return NON_QUANTIFIABLE, False
+    total, found = 0, False
     for _, row in rows.iterrows():
-        n = fn(row)
+        n = _volume_dept(mode, row, patho)
         if n:
             total += n
             found = True
-    return total if found else None
+    if not found:
+        return NON_QUANTIFIABLE, False
+    return _fmt(total, _UNITES[mode]), True
 
 
-def _public_region(kind: str, public_cible: str) -> str:
-    mapping = {
-        "prevention_cardio": "Patients cardiovasculaires",
-        "depistage_diabete": "Patients diabétiques",
-        "sante_mentale": "Patients en santé mentale",
-        "prevention_seniors": "Seniors",
-        "prevention_respiratoire": "Patients respiratoires",
-        "teleexpertise": "Population éloignée des spécialistes",
-        "teleconsultation": "Population éloignée des spécialistes",
-        "telesuivi_chroniques": "Patients chroniques",
-        "telesuivi_seniors": "Seniors",
-        "parcours_geriatrique": "Seniors",
-        "parcours_ville_hopital": "Patients en parcours complexe",
-        "parcours_chroniques": "Patients atteints de pathologies chroniques",
-        "consultations_avancees": "Habitants éloignés des établissements",
-        "navettes": "Personnes sans mobilité vers les soins",
-    }
-    return mapping.get(kind, public_cible.split("(")[0].strip() or "Population du territoire")
-
-
-def _horizon_region(kind: str) -> str:
-    court = {
-        "prevention_cardio", "depistage_diabete", "sante_mentale",
-        "prevention_respiratoire", "teleexpertise", "teleconsultation", "navettes",
-    }
-    long = set()  # pas de levier MSP explicite au niveau régional actuel
-    if kind in court:
-        return HORIZON_COURT
-    if kind in long:
-        return HORIZON_LONG
-    return HORIZON_MOYEN
-
-
-def _population_region(
-    kind: str,
-    rows: pd.DataFrame,
-    patho: pd.DataFrame | None,
-) -> str:
-    codes = rows["dept"].astype(str).str.zfill(2).tolist()
-
-    if kind == "prevention_cardio":
-        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "cardio"), "patients cardiovasculaires")
-    if kind == "depistage_diabete":
-        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "iabète"), "patients diabétiques")
-    if kind == "sante_mentale":
-        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "sychiatr"), "personnes")
-    if kind == "prevention_respiratoire":
-        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "espira"), "patients respiratoires")
-    if kind in ("prevention_seniors", "telesuivi_seniors", "parcours_geriatrique"):
-        return _fmt_amplitude(_sum_across_rows(rows, _pop_seniors), "seniors")
-    if kind in ("teleexpertise", "teleconsultation"):
-        return _fmt_amplitude(_sum_across_rows(rows, _pop_acces_ville_contraint),
-                              "habitants de communes sous APL 2,5")
-    if kind in ("navettes", "consultations_avancees"):
-        return _fmt_amplitude(_sum_across_rows(rows, _pop_communes_eloignees),
-                              "habitants de communes à plus de 15 min")
-    if kind in ("telesuivi_chroniques", "parcours_chroniques", "parcours_ville_hopital"):
-        return _fmt_amplitude(_sum_patho_ntop(patho, codes, "cardio"),
-                              "patients cardio-neuro-vasculaires (CNAM)")
-    pop = int(rows["population_num"].apply(_num).sum())
-    return _fmt_amplitude(pop if pop > 0 else None, "habitants (départements ciblés)")
-
-
-def project_levier_amplitude_region(
-    levier: dict,
-    region_depts: pd.DataFrame,
-    data: dict | None = None,
-    region_name: str = "",
-) -> LevierAmplitudeRegion:
-    """Projette l'amplitude territoriale d'un levier régional.
-
-    Parameters
-    ----------
-    levier : dict
-        Levier retourné par ``compute_leviers_action``.
-    region_depts : pd.DataFrame
-        Sous-ensemble ``master`` des départements de la région.
-    data : dict, optional
-        Dictionnaire applicatif (``patho``, etc.).
-    region_name : str
-        Libellé région (informatif, non utilisé dans le calcul).
-
-    Returns
-    -------
-    LevierAmplitudeRegion
-    """
+def project_levier_amplitude_region(levier: dict, region_depts: pd.DataFrame, data: dict | None = None,
+                                    region_name: str = "") -> LevierAmplitudeRegion:
+    """Départements concernés, public du catalogue, population cible observée et horizon d'un levier régional."""
     _ = region_name
     data = data or {}
-    patho = data.get("patho")
     dept_names = list(levier.get("depts") or [])
-    intitule = str(levier.get("intitule", ""))
-    famille = str(levier.get("famille", ""))
-    public_cible = str(levier.get("public_cible", ""))
-
-    kind = _classify_levier_region(intitule, famille)
     rows = _rows_for_levier_depts(region_depts, dept_names)
-    nb_region = len(region_depts)
-
+    label, ok = population_cible_region(str(levier.get("id", "") or ""), rows, data.get("patho"))
+    public = str(levier.get("public_cible") or levier.get("public") or "Population du territoire").split("(")[0].strip()
     return LevierAmplitudeRegion(
-        territoires=_format_territoires_region(dept_names, nb_region),
-        public=_public_region(kind, public_cible),
-        population=_population_region(kind, rows, patho),
-        horizon=_horizon_region(kind),
+        territoires=_format_territoires_region(dept_names, len(region_depts)),
+        public=public or "Population du territoire",
+        population=label,
+        horizon=str(levier.get("horizon") or HORIZON_MOYEN),
+        quantifie=ok,
     )
 
 
@@ -524,7 +295,7 @@ def render_amplitude_region_html(amplitude: LevierAmplitudeRegion) -> str:
         f'<span class="reco-impact-val">{amplitude.public}</span>'
         '</div>'
         '<div class="reco-impact-item">'
-        '<span class="reco-impact-lbl">Population observée</span>'
+        '<span class="reco-impact-lbl">Population cible observée</span>'
         f'<span class="reco-impact-val">{amplitude.population}</span>'
         '</div>'
         '<div class="reco-impact-item">'

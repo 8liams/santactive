@@ -463,44 +463,29 @@ def _reco_card(i: int, reco: dict, r: pd.Series, data: dict | None) -> Table:
     def block(label: str, text: str) -> None:
         if text and str(text).strip():
             parts.append(Paragraph(f'<font color="#{_hex(BLEU_ROYAL)}"><b>{esc(label)}</b></font>  {esc(text)}',
-                                   _s("rb", fontSize=8.5, leading=12)))
-            parts.append(Spacer(1, 3))
+                                   _s("rb", fontSize=8.5, leading=11.5)))
+            parts.append(Spacer(1, 2))
 
     block("Problème", reco.get("probleme", ""))
     pop_obs = ""
     try:
-        if data is not None:
-            from .action_impact import project_levier_impact
-            imp = project_levier_impact(reco, r, data)
-            pop_obs = str(getattr(imp, "population", "") or "")
-            if pop_obs.strip().lower() in ("n.d.", "n/d"):
-                pop_obs = ""
+        from .action_impact import project_levier_impact
+        imp = project_levier_impact(reco, r, data or {})
+        pop_obs = str(getattr(imp, "population", "") or "")
     except Exception:
         pop_obs = ""
     public = str(reco.get("public", "") or "").strip()
     if public or pop_obs:
-        block("Public", public + (f" · population observée : {pop_obs}" if pop_obs else ""))
+        block("Public", public + (f" · {pop_obs}" if pop_obs else ""))
     block("Communes et secteurs concernés", str(reco.get("secteurs", "") or "").strip())
     block("Action", reco.get("action", ""))
-    indic = [str(x) for x in (reco.get("indicateurs") or [])[:4]]
-    if indic:
-        block("Données", " · ".join(indic))
     block("Pourquoi ici", reco.get("pourquoi", ""))
     disp = ", ".join(str(x) for x in (reco.get("dispositifs") or []))
-    if disp:
-        block("Dispositifs existants", disp)
-    block("Mise en œuvre", reco.get("mise_en_oeuvre", ""))
-    conds = reco.get("conditions") or []
-    if conds:
-        ok = [str(lab) for lab, k in conds if k]
-        ko = [str(lab) for lab, k in conds if not k]
-        txt = ""
-        if ok:
-            txt += f'<font color="#{_hex(VERT_FAV)}">Conditions remplies :</font> ' + esc(" ; ".join(ok)) + ". "
-        if ko:
-            txt += f'<font color="#{_hex(GRIS_SEC)}">Non remplies :</font> ' + esc(" ; ".join(ko)) + "."
-        parts.append(Paragraph(txt, ST_NOTE))
-    return _box(parts, bg=BLANC, left_bar=BLEU_ROYAL, pad=8)
+    meo = str(reco.get("mise_en_oeuvre", "") or "").strip()
+    if meo and not meo.endswith("."):
+        meo += "."
+    block("Mise en œuvre", (meo + " " if meo else "") + (f"Dispositifs existants : {disp}." if disp else ""))
+    return _box(parts, bg=BLANC, left_bar=BLEU_ROYAL, pad=6)
 
 
 def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict], data: dict | None = None) -> bytes:
@@ -669,12 +654,25 @@ def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict
     crow("Part des 65 ans et plus", _num(p65) + NBSP + "%", _num(p65_m) + NBSP + "%", "pression sur la demande de soins", "INSEE RP 2021")
     crow("Prix médian au m²", _num(r.get("prix_m2_moyen"), 0) + " €", _num(med("prix_m2_moyen"), 0) + " €", "contexte d'installation (5 % du score)", "DVF 2025")
     story.append(_table(comp, [CONTENT_W * 0.34, CONTENT_W * 0.17, CONTENT_W * 0.21, CONTENT_W * 0.28]))
+    story.append(Spacer(1, 6))
+    diverge = (mg is not None and mg_m and apl is not None and apl_m and ((mg >= mg_m) != (apl >= apl_m)))
+    expl = ("<b>Pourquoi densité et APL peuvent diverger.</b> La densité compte des personnes inscrites au répertoire RPPS, "
+            "quel que soit leur temps de travail, leur âge ou leur mode d'exercice, rapportées à la population du département. "
+            "L'APL mesure des consultations réellement accessibles : elle tient compte de l'activité de chaque médecin, de la "
+            "distance aux communes voisines et des besoins liés à l'âge des habitants. Un département peut donc compter "
+            "beaucoup de généralistes et offrir peu de consultations disponibles, ou l'inverse.")
+    if diverge:
+        expl += (f" C'est le cas ici : {_num(mg, 0)} généralistes pour 100 000 habitants "
+                 f"({'au-dessus' if mg >= mg_m else 'sous'} la médiane) mais un APL de {_num(apl, 2)} "
+                 f"({'sous' if apl < apl_m else 'au-dessus de'} la médiane de {_num(apl_m, 2)}).")
+    story.append(_box([Paragraph(expl, ST_SMALL)], bg=BLEU_PALE, border=BLEU_PALE))
 
     # ── PAGE 3 · RECOMMANDATIONS ─────────────────────────────────────────────
     story.append(PageBreak())
     _heading("Recommandations opérationnelles", story,
              "Leviers issus d'un catalogue de dispositifs existants, retenus par des règles explicites sur les indicateurs "
-             "observés (au plus quatre, deux par famille). Pistes à instruire avec les acteurs locaux, pas des prescriptions.")
+             "observés (au plus quatre, deux par famille). Pistes à instruire avec les acteurs locaux, pas des prescriptions ; "
+             "indicateurs détaillés et conditions de déclenchement dans la fiche en ligne.")
     if maintien and recos and (recos[0].get("action") or recos[0].get("probleme")):
         story.append(KeepTogether(_reco_card(1, recos[0], r, data)))
     elif maintien or not recos:
