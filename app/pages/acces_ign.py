@@ -603,7 +603,7 @@ def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *
             lz.add_to(fgz)
         fgz.add_to(m)
     else:
-        lz = _zones_layer(zones, "Aujourd’hui : zones par temps de trajet", 0.18 if estompe else 0.55)
+        lz = _zones_layer(zones, "Aujourd’hui : zones par temps de trajet", 0.30 if estompe else 0.72)
         if lz is not None:
             lz.add_to(m)
     if detail:
@@ -633,7 +633,7 @@ def _legende(m: folium.Map, seuil: int | None, mode: str | None, continu: bool =
     if mode and mode != "Situation actuelle":
         scen = ('<b style="margin-top:6px;">Scénario</b>'
                 '<div><i class="pin-mini"></i>nouvelle offre simulée (point hypothétique)</div>'
-                f'<div><i style="border:2px dashed {_NEUF};background:transparent;"></i>isochrone IGN ≤ {seuil} min</div>')
+                f'<div><i style="border:2px solid {_NEUF};background:rgba(26,61,143,.16);"></i>zone atteignable en ≤ {seuil} min depuis la nouvelle offre (isochrone IGN)</div>')
         if mode == "Avec la nouvelle offre":
             scen += (f'<div><i style="background:{_COULEURS[10]};border:2px solid {_NEUF};"></i>'
                      + ("mailles dont le temps s’améliore : nouvelle couleur ; " if continu else "zone dont la classe change : nouvelle couleur, ")
@@ -865,8 +865,9 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
                 continue
             fg = folium.FeatureGroup(name=f"Isochrone IGN ≤ {s_} min", show=(s_ == seuil))
             folium.GeoJson({"type": "Feature", "geometry": sim_geoms[s_]},
-                           style_function=lambda f, s2=s_: {"fillColor": _NEUF, "color": _NEUF, "weight": 2.4 if s2 == seuil else 1.2,
-                                                            "fillOpacity": 0.0, "dashArray": "6 4"},
+                           style_function=lambda f, s2=s_: {"fillColor": _NEUF, "color": _NEUF, "weight": 2.2 if s2 == seuil else 1.0,
+                                                            "fillOpacity": 0.14 if s2 == seuil else 0.05,
+                                                            "dashArray": None if s2 == seuil else "6 4"},
                            tooltip=f"Isochrone IGN {s_} min depuis la nouvelle offre").add_to(fg)
             fg.add_to(m)
         if mode == "Avec la nouvelle offre":

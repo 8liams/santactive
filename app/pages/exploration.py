@@ -134,7 +134,9 @@ def render(data: dict) -> None:
         st.session_state["_prio_region_ctx"] = t.param
     region = f1.selectbox("Région", regions, key="prio_region")
     quad_opts = ["Tous"] + [f"{q} · {lab}" for q, lab in QUADRANTS.items()]
-    quad_choice = f2.radio("Quadrant", quad_opts, horizontal=True, key="prio_quadrant")
+    # Les cinq choix tiennent sur une ligne en pleine largeur (pas de bouton orphelin) ; en dessous, ils se répartissent en grille.
+    with st.container(key="prio_quadrant_row"):
+        quad_choice = st.radio("Quadrant", quad_opts, horizontal=True, key="prio_quadrant")
     quad = quad_choice[0] if quad_choice != "Tous" else None
     sel = ind.copy()
     if region != "Toutes les régions":

@@ -102,21 +102,19 @@ def render(data: dict) -> None:
            ("2 · Une position par indicateur", f"Chaque département est classé parmi les {nb_scores} ; sa position va de 0 (le moins bien placé) à 100 (le mieux placé)."),
            ("3 · Une moyenne pondérée", "Les six positions sont combinées avec les poids ci-dessous."),
            ("4 · Trois zones", "Les départements sont répartis en trois tiers : critique, intermédiaire, favorable."))
-    st.markdown(
-        '<div class="meth-bar">'
-        '<span style="flex:30;background:#1A3D8F;">APL 30 %</span>'
-        '<span style="flex:20;background:#2E6BE6;">Médecins 20 %</span>'
-        '<span style="flex:20;background:#5A85C3;">Temps 20 %</span>'
-        '<span style="flex:15;background:#8FA8D8;">Établissements 15 %</span>'
-        '<span style="flex:10;background:#B45309;">Seniors 10 %</span>'
-        '<span style="flex:5;background:#D97706;">Immo 5 %</span></div>'
-        '<div class="meth-bar-legend">'
-        f'<span><b>APL</b> consultations accessibles par habitant (DREES {APL_MILLESIME}) · plus, c’est mieux</span>'
-        '<span><b>Médecins</b> généralistes pour 100 000 habitants (RPPS 2026) · plus, c’est mieux</span>'
-        '<span><b>Temps</b> trajet médian en voiture vers un généraliste (INSEE 2025) · moins, c’est mieux</span>'
-        '<span><b>Établissements</b> sites hospitaliers pour 100 000 habitants (FINESS 2026) · plus, c’est mieux</span>'
-        '<span><b>Seniors</b> part des 65 ans et plus (INSEE 2021) · moins, c’est mieux</span>'
-        '<span><b>Immobilier</b> prix médian au m² (DVF 2025) · moins, c’est mieux</span></div>', unsafe_allow_html=True)
+    # Barre proportionnelle : seuls les pourcentages figurent dans les segments (les petits segments ne
+    # peuvent pas contenir un libellé) ; la légende colorée en dessous donne les intitulés complets.
+    poids = [("APL", "Accessibilité potentielle (APL)", 30, "#1A3D8F", f"consultations accessibles par habitant · DREES {APL_MILLESIME} · plus, c’est mieux"),
+             ("Médecins", "Médecins généralistes", 20, "#2E6BE6", "généralistes pour 100 000 habitants · RPPS 2026 · plus, c’est mieux"),
+             ("Temps", "Temps d’accès", 20, "#5A85C3", "trajet médian en voiture vers un généraliste · INSEE 2025 · moins, c’est mieux"),
+             ("Établissements", "Établissements de santé", 15, "#8FA8D8", "sites hospitaliers pour 100 000 habitants · FINESS 2026 · plus, c’est mieux"),
+             ("Seniors", "Part des 65 ans et plus", 10, "#B45309", "INSEE 2021 · moins, c’est mieux"),
+             ("Immobilier", "Prix immobilier", 5, "#D97706", "prix médian au m² · DVF 2025 · moins, c’est mieux")]
+    bar = "".join(f'<span style="flex:{w};background:{c};" title="{lib} · {w} %">{w}\u202f%</span>' for _, lib, w, c, _ in poids)
+    leg = "".join(f'<span><i style="background:{c};"></i><b>{lib}</b> {w}\u202f% · {d}</span>' for _, lib, w, c, d in poids)
+    st.markdown(f'<div class="meth-bar" role="img" aria-label="Pondérations du score : APL 30 %, médecins 20 %, temps 20 %, '
+                f'établissements 15 %, seniors 10 %, immobilier 5 %">{bar}</div>'
+                f'<div class="meth-bar-legend meth-bar-legend--chips">{leg}</div>', unsafe_allow_html=True)
     _formula("Score = 0,30 × APL + 0,20 × Médecins + 0,20 × Temps + 0,15 × Établissements + 0,10 × Seniors + 0,05 × Immobilier",
              "chaque terme est une position de 0 à 100 ; 50 = médiane des départements. Si un indicateur manque, son poids est "
              "redistribué sur les autres (au moins trois dimensions).")

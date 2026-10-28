@@ -357,11 +357,31 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
     lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score Sant’active", "apl_dept": "l’accessibilité aux généralistes (APL)",
               "temps_acces_median": f"le temps d’accès ({TEMPS_LABEL_COURT})", "med_gen_pour_100k": "la densité de généralistes",
               "structures_pour_100k": "l’offre hospitalière", "prix_m2_moyen": "le prix du foncier", "pct_plus_65": "la part des 65 ans et plus"}
+    def _ecart_txt(v_hi: float, v_lo: float, fmt: str, unit: str) -> str:
+        """Écart absolu lisible : en points pour les pourcentages, dans l'unité sinon."""
+        d = abs(v_hi - v_lo)
+        if "%" in unit:
+            return f"{_fr(d, fmt)} point{'s' if d >= 2 else ''}"
+        return f"{_fr(d, fmt)}{unit}"
+
     li = ""
     for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:
-        li += (f"<li><strong>{lib_fr.get(col, label).capitalize()}</strong> : {html.escape(pire)} ({_fr(vals[pire], fmt)}{unit}) "
-               f"contre {html.escape(mieux)} ({_fr(vals[mieux], fmt)}{unit}), soit un écart de {rel * 100:.0f}\u202f% de la référence nationale"
-               + (f" ({_fr(nat, fmt)}{unit})" if nat is not None else "") + ".</li>")
+        lower = col in NATIONAL_LOWER_IS_BETTER
+        ordre = sorted(vals, key=vals.get, reverse=not lower)  # du plus favorable au moins favorable
+        serie = " · ".join(f"{html.escape(n)} {_fr(vals[n], fmt)}{unit}" for n in ordre)
+        n_better = sum(1 for p in pos.values() if p == "better"); n_worse = sum(1 for p in pos.values() if p == "worse")
+        if pos and n_better and n_worse:
+            lecture = f"{n_better} territoire{'s' if n_better > 1 else ''} mieux placé{'s' if n_better > 1 else ''} que la référence nationale, {n_worse} en dessous"
+        elif pos and n_worse == len(pos):
+            lecture = "tous sous la référence nationale"
+        elif pos and n_better == len(pos):
+            lecture = "tous mieux placés que la référence nationale"
+        else:
+            lecture = ""
+        li += (f"<li><strong>{lib_fr.get(col, label).capitalize()}</strong> : {serie}. "
+               f"Écart de {_ecart_txt(vals[mieux], vals[pire], fmt, unit)} entre {html.escape(mieux)} (le plus favorable) et "
+               f"{html.escape(pire)} (le moins favorable)"
+               + (f" ; référence nationale {_fr(nat, fmt)}{unit}" if nat is not None else "") + (f", {lecture}" if lecture else "") + ".</li>")
     ecarts_html = f"<ul class='cmp-list'>{li}</ul>" if li else "<p>Les territoires comparés sont proches sur toutes les dimensions.</p>"
 
     rows = ""
@@ -372,7 +392,7 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
              "<th class='metric-col'>Le plus favorable</th><th class='metric-col'>Le moins favorable</th></tr></thead>"
              f"<tbody>{rows}</tbody></table>")
 
-    pc = []
+    pc, contrastes = [], []
     for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in ecarts:
         if not pos:
             continue
@@ -381,8 +401,14 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
             pc.append(f"tous sous la référence nationale pour {lib_fr.get(col, label)}")
         elif side == {"better"}:
             pc.append(f"tous mieux placés que la référence pour {lib_fr.get(col, label)}")
+        elif "better" in side and "worse" in side and rel >= 0.08:
+            hauts = [n for n, p in pos.items() if p == "better"]; bas = [n for n, p in pos.items() if p == "worse"]
+            contrastes.append(f"{lib_fr.get(col, label)} ({html.escape(', '.join(hauts))} mieux placé{'s' if len(hauts) > 1 else ''} que la référence ; "
+                              f"{html.escape(', '.join(bas))} en dessous)")
     communs_html = ("<p><strong>Points communs</strong> : " + " ; ".join(pc) + ".</p>") if pc else \
         "<p><strong>Points communs</strong> : aucune dimension où tous les territoires sont du même côté de la référence nationale.</p>"
+    if contrastes:
+        communs_html += "<p><strong>Situations contrastées</strong> : " + " ; ".join(contrastes[:3]) + ".</p>"
 
     impl = []
     for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:
@@ -395,7 +421,7 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
         '<div class="section-header"><div class="section-eyebrow">CE QU’ON APPREND</div>'
         '<h2 class="section-title">Les écarts <em>qui comptent.</em></h2></div>'
         f'<div class="cmp-synth"><div class="cmp-synth-main"><p><strong>Écarts majeurs</strong></p>{ecarts_html}{communs_html}{impl_html}'
-        '<p class="sa-couverture">Référence nationale = médiane des 100 départements. Un écart est jugé majeur au-delà de 8 % de cette référence. '
+        '<p class="sa-couverture">Synthèse calculée sur l’ensemble des territoires sélectionnés. Référence nationale = médiane des 100 départements ; un écart est jugé majeur lorsqu’il dépasse 8 % de cette référence. Les écarts entre pourcentages sont exprimés en points. '
         'Les indicateurs décrivent l’offre et le contexte : ils ne mesurent pas l’accès effectif aux rendez-vous.</p></div>'
         f'<div class="cmp-synth-side">{table}</div></div>',
         unsafe_allow_html=True)
