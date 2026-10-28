@@ -835,7 +835,8 @@ class TestFiabilisationEtTerritoire(unittest.TestCase):
     def test_pct_bornes_et_mairies(self):
         import json
         from app.pages.acces_ign import _pct, charger_communes
-        self.assertEqual(_pct(0.99997), "> 99,9\u202f%"); self.assertEqual(_pct(0.0002), "< 0,1\u202f%")
+        self.assertEqual(_pct(0.99997), "> 99\u202f%"); self.assertEqual(_pct(0.99997, 1), "> 99,9\u202f%")
+        self.assertEqual(_pct(0.0002), "< 1\u202f%"); self.assertEqual(_pct(0.0002, 1), "< 0,1\u202f%"); self.assertEqual(_pct(0.999), "> 99\u202f%")
         self.assertEqual(_pct(1.0), "100\u202f%"); self.assertEqual(_pct(0.0), "0\u202f%"); self.assertEqual(_pct(0.1234, 1), "12,3\u202f%")
         for d in ("18", "75", "974"):
             c = charger_communes(d)

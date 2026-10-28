@@ -103,7 +103,7 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         unsafe_allow_html=True,
     )
     pop_txt = (f"<strong>{_fr_int(c['pop_concernee'])} habitants</strong> ({c['part']:.0%})" if c["pop_concernee"] is not None
-               else f"<strong>{c['part']:.0%} de la population</strong>")
+               else f"<strong>{c['part'] * 100:.0f}\u202f% de la population</strong>")
     if c["deficit"]:
         conclusion = (
             f'<p><strong>Déficit théorique détecté.</strong> Dans {nom}, {pop_txt} vivent dans {c["communes"]} commune{"s" if c["communes"] != 1 else ""} '
@@ -139,7 +139,7 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         f'</div>', unsafe_allow_html=True)
     kpi(c1, "APL moyen pondéré", _fmt(sim["apl_moyen_pondere"], ".2f"),
         "consultations par habitant et par an · DREES 2023 · repère de sous-densité 2,5")
-    kpi(c2, "Population sous le repère 2,5", f"{sim['part_pop_apl_inf_2_5']:.0%}",
+    kpi(c2, "Population sous le repère 2,5", f"{sim['part_pop_apl_inf_2_5'] * 100:.0f}\u202f%",
         f"{sim['nb_communes_inf_2_5']} commune{'s' if sim['nb_communes_inf_2_5'] != 1 else ''} sur {sim['nb_communes']}")
     kpi(c3, "Renforcement théorique étudié", f"≈ {mid:.0f} ETP" if c["deficit"] else "0 ETP",
         f"équivalents temps plein · fourchette {lo:.0f} – {hi:.0f}" if c["deficit"] else "équivalent temps plein · aucun déficit au repère 2,5")
