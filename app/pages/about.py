@@ -308,8 +308,8 @@ def render(data: dict) -> None:
             "https://www.data.gouv.fr/fr/datasets/annuaire-sante-medecin/",
         ),
         (
-            "FINESS · DREES · mars 2026",
-            "Établissements sanitaires et sociaux (hôpitaux, cliniques)",
+            "FINESS · ministère chargé de la Santé (diffusion DREES) · mars 2026",
+            "Fichier national des établissements sanitaires et sociaux ; retenus dans le score : CH, CHR et SSR privés",
             "https://www.data.gouv.fr/fr/datasets/finess-extraction-du-fichier-des-etablissements/",
         ),
         (

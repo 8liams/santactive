@@ -1,22 +1,39 @@
-"""Génération du rapport PDF départemental avec ReportLab — v2."""
+"""Rapports territoriaux PDF (département, région) — ReportLab.
+
+Structure du rapport départemental (3 à 5 pages A4) :
+  1. Synthèse exécutive : identité, score Sant'active (offre et accès aux soins), indicateurs clés,
+     trois constats, priorités d'action, lien vers la fiche en ligne.
+  2. Diagnostic : les six dimensions du score, comparaison aux médianes nationales (temps INSEE 2025),
+     pathologies.
+  3. Recommandations : pour chaque levier, problème, public, communes concernées, action, données,
+     conditions de mise en œuvre.
+  4. Approfondissement (si disponible) : capacité théorique en ETP, estimation indicative des délais.
+  5. Sources, méthode et limites.
+
+Règles éditoriales : chiffres au format français, millésimes nommés, estimation distinguée de
+l'observé, pas de « score global de santé territoriale » (le score mesure l'offre et l'accès aux
+soins de premier recours), rangs affichés 1er = le mieux placé.
+"""
 
 from __future__ import annotations
 
 import io
 from datetime import date
-
-from .config import APL_LABEL_COURT, APL_MILLESIME
+from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape as _xml_escape
 
 import pandas as pd
-from .scoring import fmt_classement_national
+from reportlab.graphics.shapes import Drawing, Rect
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as _canvas
 from reportlab.platypus import (
-    HRFlowable,
     KeepTogether,
     PageBreak,
     Paragraph,
@@ -25,6 +42,9 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+from .config import APL_MILLESIME, TEMPS_LABEL_COURT
+from .scoring import DIMENSIONS, fmt_classement_national
 
 # ── Palette Sant'active ────────────────────────────────────────────────────────
 BLEU_NUIT  = colors.HexColor("#0A1938")
@@ -37,22 +57,104 @@ GRIS_BORD  = colors.HexColor("#C9C6BA")
 BLANC      = colors.white
 NOIR       = colors.HexColor("#0A0A0A")
 GRIS_TXT   = colors.HexColor("#4A4A4A")
-GRIS_SEC   = colors.HexColor("#999999")
+GRIS_SEC   = colors.HexColor("#777777")
+BLEU_PALE  = colors.HexColor("#EEF2FA")
 
 W, H = A4
-MARGIN    = 20 * mm
+MARGIN    = 18 * mm
 CONTENT_W = W - 2 * MARGIN
+NBSP = " "
+BASE_URL = "https://santactive.streamlit.app"
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Polices : Marianne (charte) avec repli Helvetica ─────────────────────────
+def _register_fonts() -> tuple[str, str, str]:
+    try:
+        base = Path(__file__).resolve().parent.parent / "static" / "fonts" / "marianne"
+        if "Marianne" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("Marianne", str(base / "Marianne-Regular.ttf")))
+            pdfmetrics.registerFont(TTFont("Marianne-Bold", str(base / "Marianne-Bold.ttf")))
+            pdfmetrics.registerFont(TTFont("Marianne-Medium", str(base / "Marianne-Medium.ttf")))
+            pdfmetrics.registerFontFamily("Marianne", normal="Marianne", bold="Marianne-Bold",
+                                          italic="Marianne", boldItalic="Marianne-Bold")
+        return "Marianne", "Marianne-Bold", "Marianne-Medium"
+    except Exception:
+        return "Helvetica", "Helvetica-Bold", "Helvetica"
+
+
+FONT, FONT_B, FONT_M = _register_fonts()
+
+
+# ─── Helpers de format ────────────────────────────────────────────────────────
 _MOIS_FR = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet",
             "août", "septembre", "octobre", "novembre", "décembre")
 
 
 def _date_fr(d: date | None = None) -> str:
-    """Date au format « 27 octobre 2026 » (strftime %B dépend de la locale)."""
     d = d or date.today()
     return f"{d.day} {_MOIS_FR[d.month - 1]} {d.year}"
+
+
+def _num(val, dec: int = 1, fallback: str = "N/D") -> str:
+    """Nombre au format français (virgule décimale, espace insécable pour les milliers)."""
+    try:
+        if val is None or pd.isna(val):
+            return fallback
+        s = f"{float(val):,.{dec}f}"
+        return s.replace(",", "§").replace(".", ",").replace("§", NBSP)
+    except Exception:
+        return fallback
+
+
+def _pct(val, dec: int = 1, fallback: str = "N/D") -> str:
+    """Part (0-1) en pourcentage français."""
+    try:
+        if val is None or pd.isna(val):
+            return fallback
+        return _num(float(val) * 100, dec) + NBSP + "%"
+    except Exception:
+        return fallback
+
+
+def _f(val) -> float | None:
+    try:
+        if val is None or pd.isna(val):
+            return None
+        return float(val)
+    except Exception:
+        return None
+
+
+_GLYPH_MAP = str.maketrans({" ": NBSP, " ": NBSP, "ᵉ": "e", "✓": "+", "✗": "–",
+                            "′": "'", "″": '"'})
+
+
+def _esc(x: Any) -> str:
+    """Échappement XML pour Paragraph + remplacement des caractères absents de la police (Marianne)."""
+    return _xml_escape(str(x if x is not None else "").translate(_GLYPH_MAP))
+
+
+def _hex(c: Any) -> str:
+    return c.hexval()[2:]
+
+
+def _s(name: str, **kwargs) -> ParagraphStyle:
+    defaults = {"fontName": FONT, "fontSize": 9.5, "textColor": NOIR, "leading": 13.5}
+    defaults.update(kwargs)
+    return ParagraphStyle(name, **defaults)
+
+
+ST_BODY  = _s("body")
+ST_SMALL = _s("small", fontSize=8, leading=11, textColor=GRIS_TXT)
+ST_NOTE  = _s("note", fontSize=7.5, leading=10.5, textColor=GRIS_SEC)
+ST_LABEL = _s("label", fontSize=7.5, leading=10, textColor=GRIS_SEC)
+ST_H1    = _s("h1", fontName=FONT_B, fontSize=24, leading=28, textColor=BLEU_NUIT)
+ST_H2    = _s("h2", fontName=FONT_B, fontSize=12.5, leading=16, textColor=BLEU_NUIT)
+ST_H3    = _s("h3", fontName=FONT_B, fontSize=10.5, leading=14, textColor=BLEU_NUIT)
+ST_TH    = _s("th", fontName=FONT_B, fontSize=8, leading=10, textColor=BLANC)
+ST_TD    = _s("td", fontSize=8.5, leading=11)
+ST_TDC   = _s("tdc", fontSize=8.5, leading=11, alignment=TA_CENTER)
+ST_TDR   = _s("tdr", fontSize=8.5, leading=11, alignment=TA_RIGHT)
 
 
 def _zone_color(zone: str) -> Any:
@@ -60,761 +162,787 @@ def _zone_color(zone: str) -> Any:
 
 
 def _zone_soft(zone: str) -> Any:
-    return {
-        "Critique":      colors.HexColor("#FBEEF0"),
-        "Intermédiaire": colors.HexColor("#FEF4DC"),
-        "Favorable":     colors.HexColor("#E3EFE8"),
-    }.get(zone, GRIS_CLAIR)
+    return {"Critique": colors.HexColor("#FBEEF0"), "Intermédiaire": colors.HexColor("#FEF4DC"),
+            "Favorable": colors.HexColor("#E3EFE8")}.get(zone, GRIS_CLAIR)
 
 
-def _fmt(val, fmt="{:.1f}", fallback="N/D"):
-    try:
-        if pd.isna(val):
-            return fallback
-        return fmt.format(float(val))
-    except Exception:
-        return fallback
+def _zone_lecture(zone: str) -> str:
+    return {"Critique": "tiers des départements les moins bien placés",
+            "Intermédiaire": "tiers médian des départements",
+            "Favorable": "tiers des départements les mieux placés"}.get(zone, "sans classement")
 
 
-def _compare(val, ref) -> bool | None:
-    try:
-        if pd.isna(val) or pd.isna(ref):
-            return None
-        return float(val) >= float(ref)
-    except Exception:
-        return None
+def _typologie(densite) -> str:
+    d = _f(densite)
+    if d is None:
+        return "N/D"
+    return "rural" if d < 80 else "péri-urbain" if d < 250 else "urbain" if d < 1000 else "urbain dense"
 
 
-def _s(name: str, **kwargs) -> ParagraphStyle:
-    defaults = {"fontName": "Helvetica", "fontSize": 10, "textColor": NOIR, "leading": 14}
-    defaults.update(kwargs)
-    return ParagraphStyle(name, **defaults)
-
-
-def _hex(c: Any) -> str:
-    return c.hexval()[2:]
-
-
-# ─── Section heading ──────────────────────────────────────────────────────────
-def _section_heading(title: str, story: list) -> None:
-    story.append(Spacer(1, 12))
-    tbl = Table([[
-        Paragraph(
-            f'<font color="#{_hex(ROUGE_CRIT)}" size="11">▌</font>'
-            f'  <b><font size="11" color="#{_hex(BLEU_NUIT)}">{title.upper()}</font></b>',
-            _s("sh", fontName="Helvetica-Bold", fontSize=11, textColor=BLEU_NUIT, leading=14),
-        )
-    ]], colWidths=[CONTENT_W])
+# ─── Composants ───────────────────────────────────────────────────────────────
+def _heading(title: str, story: list, sub: str | None = None) -> None:
+    story.append(Spacer(1, 10))
+    rows = [[Paragraph(_esc(title).upper(), _s("hd", fontName=FONT_B, fontSize=10.5, leading=13, textColor=BLEU_NUIT))]]
+    tbl = Table(rows, colWidths=[CONTENT_W])
     tbl.setStyle(TableStyle([
-        ("LINEBELOW",     (0, 0), (-1, -1), 1,  GRIS_BORD),
-        ("TOPPADDING",    (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LINEBELOW", (0, 0), (-1, -1), 1, BLEU_ROYAL),
+        ("LINEBEFORE", (0, 0), (0, -1), 3, ROUGE_CRIT),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(tbl)
-    story.append(Spacer(1, 8))
+    if sub:
+        story.append(Spacer(1, 3))
+        story.append(Paragraph(_esc(sub), ST_SMALL))
+    story.append(Spacer(1, 7))
 
 
-# ─── Footer/header callbacks ──────────────────────────────────────────────────
-def _page_cb(dept_name: str):
+def _box(flowables: list, bg=GRIS_CLAIR, border=GRIS_BORD, width: float = CONTENT_W, pad: int = 9,
+         left_bar: Any = None) -> Table:
+    t = Table([[flowables]], colWidths=[width])
+    style = [("BACKGROUND", (0, 0), (-1, -1), bg), ("BOX", (0, 0), (-1, -1), 0.5, border),
+             ("TOPPADDING", (0, 0), (-1, -1), pad), ("BOTTOMPADDING", (0, 0), (-1, -1), pad),
+             ("LEFTPADDING", (0, 0), (-1, -1), pad + 2), ("RIGHTPADDING", (0, 0), (-1, -1), pad + 2),
+             ("VALIGN", (0, 0), (-1, -1), "TOP")]
+    if left_bar is not None:
+        style.append(("LINEBEFORE", (0, 0), (0, -1), 3, left_bar))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _bar(value: float | None, color: Any, width: float = 50 * mm, height: float = 5.5) -> Drawing:
+    """Barre 0-100 avec repère médian (50)."""
+    d = Drawing(width, height + 3)
+    d.add(Rect(0, 1.5, width, height, fillColor=GRIS_CLAIR, strokeColor=None))
+    if value is not None:
+        d.add(Rect(0, 1.5, width * max(0.0, min(100.0, value)) / 100.0, height, fillColor=color, strokeColor=None))
+    d.add(Rect(width / 2 - 0.4, 0, 0.8, height + 3, fillColor=GRIS_SEC, strokeColor=None))
+    return d
+
+
+def _table(rows: list, col_widths: list, header: bool = True, zebra: bool = True, font_size: float = 8.5) -> Table:
+    t = Table(rows, colWidths=col_widths, repeatRows=1 if header else 0)
+    style = [("GRID", (0, 0), (-1, -1), 0.3, GRIS_BORD), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+             ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+             ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6)]
+    if header:
+        style.append(("BACKGROUND", (0, 0), (-1, 0), BLEU_NUIT))
+    if zebra:
+        style.append(("ROWBACKGROUNDS", (0, 1 if header else 0), (-1, -1), [BLANC, GRIS_CLAIR]))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _th(txt: str, align=TA_LEFT) -> Paragraph:
+    return Paragraph(_esc(txt), _s("thx", fontName=FONT_B, fontSize=8, leading=10, textColor=BLANC, alignment=align))
+
+
+def _td(txt: str, align=TA_LEFT, bold: bool = False, color: Any = NOIR, size: float = 8.5) -> Paragraph:
+    return Paragraph(txt, _s("tdx", fontName=FONT_B if bold else FONT, fontSize=size, leading=size + 2.5,
+                             textColor=color, alignment=align))
+
+
+def _link(url: str, label: str | None = None) -> str:
+    return f'<a href="{_esc(url)}" color="#{_hex(BLEU_ROYAL)}"><u>{_esc(label or url)}</u></a>'
+
+
+# ─── Pagination : en-tête, pied de page, « Page x / n » ───────────────────────
+class _NumberedCanvas(_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_states: list[dict] = []
+
+    def showPage(self):
+        self._saved_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_states)
+        for state in self._saved_states:
+            self.__dict__.update(state)
+            self.setFont(FONT, 7.5)
+            self.setFillColor(GRIS_SEC)
+            self.drawRightString(W - MARGIN, 10 * mm, f"Page {self._pageNumber} / {total}")
+            _canvas.Canvas.showPage(self)
+        _canvas.Canvas.save(self)
+
+
+def _page_cb(running_title: str, sources_line: str):
     def _cb(canvas, doc):
         canvas.saveState()
-
-        # ── Running header (pages 2+) ─────────────────────────────────────────
-        if doc.page > 1:
-            canvas.setFillColor(BLEU_NUIT)
-            canvas.rect(0, H - 8 * mm, W, 8 * mm, fill=1, stroke=0)
-            canvas.setFont("Helvetica-Bold", 7.5)
-            canvas.setFillColor(BLANC)
-            canvas.drawString(MARGIN, H - 5.5 * mm, f"SANT'ACTIVE  ·  {dept_name.upper()}")
-            canvas.drawRightString(W - MARGIN, H - 5.5 * mm, date.today().strftime("%d/%m/%Y"))
-
-        # ── Footer ────────────────────────────────────────────────────────────
+        canvas.setFillColor(BLEU_NUIT)
+        canvas.rect(0, H - 9 * mm, W, 9 * mm, fill=1, stroke=0)
+        canvas.setFillColor(ROUGE_CRIT)
+        canvas.rect(0, H - 9 * mm, 4 * mm, 9 * mm, fill=1, stroke=0)
+        canvas.setFont(FONT_B, 7.5)
+        canvas.setFillColor(BLANC)
+        canvas.drawString(MARGIN, H - 6 * mm, "SANT'ACTIVE  ·  " + running_title.upper())
+        canvas.setFont(FONT, 7.5)
+        canvas.drawRightString(W - MARGIN, H - 6 * mm, f"Rapport territorial · {_date_fr()}")
         canvas.setStrokeColor(GRIS_BORD)
         canvas.setLineWidth(0.5)
         canvas.line(MARGIN, 14 * mm, W - MARGIN, 14 * mm)
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(FONT, 7)
         canvas.setFillColor(GRIS_SEC)
-        canvas.drawString(MARGIN, 11 * mm, f"Sant'active · Rapport confidentiel · {dept_name}")
-        canvas.drawCentredString(
-            W / 2, 8 * mm,
-            f"Sources : INSEE RP 2021 · INSEE accès aux équipements 2025 · DREES RPPS 2026 · DREES APL {APL_MILLESIME} · FINESS 2026 · DVF 2025 · CNAM 2023",
-        )
-        canvas.drawRightString(W - MARGIN, 11 * mm, f"Page {doc.page}")
+        canvas.drawString(MARGIN, 10 * mm, f"Sant'active · {running_title} · document de travail, données publiques")
+        canvas.drawString(MARGIN, 7 * mm, sources_line)
         canvas.restoreState()
-
     return _cb
 
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
-def generate_department_pdf(
-    r: pd.Series,
-    master: pd.DataFrame,
-    recos: list[dict],
-    data: dict | None = None,
-) -> bytes:
-    """Génère un rapport PDF A4 complet pour un département."""
+def _doc(buf: io.BytesIO, title: str) -> SimpleDocTemplate:
+    return SimpleDocTemplate(buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
+                             topMargin=MARGIN + 3 * mm, bottomMargin=19 * mm, title=title, author="Sant'active",
+                             subject="Offre et accès aux soins de premier recours")
 
-    buf        = io.BytesIO()
-    dept_name  = str(r.get("Nom du département", "N/D"))
-    dept_code  = str(r.get("dept", "")).zfill(2)
-    region     = str(r.get("Nom de la région", "N/D"))
-    zone       = str(r.get("zone_short", "N/D"))
-    score      = r.get("score_global")
-    nb_dims    = pd.to_numeric(pd.Series([r.get("nb_dimensions_ok")]), errors="coerce").iloc[0]
-    zone_col   = _zone_color(zone)
-    zone_bg    = _zone_soft(zone)
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN + 4 * mm,
-        bottomMargin=18 * mm,
-        title=f"Sant'active · {dept_name}",
-        author="Sant'active",
-    )
+_SOURCES_LINE = (f"Sources : DREES APL {APL_MILLESIME} · INSEE accès aux équipements 2025 · DREES RPPS 2026 · "
+                 "FINESS 2026 · INSEE RP 2021 · CNAM 2023 · DVF 2025")
 
-    story: list = []
 
-    # ── ① BANDEAU COUVERTURE ──────────────────────────────────────────────────
-    cov = Table([[
-        Paragraph(
-            '<font color="white" size="9"><b>SANT\'ACTIVE</b></font>'
-            '<font color="white" size="8">  ·  Observatoire Santé Territorial</font>',
-            _s("cov_l", fontName="Helvetica-Bold", fontSize=9, textColor=BLANC),
-        ),
-        Paragraph(
-            f'<font color="white" size="8">Rapport confidentiel · {_date_fr()}</font>',
-            _s("cov_r", fontName="Helvetica", fontSize=8, alignment=TA_RIGHT, textColor=BLANC),
-        ),
-    ]], colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
-    cov.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), BLEU_NUIT),
-        ("TOPPADDING",    (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 14),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    story.append(cov)
-    story.append(Spacer(1, 16))
+# ─── Pages communes : sources, méthode, limites ───────────────────────────────
+_SOURCES_ROWS = [
+    ("Accessibilité potentielle localisée (APL)", f"DREES, APL aux médecins généralistes, millésime {APL_MILLESIME}",
+     "Consultations accessibles par an et par habitant ; repère de sous-densité 2,5. Valeur départementale : moyenne des APL communaux pondérée par la population standardisée."),
+    ("Temps d'accès à un généraliste", "INSEE, accès aux équipements 2025 (BPE 2025, distancier Metric-OSRM)",
+     "Trajet en voiture, par carreau habité de 200 m, vers le cabinet le plus proche. Guadeloupe, Guyane, Mayotte hors champ."),
+    ("Médecins généralistes", "DREES, répertoire RPPS au 1er janvier 2026 · INSEE RP 2021",
+     "Personnes en activité, tous modes d'exercice, rapportées à la population municipale."),
+    ("Structures de soins", "FINESS (ministère chargé de la Santé, diffusion DREES), mars 2026",
+     "Centres hospitaliers, centres hospitaliers régionaux, établissements privés de soins de suite et de réadaptation : des sites, pas des capacités."),
+    ("Population, âge, densité", "INSEE, recensement de la population 2021", "Population municipale, part des 65 ans et plus, densité."),
+    ("Pathologies", "CNAM, cartographie des pathologies et des dépenses, 2023", "Patients pris en charge ; prévalences brutes ou standardisées sur l'âge selon l'usage."),
+    ("Prix immobilier", "DVF (DGFiP), 2025", "Prix médian des transactions, indicateur de contexte (5 % du score)."),
+]
 
-    # ── ② TITRE DÉPARTEMENT ───────────────────────────────────────────────────
+
+def _sources_pages(story: list, *, lien_methodo: str, niveau: str) -> None:
+    story.append(PageBreak())
+    _heading("Sources, méthode et limites", story)
+    rows = [[_th("Donnée"), _th("Source et millésime"), _th("Lecture")]]
+    for a, b, c in _SOURCES_ROWS:
+        rows.append([_td(_esc(a), bold=True, size=8), _td(_esc(b), size=8), _td(_esc(c), size=7.5, color=GRIS_TXT)])
+    story.append(_table(rows, [CONTENT_W * 0.24, CONTENT_W * 0.32, CONTENT_W * 0.44]))
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Méthode", ST_H3))
+    story.append(Spacer(1, 3))
+    meth = [
+        "<b>Score Sant'active</b> : indice sur 100 construit à partir de six indicateurs publics, chacun converti en rang "
+        "parmi les 100 départements analysés (50 = médiane), puis moyenne pondérée : APL 30 %, temps d'accès à un "
+        "généraliste 20 %, densité de généralistes 20 %, structures hospitalières 15 %, part des 65 ans et plus 10 %, "
+        "prix immobilier 5 %. Les pondérations sont un choix méthodologique du projet, pas des pondérations officielles. "
+        "Lorsqu'un indicateur manque, son poids est redistribué (au moins trois dimensions).",
+        "<b>Zones et classement</b> : les départements sont répartis en trois groupes de taille égale (critique, "
+        "intermédiaire, favorable). Le classement affiche 1er = le mieux placé ; les rangs sont uniques.",
+        "<b>Leviers d'action</b> : catalogue d'une vingtaine de dispositifs existants, chacun assorti de conditions "
+        "chiffrées (obligatoires, contributives, exclusions). Un levier est retenu si ses conditions obligatoires sont "
+        "remplies et qu'au moins un tiers de ses conditions pondérées le sont ; au plus quatre leviers, deux par famille. "
+        "Règles explicites, sans intelligence artificielle générative.",
+    ]
+    if niveau == "region":
+        meth.append(
+            "<b>Priorités régionales</b> : le score de priorité (0-100) est la moyenne du besoin (fragilité et score "
+            "Sant'active) et du volume de population concernée ; il n'intègre pas la faisabilité. La lecture "
+            "« fragilité × impact × faisabilité » est une qualification complémentaire qui identifie les candidats à "
+            "une expérimentation ; ce n'est pas un second score.")
+    for m in meth:
+        story.append(Paragraph(m, ST_SMALL))
+        story.append(Spacer(1, 3))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph("Limites", ST_H3))
+    story.append(Spacer(1, 3))
+    for lim in [
+        "Les indicateurs décrivent l'offre et l'accessibilité géographique des soins de premier recours ; ils ne mesurent "
+        "ni la disponibilité réelle des rendez-vous, ni la qualité des soins, ni l'état de santé de la population.",
+        "Le score situe un département parmi les autres à une date donnée ; il ne mesure pas une évolution.",
+        "Les leviers sont des pistes fondées sur des règles explicites, à instruire avec les acteurs locaux (ARS, CPTS, "
+        "collectivités, professionnels) ; ils ne constituent ni une prescription ni une évaluation de politique publique.",
+        "Les estimations (ETP théoriques, délais indicatifs) sont signalées comme telles et ne remplacent pas une donnée observée.",
+    ]:
+        story.append(Paragraph("– " + lim, ST_SMALL))
+        story.append(Spacer(1, 2))
+    story.append(Spacer(1, 8))
     story.append(Paragraph(
-        f'<b><font size="30" color="#{_hex(BLEU_NUIT)}">{dept_name}</font></b>'
-        f'<font size="16" color="#999999">  ·  {dept_code}</font>',
-        _s("dept_title", fontName="Helvetica-Bold", fontSize=30, textColor=BLEU_NUIT, leading=34),
-    ))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph(
-        f'<font size="11" color="#666666">{region}</font>',
-        _s("sub", fontName="Helvetica", fontSize=11, textColor=colors.HexColor("#666666")),
-    ))
-    story.append(Spacer(1, 12))
+        f"Méthodologie complète et historique des changements : {_link(lien_methodo)}. "
+        f"Rapport généré le {_date_fr()} à partir de l'application Sant'active ({_link(BASE_URL)}).", ST_NOTE))
 
-    # ── ③ SCORE GLOBAL + ZONE ─────────────────────────────────────────────────
-    # Rang : même source que la page (rang_national, 1 = pire en interne).
-    # L'ancien calcul `cumsum().max()` valait toujours 1 → « 100ème » partout.
-    rang      = r.get("rang_national")
-    total     = int(master["score_global"].notna().sum())
-    score_str = _fmt(score, "{:.1f}")
-    frag_str  = (
-        fmt_classement_national(rang, total)
-        if rang is not None and pd.notna(rang) else "N/D"
-    )
 
-    score_block = Table([[
-        Paragraph(
-            f'<b><font size="40" color="#{_hex(zone_col)}">{score_str}</font>'
-            f'<font size="14" color="#999999">/100</font></b>',
-            _s("sc_big", fontName="Helvetica-Bold", fontSize=40, textColor=zone_col, leading=44),
-        ),
-        [
-            Paragraph(
-                f'<b><font size="13" color="#{_hex(zone_col)}">● {zone}</font></b>',
-                _s("zb", fontName="Helvetica-Bold", fontSize=13, alignment=TA_RIGHT, textColor=zone_col),
-            ),
-            Spacer(1, 6),
-            Paragraph(
-                '<font size="10" color="#444444">Score global de santé territoriale</font>',
-                _s("zl", fontName="Helvetica", fontSize=10, alignment=TA_RIGHT,
-                   textColor=colors.HexColor("#444444")),
-            ),
-            Paragraph(
-                f'<font size="9" color="#999999">Classement national : '
-                f'{frag_str} / {total}</font>',
-                _s("rang", fontName="Helvetica", fontSize=9, alignment=TA_RIGHT, textColor=GRIS_SEC),
-            ),
-        ] + ([Paragraph(
-                f'<font size="8" color="#A51C30">Score calculé sur {int(nb_dims)} dimensions sur 6 : le temps d\'accès INSEE 2025 '
-                f'n\'est pas disponible pour ce département (hors champ de la base) ; son poids est redistribué.</font>',
-                _s("dims", fontName="Helvetica", fontSize=8, alignment=TA_RIGHT, textColor=ROUGE_CRIT))]
-             if pd.notna(nb_dims) and int(nb_dims) < 6 else []),
-    ]], colWidths=[CONTENT_W * 0.42, CONTENT_W * 0.58])
-    score_block.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), zone_bg),
-        ("TOPPADDING",    (0, 0), (-1, -1), 14),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
-        ("LEFTPADDING",   (0, 0), (0, -1), 20),
-        ("RIGHTPADDING",  (-1, 0), (-1, -1), 16),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("LINEBELOW",     (0, 0), (-1, -1), 3, zone_col),
-    ]))
-    story.append(score_block)
-    story.append(Spacer(1, 18))
+# ═════════════════════════════════════════════════════════════════════════════
+# RAPPORT DÉPARTEMENTAL
+# ═════════════════════════════════════════════════════════════════════════════
+_DIM_META = {
+    "apl":      ("Accessibilité potentielle (APL)", lambda v: _num(v, 2) + " consult./hab.", f"DREES {APL_MILLESIME}"),
+    "temps":    ("Temps médian vers un généraliste", lambda v: _num(v, 0) + " min", TEMPS_LABEL_COURT),
+    "medecins": ("Généralistes pour 100 000 hab.", lambda v: _num(v, 0), "RPPS 2026"),
+    "etabs":    ("Sites hospitaliers pour 100 000 hab.", lambda v: _num(v, 1), "FINESS 2026"),
+    "seniors":  ("Part des 65 ans et plus", lambda v: _num(v, 1) + NBSP + "%", "INSEE RP 2021"),
+    "foncier":  ("Prix médian au m²", lambda v: _num(v, 0) + " €/m²", "DVF 2025"),
+}
 
-    # ── ④ KPI GRID (6 indicateurs 3×2) ───────────────────────────────────────
-    _section_heading("Indicateurs clés", story)
 
-    apl     = r.get("apl_dept")
-    # Repli hors champ INSEE (Guadeloupe, Guyane) : indicateur interne, nommé comme tel dans le PDF
-    temps   = r.get("temps_acces_interne_median") if "temps_acces_interne_median" in r.index else r.get("temps_acces_median")
-    med_gen = r.get("med_gen_pour_100k")
-    prix    = r.get("prix_m2_moyen")
-    pct65   = r.get("pct_plus_65")
-    pop     = r.get("population_num")
-    score_acces = r.get("score_acces")
-    score_etabs = r.get("score_etabs")
+def _constats(r: pd.Series, master: pd.DataFrame) -> list[tuple[str, bool]]:
+    """Trois constats chiffrés, du plus marquant au moins marquant ; True = point de vigilance."""
+    med = lambda c: _f(pd.to_numeric(master[c], errors="coerce").median()) if c in master.columns else None
+    out: list[tuple[float, str, bool]] = []
 
-    apl_nat   = master["apl_dept"].median()   if "apl_dept"   in master.columns else None
-    temp_nat  = (master["temps_acces_interne_median"] if "temps_acces_interne_median" in master.columns else master["temps_acces_median"]).median() if "temps_acces_median" in master.columns else None
-    med_nat   = master["med_gen_pour_100k"].median()  if "med_gen_pour_100k"  in master.columns else None
-    pct65_nat = master["pct_plus_65"].median()        if "pct_plus_65"        in master.columns else None
+    apl, apl_m = _f(r.get("apl_dept")), med("apl_dept")
+    if apl is not None and apl_m:
+        part, pop = _f(r.get("part_pop_apl_inf_2_5")), _f(r.get("population_num"))
+        sous = apl < apl_m
+        s = (f"APL de {_num(apl, 2)} consultations par habitant et par an, {'sous' if sous else 'au-dessus de'} la "
+             f"médiane des départements ({_num(apl_m, 2)}).")
+        if part is not None and pop is not None:
+            s += (f" {_num(part * pop, 0)} habitants ({_pct(part, 0)}) vivent dans une commune sous le repère 2,5."
+                  if part > 0 else " Aucune commune sous le repère de sous-densité 2,5.")
+        out.append(((apl - apl_m) / apl_m, s, sous))
 
-    def _arrow(good: bool | None) -> str:
-        if good is True:  return f'<font color="#{_hex(VERT_FAV)}">▲</font>'
-        if good is False: return f'<font color="#{_hex(ROUGE_CRIT)}">▼</font>'
-        return ""  # pas de comparaison pertinente (≠ donnée absente)
+    p15, p15_m = _f(r.get("acces_mg_part_sup_15")), med("acces_mg_part_sup_15")
+    if p15 is not None and p15_m is not None:
+        n15, nc = _f(r.get("acces_mg_pop_sup_15")), _f(r.get("acces_mg_nb_communes_sup_15"))
+        pire = p15 > p15_m
+        s = (f"{_pct(p15)} des habitants sont à plus de 15 minutes en voiture d'un généraliste "
+             f"(médiane des départements : {_pct(p15_m)})")
+        if n15 is not None:
+            s += f", soit {_num(n15, 0)} personnes"
+        if nc is not None and nc > 0:
+            s += f" dans {_num(nc, 0)} communes"
+        s += " (INSEE 2025)."
+        out.append((-(p15 - p15_m) / max(p15_m, 0.005), s, pire))
+    elif _f(r.get("temps_acces_interne_median")) is not None:
+        t = _f(r.get("temps_acces_interne_median"))
+        out.append((-0.3, f"Temps d'accès INSEE 2025 non disponible (territoire hors champ) ; l'indicateur interne "
+                          f"donne {_num(t, 0)} minutes médianes vers un généraliste, à lire avec prudence.", True))
 
-    def _kpi(label, val_str, cmp_str, good):
-        col = VERT_FAV if good is True else (ROUGE_CRIT if good is False else AMBRE)
-        return [
-            Paragraph(f'<font size="8" color="#999999">{label.upper()}</font>',
-                      _s(f"kl_{label[:4]}", fontSize=8, textColor=GRIS_SEC)),
-            Paragraph(f'<b><font size="20" color="#{_hex(col)}">{val_str}</font></b>',
-                      _s(f"kv_{label[:4]}", fontName="Helvetica-Bold", fontSize=20,
-                         textColor=col, leading=24)),
-            Paragraph(f'{_arrow(good)} <font size="8" color="#666666">{cmp_str}</font>',
-                      _s(f"kd_{label[:4]}", fontSize=8, textColor=colors.HexColor("#666666"))),
-        ]
+    mg, mg_m = _f(r.get("med_gen_pour_100k")), med("med_gen_pour_100k")
+    if mg is not None and mg_m:
+        sous = mg < mg_m
+        out.append(((mg - mg_m) / mg_m,
+                    f"{_num(mg, 0)} médecins généralistes pour 100 000 habitants (RPPS 2026), {'sous' if sous else 'au-dessus de'} "
+                    f"la médiane ({_num(mg_m, 0)}) ; un effectif de personnes, à lire avec l'APL qui tient compte de l'activité réelle.",
+                    sous))
 
-    kpis = [
-        _kpi("APL médecins gén.",
-             _fmt(apl, "{:.2f}") + " /hab.",
-             f"Méd. nat. {_fmt(apl_nat, '{:.2f}')}",
-             _compare(apl, apl_nat)),
-        (_kpi("Hab. à > 15 min d'un généraliste",
-              _fmt(float(r.get("acces_mg_part_sup_15")) * 100, "{:.1f}") + " %",
-              f"Méd. nat. {_fmt(float(master['acces_mg_part_sup_15'].median()) * 100, '{:.1f}')} % · INSEE 2025",
-              _compare(float(master["acces_mg_part_sup_15"].median()), float(r.get("acces_mg_part_sup_15"))))
-         if "acces_mg_part_sup_15" in master.columns and pd.notna(r.get("acces_mg_part_sup_15")) else
-         _kpi("Temps d'accès (interne, hors INSEE)",
-              _fmt(temps, "{:.0f}") + " min",
-              f"Méd. nat. {_fmt(temp_nat, '{:.0f}')} min",
-              _compare(temp_nat, temps))),  # inversé : moins = mieux
-        _kpi("Médecins gén. / 100k",
-             _fmt(med_gen, "{:.0f}"),
-             f"Méd. nat. {_fmt(med_nat, '{:.0f}')}",
-             _compare(med_gen, med_nat)),
-        _kpi("Prix immobilier médian",
-             _fmt(prix, "{:,.0f}").replace(",", "\u202f") + " €/m²",
-             "Source DVF 2025",
-             None),
-        _kpi("Part des 65 ans et +",
-             _fmt(pct65, "{:.1f}") + " %",
-             f"Méd. nat. {_fmt(pct65_nat, '{:.1f}')} %",
-             None),
-        _kpi("Population",
-             _fmt(pop, "{:,.0f}").replace(",", "\u202f") if pop and not pd.isna(pop) else "N/D",
-             "Source INSEE 2021",
-             None),
+    p65, p65_m = _f(r.get("pct_plus_65")), med("pct_plus_65")
+    if p65 is not None and p65_m:
+        plus = p65 > p65_m
+        out.append((-(p65 - p65_m) / p65_m,
+                    f"{_num(p65)} % de la population a 65 ans ou plus (médiane {_num(p65_m)} %) : "
+                    f"{'pression accrue' if plus else 'pression moindre'} sur la demande de soins et les parcours gériatriques.",
+                    plus))
+
+    et, et_m = _f(r.get("structures_pour_100k")), med("structures_pour_100k")
+    if et is not None and et_m:
+        sous = et < et_m
+        out.append(((et - et_m) / et_m,
+                    f"{_num(et, 1)} sites hospitaliers pour 100 000 habitants (FINESS 2026), {'sous' if sous else 'au-dessus de'} "
+                    f"la médiane ({_num(et_m, 1)}).", sous))
+
+    out.sort(key=lambda x: (not x[2], -abs(x[0])))  # vigilances d'abord, puis écart le plus marquant
+    return [(s, vig) for _, s, vig in out[:3]]
+
+
+def _reco_card(i: int, reco: dict, r: pd.Series, data: dict | None) -> Table:
+    esc = _esc
+    famille = str(reco.get("famille", "") or "")
+    horizon = str(reco.get("horizon", "") or "")
+    head = f'<font color="#{_hex(GRIS_SEC)}" size="7.5">{esc(famille).upper()}'
+    if horizon:
+        head += f"  ·  {esc(horizon)}"
+    head += "</font>"
+    parts: list = [
+        Paragraph(head, ST_LABEL),
+        Paragraph(f"{i}. {esc(reco.get('title', ''))}", ST_H3),
+        Spacer(1, 4),
     ]
 
-    cw3 = CONTENT_W / 3
-    kpi_tbl = Table(
-        [[kpis[0], kpis[1], kpis[2]], [kpis[3], kpis[4], kpis[5]]],
-        colWidths=[cw3, cw3, cw3],
-    )
-    kpi_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), BLANC),
-        ("BOX",           (0, 0), (-1, -1), 0.8, GRIS_BORD),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.5, GRIS_BORD),
-        ("TOPPADDING",    (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("BACKGROUND",    (0, 0), (2, 0), GRIS_CLAIR),  # first row slightly shaded
-    ]))
-    story.append(kpi_tbl)
-    story.append(Spacer(1, 18))
+    def block(label: str, text: str) -> None:
+        if text and str(text).strip():
+            parts.append(Paragraph(f'<font color="#{_hex(BLEU_ROYAL)}"><b>{esc(label)}</b></font>  {esc(text)}',
+                                   _s("rb", fontSize=8.5, leading=12)))
+            parts.append(Spacer(1, 3))
 
-    # ── ④bis RENFORCEMENT THÉORIQUE DE CAPACITÉ (APL communal DREES) ─────────
+    block("Problème", reco.get("probleme", ""))
+    pop_obs = ""
+    try:
+        if data is not None:
+            from .action_impact import project_levier_impact
+            imp = project_levier_impact(reco, r, data)
+            pop_obs = str(getattr(imp, "population", "") or "")
+            if pop_obs.strip().lower() in ("n.d.", "n/d"):
+                pop_obs = ""
+    except Exception:
+        pop_obs = ""
+    public = str(reco.get("public", "") or "").strip()
+    if public or pop_obs:
+        block("Public", public + (f" · population observée : {pop_obs}" if pop_obs else ""))
+    block("Communes et secteurs concernés", str(reco.get("secteurs", "") or "").strip())
+    block("Action", reco.get("action", ""))
+    indic = [str(x) for x in (reco.get("indicateurs") or [])[:4]]
+    if indic:
+        block("Données", " · ".join(indic))
+    block("Pourquoi ici", reco.get("pourquoi", ""))
+    disp = ", ".join(str(x) for x in (reco.get("dispositifs") or []))
+    if disp:
+        block("Dispositifs existants", disp)
+    block("Mise en œuvre", reco.get("mise_en_oeuvre", ""))
+    conds = reco.get("conditions") or []
+    if conds:
+        ok = [str(lab) for lab, k in conds if k]
+        ko = [str(lab) for lab, k in conds if not k]
+        txt = ""
+        if ok:
+            txt += f'<font color="#{_hex(VERT_FAV)}">Conditions remplies :</font> ' + esc(" ; ".join(ok)) + ". "
+        if ko:
+            txt += f'<font color="#{_hex(GRIS_SEC)}">Non remplies :</font> ' + esc(" ; ".join(ko)) + "."
+        parts.append(Paragraph(txt, ST_NOTE))
+    return _box(parts, bg=BLANC, left_bar=BLEU_ROYAL, pad=8)
+
+
+def generate_department_pdf(r: pd.Series, master: pd.DataFrame, recos: list[dict], data: dict | None = None) -> bytes:
+    """Rapport territorial départemental (3 à 5 pages)."""
+    buf = io.BytesIO()
+    dept_name = str(r.get("Nom du département", "N/D"))
+    dept_code = str(r.get("dept", "")).zfill(2)
+    region = str(r.get("Nom de la région", "N/D"))
+    zone = str(r.get("zone_short", "N/D"))
+    score = _f(r.get("score_global"))
+    nb_dims = _f(r.get("nb_dimensions_ok"))
+    total = int(master["score_global"].notna().sum())
+    rang = r.get("rang_national")
+    rang_str = fmt_classement_national(rang, total) if rang is not None and pd.notna(rang) else "N/D"
+    zone_col, zone_bg = _zone_color(zone), _zone_soft(zone)
+    med = lambda c: _f(pd.to_numeric(master[c], errors="coerce").median()) if c in master.columns else None
+    lien_fiche = f"{BASE_URL}/?view=dept&dept_code={dept_code}"
+    lien_methodo = f"{BASE_URL}/?view=methodologie"
+    recos = [x for x in (recos or []) if isinstance(x, dict)]
+    maintien = bool(recos) and all(str(x.get("id", "")) == "maintien" for x in recos)
+
+    doc = _doc(buf, f"Sant'active · {dept_name} ({dept_code}) · rapport territorial")
+    story: list = []
+
+    # ── PAGE 1 · SYNTHÈSE ────────────────────────────────────────────────────
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"{_esc(dept_name)} <font size='13' color='#{_hex(GRIS_SEC)}'>({dept_code})</font>", ST_H1))
+    pop, dens = _f(r.get("population_num")), _f(r.get("densite"))
+    ident = f"{_esc(region)}"
+    if pop is not None:
+        ident += f" · {_num(pop, 0)} habitants"
+    if dens is not None:
+        ident += f" · {_num(dens, 0)} hab./km² ({_typologie(dens)})"
+    story.append(Paragraph(ident, _s("ident", fontSize=10, textColor=GRIS_TXT)))
+    story.append(Paragraph(f"Rapport territorial · offre et accès aux soins de premier recours · {_date_fr()}", ST_SMALL))
+    story.append(Spacer(1, 10))
+
+    score_cell = [
+        Paragraph(f'<font size="34" color="#{_hex(zone_col)}"><b>{_num(score, 1)}</b></font>'
+                  f'<font size="11" color="#{_hex(GRIS_SEC)}"> /100</font>',
+                  _s("sc", fontName=FONT_B, fontSize=34, leading=38)),
+        Paragraph("Score Sant'active · offre et accès aux soins", _s("scl", fontSize=8.5, textColor=GRIS_TXT)),
+    ]
+    right = [
+        Paragraph(f'<font color="#{_hex(zone_col)}"><b>Zone {_esc(zone.lower())}</b></font> · {_zone_lecture(zone)}',
+                  _s("zb", fontSize=11, leading=14)),
+        Spacer(1, 3),
+        Paragraph(f"Classement : <b>{_esc(rang_str)}</b> sur {total} départements (1er = le mieux placé).", ST_BODY),
+        Paragraph("Le score situe le département parmi les autres sur six indicateurs publics d'offre et d'accès "
+                  "aux soins de premier recours ; ce n'est ni une note de santé, ni une évolution.", ST_SMALL),
+    ]
+    if nb_dims is not None and nb_dims < 6:
+        right.append(Paragraph(f'<font color="#{_hex(ROUGE_CRIT)}">Score calculé sur {int(nb_dims)} dimensions sur 6 '
+                               f'(temps d\'accès INSEE 2025 hors champ) ; les poids manquants sont redistribués.</font>', ST_SMALL))
+    sb = Table([[score_cell, right]], colWidths=[CONTENT_W * 0.36, CONTENT_W * 0.64])
+    sb.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), zone_bg), ("LINEBELOW", (0, 0), (-1, -1), 2.5, zone_col),
+                            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 10),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 10), ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 12)]))
+    story.append(sb)
+    story.append(Spacer(1, 12))
+
+    # Indicateurs clés (4)
+    apl, apl_m = _f(r.get("apl_dept")), med("apl_dept")
+    p15, p15_m = _f(r.get("acces_mg_part_sup_15")), med("acces_mg_part_sup_15")
+    mg, mg_m = _f(r.get("med_gen_pour_100k")), med("med_gen_pour_100k")
+    p65, p65_m = _f(r.get("pct_plus_65")), med("pct_plus_65")
+    part_apl = _f(r.get("part_pop_apl_inf_2_5"))
+
+    def kpi(label, value, ctx, bad: bool | None):
+        col = ROUGE_CRIT if bad else (VERT_FAV if bad is False else BLEU_NUIT)
+        return [Paragraph(_esc(label).upper(), ST_LABEL),
+                Paragraph(f'<font size="17" color="#{_hex(col)}"><b>{value}</b></font>', _s("kv", fontName=FONT_B, fontSize=17, leading=21)),
+                Paragraph(_esc(ctx), ST_NOTE)]
+
+    k = [
+        kpi(f"APL · DREES {APL_MILLESIME}", _num(apl, 2) + " c./hab.",
+            f"médiane {_num(apl_m, 2)} · " + (f"{_pct(part_apl, 0)} des habitants sous le repère 2,5" if part_apl is not None else ""),
+            None if apl is None or apl_m is None else apl < apl_m),
+        (kpi("Habitants à plus de 15 min · INSEE 2025", _pct(p15), f"médiane des départements {_pct(p15_m)}",
+             None if p15 is None or p15_m is None else p15 > p15_m)
+         if p15 is not None else
+         kpi("Temps d'accès (indicateur interne)", _num(r.get("temps_acces_interne_median"), 0) + " min",
+             "INSEE 2025 hors champ pour ce territoire", None)),
+        kpi("Généralistes /100 000 hab. · RPPS 2026", _num(mg, 0), f"médiane {_num(mg_m, 0)}",
+            None if mg is None or mg_m is None else mg < mg_m * 0.9),
+        kpi("65 ans et plus · INSEE 2021", _num(p65) + NBSP + "%", f"médiane {_num(p65_m)} %",
+            None if p65 is None or p65_m is None else p65 > p65_m + 2),
+    ]
+    kt = Table([k], colWidths=[CONTENT_W / 4] * 4)
+    kt.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORD), ("INNERGRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 8),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 8), ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
+    story.append(kt)
+    story.append(Spacer(1, 12))
+
+    # Trois constats
+    _heading("Trois constats", story)
+    for s, vig in _constats(r, master):
+        tag = (f'<font color="#{_hex(ROUGE_CRIT)}"><b>Vigilance</b></font>' if vig
+               else f'<font color="#{_hex(VERT_FAV)}"><b>Point d\'appui</b></font>')
+        story.append(Paragraph(f"{tag} — {_esc(s)}", ST_BODY))
+        story.append(Spacer(1, 4))
+
+    # Priorités d'action
+    _heading("Priorités d'action", story, "Leviers retenus par les règles du catalogue Sant'active ; détail en page 3.")
+    if maintien or not recos:
+        story.append(Paragraph("Aucun levier du catalogue n'est déclenché par les indicateurs observés : veille et maintien "
+                               "de l'offre existante, surveillance des départs de généralistes.", ST_BODY))
+    else:
+        for i, reco in enumerate(recos[:4], 1):
+            pub = str(reco.get("public", "") or "").strip()
+            story.append(Paragraph(f"<b>{i}. {_esc(reco.get('title', ''))}</b>" + (f" — public : {_esc(pub)}" if pub else ""), ST_BODY))
+            story.append(Spacer(1, 2))
+    story.append(Spacer(1, 8))
+    story.append(_box([Paragraph(f"<b>Fiche en ligne</b> (carte, communes prioritaires, comparaison, simulateur) : {_link(lien_fiche)}", ST_SMALL)],
+                      bg=BLEU_PALE, border=BLEU_PALE))
+
+    # ── PAGE 2 · DIAGNOSTIC ──────────────────────────────────────────────────
+    story.append(PageBreak())
+    _heading("Diagnostic · les six dimensions du score", story,
+             "Position du département sur chaque indicateur : 0 = le moins bien placé, 100 = le mieux placé, 50 = médiane (repère vertical).")
+    rows = [[_th("Dimension"), _th("Valeur"), _th("Médiane nat.", TA_CENTER), _th("Position /100", TA_CENTER), _th("Poids", TA_CENTER)]]
+    for key, cfg in DIMENSIONS.items():
+        label, fmt, src = _DIM_META[key]
+        sc = _f(r.get(f"score_{key}"))
+        raw = _f(r.get(cfg["col"]))
+        m = med(cfg["col"])
+        col = ROUGE_CRIT if (sc is not None and sc < 33.3) else (AMBRE if (sc is not None and sc < 66.7) else VERT_FAV)
+        rows.append([
+            _td(f"<b>{_esc(label)}</b><br/><font size='7' color='#{_hex(GRIS_SEC)}'>{_esc(src)}</font>"),
+            _td(fmt(raw) if raw is not None else "N/D", bold=True),
+            _td(fmt(m) if m is not None else "N/D", TA_CENTER, color=GRIS_TXT),
+            [_bar(sc, col), Paragraph(_num(sc, 0) if sc is not None else "non disponible", _s("bv", fontSize=7.5, leading=9, alignment=TA_CENTER, textColor=GRIS_TXT))],
+            _td(f"{int(round(cfg['weight'] * 100))} %", TA_CENTER),
+        ])
+    story.append(_table(rows, [CONTENT_W * 0.32, CONTENT_W * 0.17, CONTENT_W * 0.14, CONTENT_W * 0.27, CONTENT_W * 0.10]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("Les dimensions temps d'accès, 65 ans et plus et prix immobilier sont lues en sens inverse : une "
+                           "valeur plus faible donne une meilleure position.", ST_NOTE))
+
+    # Accès, offre, besoins : comparaison détaillée
+    _heading("Accès, offre et besoins · comparaison nationale", story)
+    t_med, t_med_m = _f(r.get("temps_acces_median")), med("temps_acces_median")
+    n15 = _f(r.get("acces_mg_pop_sup_15")); nc15 = _f(r.get("acces_mg_nb_communes_sup_15"))
+    comp = [[_th("Indicateur"), _th("Ce département", TA_CENTER), _th("Médiane des départements", TA_CENTER), _th("Lecture")]]
+
+    def crow(label, v, m, lecture, src):
+        comp.append([_td(f"{_esc(label)}<br/><font size='7' color='#{_hex(GRIS_SEC)}'>{_esc(src)}</font>"),
+                     _td(v, TA_CENTER, bold=True), _td(m, TA_CENTER, color=GRIS_TXT), _td(_esc(lecture), size=7.5, color=GRIS_TXT)])
+
+    crow("APL (consultations/hab./an)", _num(apl, 2), _num(apl_m, 2), "repère de sous-densité : 2,5", f"DREES {APL_MILLESIME}")
+    crow("Habitants sous le repère APL 2,5", _pct(part_apl, 0), _pct(med("part_pop_apl_inf_2_5"), 0),
+         (f"{_num(part_apl * pop, 0)} personnes" if part_apl > 0 else "aucune commune sous le repère") if part_apl is not None and pop else "", f"DREES {APL_MILLESIME}")
+    if p15 is not None:
+        crow("Temps médian vers un généraliste", _num(t_med, 0) + " min", _num(t_med_m, 0) + " min", "médiane pondérée par la population", "INSEE 2025")
+        crow("Habitants à plus de 15 min", _pct(p15), _pct(p15_m),
+             (f"{_num(n15, 0)} personnes" if n15 is not None else "") + (f" · {_num(nc15, 0)} communes" if nc15 else ""), "INSEE 2025")
+    else:
+        crow("Temps médian (indicateur interne)", _num(r.get("temps_acces_interne_median"), 0) + " min",
+             _num(med("temps_acces_interne_median"), 0) + " min", "INSEE 2025 hors champ : indicateur interne de repli", "interne")
+    crow("Généralistes pour 100 000 hab.", _num(mg, 0), _num(mg_m, 0), "personnes en activité, tous modes d'exercice", "RPPS 2026")
+    crow("Sites hospitaliers pour 100 000 hab.", _num(r.get("structures_pour_100k"), 1), _num(med("structures_pour_100k"), 1),
+         "CH, CHR, SSR privés ; sites, pas capacités", "FINESS 2026")
+    crow("Part des 65 ans et plus", _num(p65) + NBSP + "%", _num(p65_m) + NBSP + "%", "pression sur la demande de soins", "INSEE RP 2021")
+    crow("Prix médian au m²", _num(r.get("prix_m2_moyen"), 0) + " €", _num(med("prix_m2_moyen"), 0) + " €", "contexte d'installation (5 % du score)", "DVF 2025")
+    story.append(_table(comp, [CONTENT_W * 0.34, CONTENT_W * 0.17, CONTENT_W * 0.21, CONTENT_W * 0.28]))
+
+    # ── PAGE 3 · RECOMMANDATIONS ─────────────────────────────────────────────
+    story.append(PageBreak())
+    _heading("Recommandations opérationnelles", story,
+             "Leviers issus d'un catalogue de dispositifs existants, retenus par des règles explicites sur les indicateurs "
+             "observés (au plus quatre, deux par famille). Pistes à instruire avec les acteurs locaux, pas des prescriptions.")
+    if maintien or not recos:
+        story.append(_box([Paragraph("<b>Maintien et veille.</b> Aucun levier du catalogue n'est déclenché : les conditions "
+                                     "obligatoires (part d'habitants éloignés, sous-densité, besoins spécifiques) ne sont pas réunies. "
+                                     "Recommandation : suivre les départs de généralistes et l'APL communal, et réexaminer à la "
+                                     "prochaine mise à jour des données.", ST_BODY)], left_bar=VERT_FAV, bg=BLANC))
+    else:
+        for i, reco in enumerate(recos[:4], 1):
+            story.append(KeepTogether(_reco_card(i, reco, r, data)))
+            story.append(Spacer(1, 8))
+
+    # ── PAGE 4 · APPROFONDISSEMENT (si disponible) ───────────────────────────
+    deep: list = []
     try:
         from .simulation_capacite import simuler
         sim = simuler(dept_code)
     except Exception:
         sim = None
-    if sim:
-        _section_heading("Renforcement théorique de capacité médicale (simulation)", story)
+    if sim and _f(sim.get("deficit_2,5")) is not None and float(sim["deficit_2,5"]) <= 0:
+        deep.append(Paragraph("Capacité théorique en équivalents temps plein (ETP)", ST_H3))
+        deep.append(Spacer(1, 3))
+        deep.append(Paragraph(f"APL moyen pondéré : <b>{_num(sim['apl_moyen_pondere'], 2)}</b> consultations par an et par habitant ; "
+                              "aucune commune sous le repère 2,5 : pas de déficit théorique de capacité à combler "
+                              f"(source : DREES, APL {APL_MILLESIME}).", ST_BODY))
+        deep.append(Spacer(1, 10))
+    elif sim:
         lo, mid, hi = sim["etp_2,5"]
-        txt = (
-            f'APL moyen pondéré (méthode DREES) : <b>{sim["apl_moyen_pondere"]:.2f}</b> consult./an/hab. · '
-            f'population vivant sous le repère 2,5 : <b>{sim["part_pop_apl_inf_2_5"]:.0%}</b> '
-            f'({sim["nb_communes_inf_2_5"]} communes sur {sim["nb_communes"]}). Pour amener chaque commune '
-            f'sous le seuil 2,5 au niveau du seuil, il manquerait environ {sim["deficit_2,5"]:,.0f} '
-            f'consultations accessibles par an, soit <b>environ {mid:.0f} ETP</b> (équivalents temps plein ; fourchette {lo:.0f} à {hi:.0f} ETP '
-            f'pour 6 000 à 3 600 actes/an ; 1 ETP = 5 400 actes, convention DREES).'
-        ).replace(",", "\u202f")
-        story.append(Paragraph(f'<font size="9">{txt}</font>', _s("sim", fontSize=9, textColor=NOIR, leading=13)))
-        story.append(Paragraph(
-            '<i><font size="8" color="#666666">Simulation statique, pas un effectif officiel de '
-            'médecins manquants : offre existante supposée inchangée, déficit calculé commune par '
-            'commune (effets de voisinage ignorés, tendance à surestimer), ETP différents des médecins '
-            f'physiques. Source : DREES, APL aux médecins généralistes {APL_MILLESIME}.</font></i>',
-            _s("simn", fontSize=8, textColor=colors.HexColor("#666666"), leading=11),
-        ))
-        story.append(Spacer(1, 14))
-
-    # ── ⑤ DÉLAIS DE RDV ESTIMÉS ──────────────────────────────────────────────
+        deep.append(Paragraph("Capacité théorique en équivalents temps plein (ETP)", ST_H3))
+        deep.append(Spacer(1, 3))
+        deep.append(Paragraph(
+            f"APL moyen pondéré : <b>{_num(sim['apl_moyen_pondere'], 2)}</b> consultations par an et par habitant ; "
+            f"<b>{_pct(sim['part_pop_apl_inf_2_5'], 0)}</b> de la population vit sous le repère 2,5 "
+            f"({_num(sim['nb_communes_inf_2_5'], 0)} communes sur {_num(sim['nb_communes'], 0)}). Pour amener chaque commune "
+            f"sous le seuil au niveau du seuil, il manquerait environ <b>{_num(sim['deficit_2,5'], 0)}</b> consultations accessibles "
+            f"par an, soit <b>environ {_num(mid, 0)} ETP</b> de médecine générale (fourchette {_num(lo, 0)} à {_num(hi, 0)} ETP "
+            f"pour 6 000 à 3 600 actes par an ; convention : 1 ETP = 5 400 actes).", ST_BODY))
+        deep.append(Spacer(1, 3))
+        deep.append(Paragraph("Estimation statique, pas un effectif officiel de médecins manquants : offre existante supposée "
+                              "inchangée, déficit calculé commune par commune (effets de voisinage ignorés, tendance à surestimer), "
+                              f"ETP différents des médecins physiques. Source : DREES, APL {APL_MILLESIME}.", ST_NOTE))
+        deep.append(Spacer(1, 10))
     try:
         from .components.delais import compute_delais_proxy
-        apl_val = float(apl) if apl is not None and not pd.isna(apl) else None
-        if apl_val:
-            apl_nat_ref = float(pd.to_numeric(master["apl_dept"], errors="coerce").median())
-            delais_df = compute_delais_proxy(dept_code, apl_val, apl_nat_ref)
-            if not delais_df.empty and "delai_estime_jours" in delais_df.columns:
-                _section_heading("Délais de rendez-vous estimés", story)
-
-                story.append(Paragraph(
-                    f'<i><font size="8" color="#666666">Estimation proxy : délai national DREES '
-                    f'× (APL national {apl_nat_ref:.2f} / APL département {apl_val:.2f}). '
-                    f'Facteur plafonné à 3,0 pour éviter les aberrations.</font></i>',
-                    _s("dmeta", fontSize=8, textColor=colors.HexColor("#666666"),
-                       fontName="Helvetica", leading=11),
-                ))
-                story.append(Spacer(1, 6))
-
-                d_rows = [[
-                    Paragraph('<b><font size="9" color="white">Spécialité</font></b>',
-                              _s("dh0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-                    Paragraph('<b><font size="9" color="white">Nat. (j)</font></b>',
-                              _s("dh1", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                                 fontName="Helvetica-Bold")),
-                    Paragraph('<b><font size="9" color="white">Estimé (j)</font></b>',
-                              _s("dh2", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                                 fontName="Helvetica-Bold")),
-                    Paragraph('<b><font size="9" color="white">Interprétation</font></b>',
-                              _s("dh3", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-                ]]
-                for _, drow in delais_df.iterrows():
-                    nat_j  = int(drow.get("delai_median_jours", 0))
-                    est_j  = int(drow.get("delai_estime_jours", 0))
-                    interp = str(drow.get("interpretation", ""))
-                    diff   = est_j - nat_j
+        if apl is not None and apl_m:
+            ddf = compute_delais_proxy(dept_code, apl, apl_m)
+            if ddf is not None and not ddf.empty and "delai_estime_jours" in ddf.columns:
+                deep.append(Paragraph("Délais de rendez-vous · estimation indicative", ST_H3))
+                deep.append(Spacer(1, 3))
+                deep.append(Paragraph(
+                    "Aucune source publique ne mesure les délais par département. Les valeurs ci-dessous partent des délais "
+                    "nationaux observés par la DREES en <b>2016-2017</b> et les ajustent par le rapport entre l'APL de référence "
+                    f"({_num(apl_m, 2)}) et l'APL du département ({_num(apl, 2)}), plafonné à ×3. <b>Ce ne sont pas des délais "
+                    "actuels observés</b> : l'estimation sert à comparer des territoires, pas à annoncer un délai en 2026.", ST_SMALL))
+                deep.append(Spacer(1, 5))
+                drows = [[_th("Spécialité"), _th("Délai national 2016-2017", TA_CENTER), _th("Estimation ajustée", TA_CENTER), _th("Lecture")]]
+                for _, d in ddf.iterrows():
+                    nat_j, est_j = int(d.get("delai_median_jours", 0)), int(d.get("delai_estime_jours", 0))
+                    diff = est_j - nat_j
                     vc = ROUGE_CRIT if diff > 3 else (VERT_FAV if diff < -3 else AMBRE)
-                    d_rows.append([
-                        Paragraph(f'<font size="9">{drow.get("specialite", "")}</font>',
-                                  _s(f"dc_{nat_j}", fontSize=9, textColor=NOIR)),
-                        Paragraph(f'<font size="9">{nat_j}\u202fj</font>',
-                                  _s(f"dn_{nat_j}", fontSize=9, alignment=TA_CENTER, textColor=GRIS_TXT)),
-                        Paragraph(f'<b><font size="9" color="#{_hex(vc)}">{est_j}\u202fj</font></b>',
-                                  _s(f"de_{est_j}", fontSize=9, alignment=TA_CENTER,
-                                     textColor=vc, fontName="Helvetica-Bold")),
-                        Paragraph(f'<font size="8" color="#666666">{interp}</font>',
-                                  _s(f"di_{nat_j}", fontSize=8, textColor=colors.HexColor("#666666"))),
-                    ])
-
-                d_tbl = Table(
-                    d_rows,
-                    colWidths=[CONTENT_W * 0.35, CONTENT_W * 0.14, CONTENT_W * 0.17, CONTENT_W * 0.34],
-                )
-                d_tbl.setStyle(TableStyle([
-                    ("BACKGROUND",    (0, 0), (-1, 0), BLEU_NUIT),
-                    ("ROWBACKGROUNDS",(0, 1), (-1, -1), [BLANC, GRIS_CLAIR]),
-                    ("GRID",          (0, 0), (-1, -1), 0.4, GRIS_BORD),
-                    ("TOPPADDING",    (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                    ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-                    ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-                ]))
-                story.append(d_tbl)
-                story.append(Spacer(1, 18))
+                    drows.append([_td(_esc(d.get("specialite", ""))), _td(f"{nat_j} j", TA_CENTER, color=GRIS_TXT),
+                                  _td(f"{est_j} j", TA_CENTER, bold=True, color=vc), _td(_esc(d.get("interpretation", "")), size=7.5, color=GRIS_TXT)])
+                deep.append(_table(drows, [CONTENT_W * 0.30, CONTENT_W * 0.20, CONTENT_W * 0.18, CONTENT_W * 0.32]))
     except Exception:
         pass
-
-    # ── ⑥ PATHOLOGIES PRIORITAIRES ────────────────────────────────────────────
-    if data and "patho" in data:
+    # Pathologies (prévalence brute) en approfondissement
+    if data and isinstance(data.get("patho"), pd.DataFrame):
         try:
             from .config import PATHOS_EXCLUDED
-            patho_df = data["patho"]
-            if not patho_df.empty and "_error" not in patho_df.columns:
-                dp = patho_df[patho_df["dept"] == dept_code].copy()
-                dp = dp[~dp["patho_niv1"].isin(PATHOS_EXCLUDED)]
-                if not dp.empty and "patho_niv1" in dp.columns:
-                    dg = (
-                        dp.groupby("patho_niv1")[["Ntop", "Npop"]]
-                        .sum(min_count=1)
-                        .reset_index()
-                    )
-                    dg["prev"] = (dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100).round(2)
+            pdf_ = data["patho"]
+            if not pdf_.empty and "_error" not in pdf_.columns:
+                dp = pdf_[(pdf_["dept"] == dept_code) & (~pdf_["patho_niv1"].isin(PATHOS_EXCLUDED))]
+                if not dp.empty:
+                    dg = dp.groupby("patho_niv1")[["Ntop", "Npop"]].sum(min_count=1).reset_index()
+                    dg["prev"] = dg["Ntop"] / dg["Npop"].where(dg["Npop"] > 0) * 100
                     top5 = dg.dropna(subset=["prev"]).sort_values("prev", ascending=False).head(5)
                     if not top5.empty:
-                        _section_heading("Pathologies · prévalence brute (non standardisée sur l'âge)", story)
-
-                        p_rows = [[
-                            Paragraph('<b><font size="9" color="white">Pathologie</font></b>',
-                                      _s("ph0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-                            Paragraph('<b><font size="9" color="white">Prévalence</font></b>',
-                                      _s("ph1", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                                         fontName="Helvetica-Bold")),
-                            Paragraph('<b><font size="9" color="white">Patients</font></b>',
-                                      _s("ph2", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                                         fontName="Helvetica-Bold")),
-                            Paragraph('<b><font size="9" color="white">Relatif (top 5)</font></b>',
-                                      _s("ph3", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                                         fontName="Helvetica-Bold")),
-                        ]]
-                        for rank_i, (_, prow) in enumerate(top5.iterrows(), 1):
-                            ntop_s = f"{int(prow['Ntop']):,}".replace(",", "\u202f")
-                            bar_w  = int(float(prow["prev"]) / float(top5["prev"].max()) * 10)
-                            bar    = "█" * bar_w + "░" * (10 - bar_w)
-                            p_rows.append([
-                                Paragraph(
-                                    f'<font size="9">{str(prow["patho_niv1"])[:55]}</font>',
-                                    _s(f"pn{rank_i}", fontSize=9, textColor=NOIR),
-                                ),
-                                Paragraph(
-                                    f'<b><font size="9" color="#{_hex(BLEU_ROYAL)}">'
-                                    f'{prow["prev"]:.2f}\u202f%</font></b>',
-                                    _s(f"pv{rank_i}", fontSize=9, alignment=TA_CENTER,
-                                       textColor=BLEU_ROYAL, fontName="Helvetica-Bold"),
-                                ),
-                                Paragraph(
-                                    f'<font size="9">{ntop_s}</font>',
-                                    _s(f"pp{rank_i}", fontSize=9, alignment=TA_CENTER, textColor=GRIS_TXT),
-                                ),
-                                Paragraph(
-                                    f'<font size="8" color="#{_hex(BLEU_NUIT)}">{bar}</font>',
-                                    _s(f"pb{rank_i}", fontSize=8, alignment=TA_CENTER, textColor=BLEU_NUIT),
-                                ),
-                            ])
-                        p_tbl = Table(
-                            p_rows,
-                            colWidths=[CONTENT_W * 0.48, CONTENT_W * 0.18, CONTENT_W * 0.17, CONTENT_W * 0.17],
-                        )
-                        p_tbl.setStyle(TableStyle([
-                            ("BACKGROUND",    (0, 0), (-1, 0), BLEU_NUIT),
-                            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [BLANC, GRIS_CLAIR]),
-                            ("GRID",          (0, 0), (-1, -1), 0.4, GRIS_BORD),
-                            ("TOPPADDING",    (0, 0), (-1, -1), 7),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-                            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-                            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-                        ]))
-                        story.append(p_tbl)
-                        story.append(Spacer(1, 18))
+                        deep.append(Paragraph("Pathologies les plus fréquentes", ST_H3)); deep.append(Spacer(1, 3)); deep.append(Paragraph(
+                                 "Prévalence brute (part des assurés pris en charge), non standardisée sur l'âge · CNAM 2023.", ST_SMALL)); deep.append(Spacer(1, 5))
+                        prow = [[_th("Pathologie"), _th("Prévalence", TA_CENTER), _th("Patients", TA_CENTER), _th("")]]
+                        mx = float(top5["prev"].max())
+                        for _, p in top5.iterrows():
+                            prow.append([_td(_esc(str(p["patho_niv1"])[:70])), _td(_num(p["prev"], 2) + NBSP + "%", TA_CENTER, bold=True),
+                                         _td(_num(p["Ntop"], 0), TA_CENTER, color=GRIS_TXT), _bar(float(p["prev"]) / mx * 100, BLEU_ROYAL, 36 * mm)])
+                        deep.append(_table(prow, [CONTENT_W * 0.50, CONTENT_W * 0.15, CONTENT_W * 0.15, CONTENT_W * 0.20])); deep.append(Spacer(1, 10))
         except Exception:
             pass
 
-    # ── ⑦ RECOMMANDATIONS ─────────────────────────────────────────────────────
-    if recos:
-        _section_heading("Leviers d'action recommandés", story)
+    if deep:
+        story.append(PageBreak())
+        _heading("Approfondissement", story, "Pathologies observées (CNAM) et calculs Sant'active signalés comme estimations ; ils complètent le diagnostic sans s'y substituer.")
+        story.extend(deep)
 
-        for i, reco in enumerate(recos[:4], 1):
-            stats     = reco.get("stats", [])
+    _sources_pages(story, lien_methodo=lien_methodo, niveau="dept")
 
-            content = [
-                Paragraph(
-                    f'<b><font size="11" color="#{_hex(BLEU_NUIT)}">{reco.get("title", "")}</font></b>',
-                    _s(f"rt{i}", fontName="Helvetica-Bold", fontSize=11,
-                       textColor=BLEU_NUIT, spaceAfter=4),
-                ),
-                Paragraph(
-                    reco.get("prose", ""),
-                    _s(f"rp{i}", fontSize=9, textColor=GRIS_TXT, leading=13),
-                ),
-            ]
-
-            if stats:
-                stat_items = []
-                for val, lbl in stats[:3]:
-                    stat_items.append(Paragraph(
-                        f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">{val}</font></b>'
-                        f'<br/><font size="8" color="#666666">{lbl}</font>',
-                        _s(f"rs{i}{val[:2]}", fontName="Helvetica-Bold", fontSize=14,
-                           textColor=BLEU_NUIT, alignment=TA_CENTER, leading=18),
-                    ))
-                while len(stat_items) < 3:
-                    stat_items.append(Paragraph("", _s("rse", fontSize=8)))
-
-                stat_cw = CONTENT_W - 24
-                st_tbl = Table([stat_items], colWidths=[stat_cw / 3] * 3)
-                st_tbl.setStyle(TableStyle([
-                    ("BACKGROUND",    (0, 0), (-1, -1), GRIS_CLAIR),
-                    ("GRID",          (0, 0), (-1, -1), 0.3, GRIS_BORD),
-                    ("TOPPADDING",    (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                    ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-                    ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-                ]))
-                content.append(Spacer(1, 5))
-                content.append(st_tbl)
-
-            reco_tbl = Table([[content]], colWidths=[CONTENT_W])
-            reco_tbl.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, -1), BLANC),
-                ("TOPPADDING",    (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 12),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
-                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-                ("LINEBELOW",     (0, 0), (-1, -1), 0.5, GRIS_BORD),
-                ("BOX",           (0, 0), (-1, -1), 0.5, GRIS_BORD),
-            ]))
-            story.append(KeepTogether(reco_tbl))
-            story.append(Spacer(1, 6))
-
-        story.append(Paragraph(
-            "Ces recommandations sont générées à partir des caractéristiques du territoire. "
-            "Elles ne constituent pas un ordre de mise en œuvre et doivent être adaptées "
-            "au contexte local, aux moyens disponibles et aux acteurs mobilisables.",
-            _s("reco_meth", fontSize=8, textColor=GRIS_TXT, leading=11, spaceBefore=4),
-        ))
-        story.append(Spacer(1, 12))
-
-    # ── ⑧ TABLEAU COMPARATIF NATIONAL ────────────────────────────────────────
-    _section_heading("Comparaison nationale", story)
-
-    def _ecart(val, ref, higher=True) -> str:
-        try:
-            v, r2 = float(val), float(ref)
-            diff   = v - r2
-            symbol = "▲" if diff > 0 else ("▼" if diff < 0 else "=")
-            good   = (diff > 0) == higher
-            c      = f"#{_hex(VERT_FAV)}" if good else f"#{_hex(ROUGE_CRIT)}"
-            return f'<font color="{c}"><b>{symbol} {abs(diff):.1f}</b></font>'
-        except Exception:
-            return "N/D"
-
-    score_med = master["score_global"].median() if master["score_global"].notna().any() else None
-
-    comp_rows = [[
-        Paragraph('<b><font size="9" color="white">Indicateur</font></b>',
-                  _s("ch0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Ce département</font></b>',
-                  _s("ch1", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                     fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Médiane nationale</font></b>',
-                  _s("ch2", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                     fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Écart</font></b>',
-                  _s("ch3", fontSize=9, alignment=TA_CENTER, textColor=BLANC,
-                     fontName="Helvetica-Bold")),
-    ]]
-
-    for ind, dept_v, nat_v, higher in [
-        ("APL médecins gén.",      _fmt(apl, "{:.2f}"),    _fmt(apl_nat, "{:.2f}"),    True),
-        ("Temps d'accès (min)",    _fmt(temps, "{:.0f}"),   _fmt(temp_nat, "{:.0f}"),   False),
-        ("Médecins gén. / 100k",   _fmt(med_gen, "{:.0f}"), _fmt(med_nat, "{:.0f}"),    True),
-        ("Score global / 100",     _fmt(score, "{:.1f}"),   _fmt(score_med, "{:.1f}"),  True),
-    ]:
-        try:
-            ecart_str = _ecart(dept_v, nat_v, higher)
-        except Exception:
-            ecart_str = "N/D"
-        comp_rows.append([
-            Paragraph(f'<font size="9">{ind}</font>',    _s(f"ci{ind[:3]}", fontSize=9, textColor=NOIR)),
-            Paragraph(f'<b><font size="9">{dept_v}</font></b>',
-                      _s(f"cv{ind[:3]}", fontName="Helvetica-Bold", fontSize=9, alignment=TA_CENTER)),
-            Paragraph(f'<font size="9">{nat_v}</font>', _s(f"cn{ind[:3]}", fontSize=9,
-                                                            alignment=TA_CENTER, textColor=GRIS_TXT)),
-            Paragraph(ecart_str,                        _s(f"ce{ind[:3]}", fontSize=9, alignment=TA_CENTER)),
-        ])
-
-    c_tbl = Table(comp_rows, colWidths=[CONTENT_W * 0.40, CONTENT_W * 0.20,
-                                        CONTENT_W * 0.20, CONTENT_W * 0.20])
-    c_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), BLEU_NUIT),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [BLANC, GRIS_CLAIR]),
-        ("GRID",          (0, 0), (-1, -1), 0.4, GRIS_BORD),
-        ("TOPPADDING",    (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    story.append(c_tbl)
-    story.append(Spacer(1, 24))
-
-    # ── BUILD ─────────────────────────────────────────────────────────────────
-    cb = _page_cb(dept_name)
-    doc.build(story, onFirstPage=cb, onLaterPages=cb)
+    doc.build(story, onFirstPage=_page_cb(f"{dept_name} ({dept_code})", _SOURCES_LINE),
+              onLaterPages=_page_cb(f"{dept_name} ({dept_code})", _SOURCES_LINE), canvasmaker=_NumberedCanvas)
     return buf.getvalue()
 
 
-def generate_region_pdf(
-    region_name: str,
-    region_code: str,
-    region_depts: pd.DataFrame,
-    summary: dict,
-    priorities: pd.DataFrame,
-    leviers: list[dict],
-) -> bytes:
-    """Génère un rapport PDF synthétique pour une fiche région."""
+# ═════════════════════════════════════════════════════════════════════════════
+# RAPPORT RÉGIONAL
+# ═════════════════════════════════════════════════════════════════════════════
+def generate_region_pdf(region_name: str, region_code: str, region_depts: pd.DataFrame, summary: dict,
+                        priorities: pd.DataFrame, leviers: list[dict], master: pd.DataFrame | None = None) -> bytes:
+    """Rapport territorial régional (3 à 4 pages) : synthèse, tableau des départements, leviers, sources."""
     buf = io.BytesIO()
-    nb_depts = len(region_depts)
-    nb_crit  = int((region_depts["zone_short"] == "Critique").sum())
-    pop_tot  = region_depts["population_num"].sum()
-    apl_med  = region_depts["apl_dept"].median()
+    rd = region_depts.copy()
+    num = lambda c: pd.to_numeric(rd[c], errors="coerce") if c in rd.columns else pd.Series(dtype=float)
+    nb = len(rd)
+    nb_crit = int((rd["zone_short"] == "Critique").sum()) if "zone_short" in rd.columns else 0
+    pop = num("population_num"); apl = num("apl_dept"); part_apl = num("part_pop_apl_inf_2_5")
+    pop_tot = float(pop.sum()) if len(pop) else None
+    pop_sous = float((part_apl * pop).sum()) if len(pop) else None
+    part_sous = pop_sous / pop_tot if pop_tot else None
+    pop15 = float(num("acces_mg_pop_sup_15").sum()); popins = float(num("acces_mg_pop").sum())
+    part15 = pop15 / popins if popins > 0 else None
+    sc = num("score_global")
+    nat = master if isinstance(master, pd.DataFrame) and not master.empty else None
+    natm = lambda c: _f(pd.to_numeric(nat[c], errors="coerce").median()) if nat is not None and c in nat.columns else None
+    part_sous_nat = (float((pd.to_numeric(nat["part_pop_apl_inf_2_5"], errors="coerce") * pd.to_numeric(nat["population_num"], errors="coerce")).sum()
+                           / pd.to_numeric(nat["population_num"], errors="coerce").sum()) if nat is not None else None)
+    lien_fiche = f"{BASE_URL}/?view=region&region_code={region_code}"
+    lien_methodo = f"{BASE_URL}/?view=methodologie"
+    prio = priorities.copy() if isinstance(priorities, pd.DataFrame) else pd.DataFrame()
+    if "priorite_rang" in prio.columns:
+        prio = prio.sort_values("priorite_rang")
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN + 4 * mm,
-        bottomMargin=18 * mm,
-        title=f"Sant'active · {region_name}",
-        author="Sant'active",
-    )
+    doc = _doc(buf, f"Sant'active · {region_name} · rapport régional")
     story: list = []
 
-    # Couverture
-    cov = Table([[
-        Paragraph(
-            '<font color="white" size="9"><b>SANT\'ACTIVE</b></font>'
-            '<font color="white" size="8">  ·  Pilotage régional ARS</font>',
-            _s("cov_l", fontName="Helvetica-Bold", fontSize=9, textColor=BLANC),
-        ),
-        Paragraph(
-            f'<font color="white" size="8">Rapport · {_date_fr()}</font>',
-            _s("cov_r", fontSize=8, alignment=TA_RIGHT, textColor=BLANC),
-        ),
-    ]], colWidths=[CONTENT_W * 0.65, CONTENT_W * 0.35])
-    cov.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), BLEU_NUIT),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING", (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-    ]))
-    story.append(cov)
-    story.append(Spacer(1, 16))
-    story.append(Paragraph(
-        f'<b><font size="28" color="#{_hex(BLEU_NUIT)}">{region_name}</font></b>',
-        _s("rg_title", fontName="Helvetica-Bold", fontSize=28, textColor=BLEU_NUIT, leading=32),
-    ))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(
-        f'<font size="11" color="#666666">Code région {region_code} · '
-        f'{nb_depts} département{"s" if nb_depts > 1 else ""}</font>',
-        _s("rg_sub", fontSize=11, textColor=GRIS_TXT),
-    ))
-    story.append(Spacer(1, 18))
+    # ── PAGE 1 · SYNTHÈSE ────────────────────────────────────────────────────
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(_esc(region_name), ST_H1))
+    story.append(Paragraph(f"Région {region_code} · {nb} département{'s' if nb > 1 else ''}"
+                           + (f" · {_num(pop_tot, 0)} habitants" if pop_tot else ""), _s("ident", fontSize=10, textColor=GRIS_TXT)))
+    story.append(Paragraph(f"Rapport territorial · disparités d'accès aux soins et départements à examiner · {_date_fr()}", ST_SMALL))
+    story.append(Spacer(1, 10))
 
-    # KPIs région
-    _section_heading("Synthèse régionale", story)
-    kpi_data = [
-        ("Départements", str(nb_depts)),
-        ("Zone critique", str(nb_crit)),
-        ("Population", _fmt(pop_tot, "{:,.0f}").replace(",", "\u202f")),
-        (APL_LABEL_COURT, _fmt(apl_med, "{:.1f}") + " /hab."),
-        ("Tension principale", str(summary.get("tension_principale", "N/D"))),
+    tension = str(summary.get("tension_principale", "") or "")
+    story.append(_box([Paragraph(f"<b>Tension principale :</b> {_esc(tension)}", _s("tp", fontSize=10.5, leading=14))],
+                      bg=BLEU_PALE, border=BLEU_PALE, left_bar=BLEU_ROYAL))
+    story.append(Spacer(1, 10))
+
+    def kpi(label, value, ctx, bad: bool | None):
+        col = ROUGE_CRIT if bad else (VERT_FAV if bad is False else BLEU_NUIT)
+        return [Paragraph(_esc(label).upper(), ST_LABEL),
+                Paragraph(f'<font size="17" color="#{_hex(col)}"><b>{value}</b></font>', _s("kv", fontName=FONT_B, fontSize=17, leading=21)),
+                Paragraph(_esc(ctx), ST_NOTE)]
+
+    k = [
+        kpi("Habitants sous le repère APL 2,5", _num(pop_sous, 0) if pop_sous is not None else "N/D",
+            (f"{_pct(part_sous)} de la population régionale" + (f" · France : {_pct(part_sous_nat)}" if part_sous_nat is not None else "")),
+            None if part_sous is None or part_sous_nat is None else part_sous > part_sous_nat),
+        kpi(f"APL médian · DREES {APL_MILLESIME}", _num(apl.median(), 2) + " c./hab.",
+            f"de {_num(apl.min(), 2)} à {_num(apl.max(), 2)} selon le département" + (f" · médiane nat. {_num(natm('apl_dept'), 2)}" if natm("apl_dept") else ""),
+            None),
+        kpi("Départements en zone critique", f"{nb_crit} / {nb}", "tiers des départements les moins bien placés au score", nb_crit > 0),
+        kpi("Habitants à plus de 15 min · INSEE 2025", _pct(part15) if part15 is not None else "N/D",
+            f"{_num(pop15, 0)} personnes" if part15 is not None else "temps INSEE non disponible", None),
     ]
-    rows = []
-    for i in range(0, len(kpi_data), 2):
-        pair = kpi_data[i:i + 2]
-        row_cells = []
-        for lbl, val in pair:
-            row_cells.append(Paragraph(
-                f'<font size="8" color="#999999">{lbl.upper()}</font><br/>'
-                f'<b><font size="14" color="#{_hex(BLEU_NUIT)}">{val}</font></b>',
-                _s(f"kpi_{lbl[:3]}", fontSize=14, leading=18),
-            ))
-        while len(row_cells) < 2:
-            row_cells.append(Paragraph("", _s("kpi_e", fontSize=8)))
-        rows.append(row_cells)
-    k_tbl = Table(rows, colWidths=[CONTENT_W / 2, CONTENT_W / 2])
-    k_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), GRIS_CLAIR),
-        ("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORD),
-        ("INNERGRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-    ]))
-    story.append(k_tbl)
-    story.append(Spacer(1, 16))
+    kt = Table([k], colWidths=[CONTENT_W / 4] * 4)
+    kt.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, GRIS_BORD), ("INNERGRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
+                            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 8),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 8), ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                            ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
+    story.append(kt)
 
-    # Territoires prioritaires
-    _section_heading("Territoires prioritaires", story)
-    prio_rows = [[
-        Paragraph('<b><font size="9" color="white">Rang</font></b>',
-                  _s("ph0", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Département</font></b>',
-                  _s("ph1", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Score · priorité</font></b>',
-                  _s("ph2", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-        Paragraph('<b><font size="9" color="white">Lecture</font></b>',
-                  _s("ph3", fontSize=9, textColor=BLANC, fontName="Helvetica-Bold")),
-    ]]
-    for _, row in priorities.head(12).iterrows():
-        prio_rows.append([
-            Paragraph(f'<font size="9">{int(row.get("priorite_rang", 0)):02d}</font>',
-                      _s("pr0", fontSize=9, alignment=TA_CENTER)),
-            Paragraph(f'<font size="9">{row.get("Nom du département", "")}</font>',
-                      _s("pr1", fontSize=9)),
-            Paragraph(
-                f'<font size="9">{_fmt(row.get("score_priorite"), "{:.0f}")}/100 · '
-                f'{row.get("priorite", "")}</font>',
-                _s("pr2", fontSize=9),
-            ),
-            Paragraph(
-                f'<font size="8" color="#666666">{str(row.get("lecture_rapide", ""))[:120]}</font>',
-                _s("pr3", fontSize=8, textColor=GRIS_TXT),
-            ),
+    # Constats régionaux
+    _heading("Trois constats", story)
+    constats: list[str] = []
+    if len(apl.dropna()) >= 2:
+        lo, hi = rd.loc[apl.idxmin()], rd.loc[apl.idxmax()]
+        constats.append(f"Disparités d'accessibilité : l'APL va de {_num(apl.min(), 2)} ({_esc(lo['Nom du département'])}) à "
+                        f"{_num(apl.max(), 2)} ({_esc(hi['Nom du département'])}) consultations par habitant et par an ; "
+                        f"scores Sant'active de {_num(sc.min(), 0)} à {_num(sc.max(), 0)} sur 100.")
+    if pop_sous is not None and part_sous is not None:
+        constats.append(f"{_num(pop_sous, 0)} habitants ({_pct(part_sous)}) vivent dans une commune sous le repère de sous-densité 2,5"
+                        + (f", contre {_pct(part_sous_nat)} en France" if part_sous_nat is not None else "") + ".")
+    crit_names = rd.loc[rd["zone_short"] == "Critique", "Nom du département"].tolist() if "zone_short" in rd.columns else []
+    if crit_names:
+        constats.append(f"{len(crit_names)} département{'s' if len(crit_names) > 1 else ''} en zone critique : "
+                        f"{_esc(', '.join(str(x) for x in crit_names))}.")
+    elif part15 is not None:
+        constats.append(f"Aucun département en zone critique ; {_pct(part15)} des habitants sont à plus de 15 minutes d'un généraliste "
+                        f"({_num(pop15, 0)} personnes, INSEE 2025).")
+    for c in constats[:3]:
+        story.append(Paragraph("– " + c, ST_BODY))
+        story.append(Spacer(1, 4))
+
+    # Départements à examiner
+    _heading("Départements à examiner en priorité", story,
+             "Score de priorité (0-100) : moyenne du besoin et du volume de population concernée, hors faisabilité.")
+    if not prio.empty:
+        for _, p in prio.head(3).iterrows():
+            story.append(Paragraph(f"<b>{int(p.get('priorite_rang', 0))}. {_esc(p.get('Nom du département', ''))}</b> · "
+                                   f"score de priorité {_num(p.get('score_priorite'), 0)}/100 · lecture : {_esc(p.get('priorite', ''))}", ST_BODY))
+            lr = str(p.get("lecture_rapide", "") or "")
+            if lr:
+                story.append(Paragraph(_esc(lr[:260]), ST_SMALL))
+            story.append(Spacer(1, 3))
+    story.append(Spacer(1, 6))
+    story.append(_box([Paragraph(f"<b>Fiche régionale en ligne</b> (carte, tableau technique, leviers par département) : {_link(lien_fiche)}", ST_SMALL)],
+                      bg=BLEU_PALE, border=BLEU_PALE))
+
+    # ── PAGE 2 · TABLEAU DES DÉPARTEMENTS ────────────────────────────────────
+    story.append(PageBreak())
+    _heading("Diagnostic · les départements de la région", story,
+             "Score Sant'active (offre et accès aux soins, 1er = le mieux placé) et indicateurs d'accès ; score de priorité et lecture "
+             "« fragilité × impact × faisabilité » (qualification complémentaire, pas un second score).")
+    pcols = {}
+    if not prio.empty and "Nom du département" in prio.columns:
+        for _, p in prio.iterrows():
+            pcols[str(p["Nom du département"])] = p
+    total_nat = int(nat["score_global"].notna().sum()) if nat is not None else None
+    rows = [[_th("Département"), _th("Score", TA_CENTER), _th("Zone", TA_CENTER), _th("APL", TA_CENTER),
+             _th("> 15 min", TA_CENTER), _th("65 ans +", TA_CENTER), _th("Priorité /100", TA_CENTER), _th("Lecture")]]
+    for _, d in rd.sort_values("score_global", na_position="last").iterrows():
+        nom = str(d.get("Nom du département", ""))
+        p = pcols.get(nom)
+        z = str(d.get("zone_short", ""))
+        rang_txt = ""
+        if total_nat and pd.notna(d.get("rang_national")):
+            rang_txt = f"<br/><font size='7' color='#{_hex(GRIS_SEC)}'>{_esc(fmt_classement_national(d.get('rang_national'), total_nat))} sur {total_nat}</font>"
+        rows.append([
+            _td(f"<b>{_esc(nom)}</b> <font size='7' color='#{_hex(GRIS_SEC)}'>({_esc(str(d.get('dept', '')).zfill(2))})</font>{rang_txt}"),
+            _td(_num(d.get("score_global"), 1), TA_CENTER, bold=True),
+            _td(_esc(z), TA_CENTER, color=_zone_color(z), bold=True, size=8),
+            _td(_num(d.get("apl_dept"), 2), TA_CENTER),
+            _td(_pct(d.get("acces_mg_part_sup_15")), TA_CENTER),
+            _td(_num(d.get("pct_plus_65")) + NBSP + "%", TA_CENTER),
+            _td(_num(p.get("score_priorite"), 0) if p is not None else "N/D", TA_CENTER, bold=True),
+            _td(_esc(p.get("priorite", "")) if p is not None else "", size=7.5),
         ])
-    p_tbl = Table(
-        prio_rows,
-        colWidths=[CONTENT_W * 0.08, CONTENT_W * 0.22, CONTENT_W * 0.22, CONTENT_W * 0.48],
-    )
-    p_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), BLEU_NUIT),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [BLANC, GRIS_CLAIR]),
-        ("GRID", (0, 0), (-1, -1), 0.3, GRIS_BORD),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
-    story.append(p_tbl)
-    story.append(Spacer(1, 16))
+    story.append(_table(rows, [CONTENT_W * 0.21, CONTENT_W * 0.08, CONTENT_W * 0.15, CONTENT_W * 0.08,
+                               CONTENT_W * 0.09, CONTENT_W * 0.09, CONTENT_W * 0.10, CONTENT_W * 0.20]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Score : score Sant'active sur 100 et classement national. APL : consultations par habitant et par an (DREES {APL_MILLESIME}). "
+                           "> 15 min : part des habitants à plus de 15 minutes en voiture d'un généraliste (INSEE 2025). "
+                           "Priorité : score de priorité régional (besoin et volume, hors faisabilité). Lecture : qualification croisant "
+                           "fragilité, impact et faisabilité.", ST_NOTE))
 
-    # Leviers
-    if leviers:
-        _section_heading("Leviers d'action recommandés", story)
-        for i, lev in enumerate(leviers[:3], 1):  # mêmes 3 leviers que la page
-            titre = lev.get("intitule", lev.get("titre", lev.get("title", "")))
-            story.append(Paragraph(
-                f'<b><font size="11" color="#{_hex(BLEU_NUIT)}">{titre}</font></b>',
-                _s(f"lv{i}", fontName="Helvetica-Bold", fontSize=11, textColor=BLEU_NUIT, spaceAfter=4),
-            ))
-            desc = (lev.get("pourquoi_maintenant") or lev.get("justification")
-                    or lev.get("description") or lev.get("prose") or "")
-            depts_lev = ", ".join(lev.get("depts") or [])
-            if depts_lev:
-                desc = f"{desc} Départements ciblés : {depts_lev}."
-            if desc:
-                story.append(Paragraph(
-                    str(desc)[:500],
-                    _s(f"lvd{i}", fontSize=9, textColor=GRIS_TXT, leading=13),
-                ))
-            story.append(Spacer(1, 8))
+    # ── LEVIERS (à la suite du tableau) ──────────────────────────────────────
+    story.append(Spacer(1, 6))
+    _heading("Leviers d'action régionaux", story,
+             "Leviers retenus pour les départements de la région par les règles du catalogue ; chaque département a son propre rapport détaillé.")
+    levs = [l for l in (leviers or []) if isinstance(l, dict)]
+    if not levs:
+        story.append(Paragraph("Aucun levier régional déclenché : maintien et veille de l'offre existante.", ST_BODY))
+    for i, lev in enumerate(levs[:6], 1):
+        titre = str(lev.get("intitule") or lev.get("titre") or lev.get("title") or "")
+        parts = [Paragraph(f"<font size='7.5' color='#{_hex(GRIS_SEC)}'>{_esc(str(lev.get('famille', '') or '')).upper()}"
+                           + (f"  ·  {_esc(lev.get('horizon'))}" if lev.get("horizon") else "") + "</font>", ST_LABEL),
+                 Paragraph(f"{i}. {_esc(titre)}", ST_H3), Spacer(1, 4)]
+        depts_lev = [str(x) for x in (lev.get("depts") or [])]
+        if depts_lev:
+            parts.append(Paragraph(f"<font color='#{_hex(BLEU_ROYAL)}'><b>Départements concernés</b></font>  {_esc(', '.join(depts_lev))}", _s("rb", fontSize=8.5, leading=12)))
+            parts.append(Spacer(1, 3))
+        pub = str(lev.get("public_cible") or lev.get("public") or "").strip()
+        if pub:
+            parts.append(Paragraph(f"<font color='#{_hex(BLEU_ROYAL)}'><b>Public</b></font>  {_esc(pub)}", _s("rb", fontSize=8.5, leading=12)))
+            parts.append(Spacer(1, 3))
+        why = str(lev.get("pourquoi_maintenant") or lev.get("justification") or lev.get("description") or "").strip()
+        if why:
+            parts.append(Paragraph(f"<font color='#{_hex(BLEU_ROYAL)}'><b>Pourquoi maintenant</b></font>  {_esc(why[:700])}", _s("rb", fontSize=8.5, leading=12)))
+            parts.append(Spacer(1, 3))
+        disp = ", ".join(str(x) for x in (lev.get("dispositifs") or []))
+        if disp:
+            parts.append(Paragraph(f"<font color='#{_hex(BLEU_ROYAL)}'><b>Dispositifs existants</b></font>  {_esc(disp)}", _s("rb", fontSize=8.5, leading=12)))
+        story.append(KeepTogether(_box(parts, bg=BLANC, left_bar=BLEU_ROYAL, pad=8)))
+        story.append(Spacer(1, 8))
 
-    cb = _page_cb(region_name)
-    doc.build(story, onFirstPage=cb, onLaterPages=cb)
+    _sources_pages(story, lien_methodo=lien_methodo, niveau="region")
+    doc.build(story, onFirstPage=_page_cb(region_name, _SOURCES_LINE), onLaterPages=_page_cb(region_name, _SOURCES_LINE),
+              canvasmaker=_NumberedCanvas)
     return buf.getvalue()

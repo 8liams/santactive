@@ -43,7 +43,7 @@ def render(data: dict) -> None:
         with col_map:
             _render_national_map(master, geojson)
         with col_kpi:
-            _render_national_kpis(master)
+            _render_reperes(master, data)
     if not dom_ref:
         with st.container(key="home_dom"):
             _render_dom_section(master)
@@ -290,6 +290,212 @@ def _render_dom_section(master: pd.DataFrame) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # REPÈRES NATIONAUX
 # ──────────────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REPÈRES SELON LE TERRITOIRE DE TRAVAIL (France, région, département, commune)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _esc(x) -> str:
+    return html.escape(str(x), quote=False)
+
+
+def _kpi_html(label, value, unit, ctx, tip=None, crit=False):
+    t = info_tooltip(tip) if tip else ""
+    return (f'<div class="nat-kpi"><div class="nat-kpi-label">{label} {t}</div>'
+            f'<div class="nat-kpi-value{" crit" if crit else ""}">{value}<small>{unit}</small></div>'
+            f'<div class="nat-kpi-ctx">{ctx}</div></div>')
+
+
+def _fr(v, dec=1):
+    return f"{float(v):.{dec}f}".replace(".", ",")
+
+
+def _ent(v):
+    return f"{int(round(float(v))):,}".replace(",", "\u202f")
+
+
+def _pop_fmt(v):
+    v = float(v)
+    return (_fr(v / 1e6) + "\u202fM") if v >= 1e6 else _ent(v)
+
+
+def _render_reperes(master: pd.DataFrame, data: dict) -> None:
+    """Colonne de repères : d'abord le territoire de travail, les références nationales en comparaison."""
+    from .. import territoire as T
+    t = T.get_exact()
+    if t.kind == "commune":
+        _render_reperes_commune(master, data, t)
+    elif t.kind == "dept":
+        _render_reperes_departement(master, data, t.code)
+    elif t.kind == "region":
+        _render_reperes_region(master, data, t.code)
+    else:
+        _render_reperes_france(master)
+
+
+def _render_reperes_france(master: pd.DataFrame) -> None:
+    """France entière : ce qui pose problème, en croisant accessibilité potentielle, populations exposées,
+    disparités et éloignement (l'éloignement n'est pas le message principal)."""
+    num = lambda c: pd.to_numeric(master[c], errors="coerce") if c in master.columns else pd.Series(dtype=float)
+    pop = num("population_num"); part_apl = num("part_pop_apl_inf_2_5"); apl = num("apl_dept")
+    pop_sous = float((part_apl * pop).sum()); part_sous = pop_sous / float(pop.sum())
+    apl_med = float(apl.median()); nb_sous_25 = int((apl < 2.5).sum())
+    pop_crit = float(pop[master["zone_short"] == "Critique"].sum())
+    pop_ins = float(num("acces_mg_pop").sum()); pop_15 = float(num("acces_mg_pop_sup_15").sum())
+    part_15 = pop_15 / pop_ins if pop_ins > 0 else float("nan")
+    med = num("med_gen_pour_100k")
+    st.markdown(
+        '<div class="kpi-stack-header"><div class="eyebrow">France entière</div>'
+        '<h3>Où l’accès aux soins <em>pose problème</em></h3></div>'
+        '<div class="nat-kpis">'
+        + _kpi_html("Habitants sous le repère APL 2,5", _pop_fmt(pop_sous), " hab.",
+                    f"{_fr(part_sous * 100)}\u202f% de la population dans une commune en sous-densité de généralistes · DREES {APL_SOURCE_LABEL[-4:]}", "apl", crit=True)
+        + _kpi_html("Écart entre départements", f"{_fr(apl.min())} à {_fr(apl.max())}", " consult./hab.",
+                    f"APL le plus faible : {master.loc[apl.idxmin(), 'Nom du département']} · le plus élevé : {master.loc[apl.idxmax(), 'Nom du département']} · médiane {_fr(apl_med)}", "apl")
+        + _kpi_html("Départements en zone critique", f"{int((master['zone_short'] == 'Critique').sum())}", "",
+                    f"{_pop_fmt(pop_crit)} habitants · tiers des départements les moins bien placés au score ; {nb_sous_25} départements sous APL 2,5", "zone")
+        + _kpi_html("Généralistes", f"{_ent(med.median())}", " /100k hab.",
+                    f"densité médiane · de {_ent(med.min())} à {_ent(med.max())} selon le département · RPPS 2026", "med_100k")
+        + _kpi_html("À plus de 15 min d’un généraliste", (_fr(part_15 * 100) + "\u202f%") if pd.notna(part_15) else "N/D", "",
+                    f"{_pop_fmt(pop_15)} habitants · l’éloignement reste rare ; les difficultés d’accès tiennent surtout à la capacité (APL) · INSEE 2025", "temps_acces")
+        + '</div>'
+        '<div class="nat-method">Le score Sant’active classe les départements sur l’offre et l’accès aux soins de premier recours '
+        '(APL 30\u202f%, temps d’accès 20\u202f%, généralistes 20\u202f%, structures 15\u202f%, 65 ans et plus 10\u202f%, foncier 5\u202f%). '
+        'Les zones sont des terciles de ce classement : elles situent un département, elles ne mesurent pas une évolution. '
+        f'<a href="{internal_href("methodologie")}" target="_self">Méthodologie →</a></div>',
+        unsafe_allow_html=True)
+
+
+def _render_reperes_region(master: pd.DataFrame, data: dict, code: str) -> None:
+    from .. import territoire as T
+    reg = master[master["Code région"].astype(str) == str(code)]
+    if reg.empty:
+        _render_reperes_france(master); return
+    nom = str(reg.iloc[0]["Nom de la région"])
+    num = lambda c: pd.to_numeric(reg[c], errors="coerce") if c in reg.columns else pd.Series(dtype=float)
+    numn = lambda c: pd.to_numeric(master[c], errors="coerce")
+    pop = num("population_num"); part_apl = num("part_pop_apl_inf_2_5"); apl = num("apl_dept"); sc = num("score_global")
+    pop_sous = float((part_apl * pop).sum()); part_sous = pop_sous / float(pop.sum()) if pop.sum() > 0 else float("nan")
+    part_sous_nat = float((numn("part_pop_apl_inf_2_5") * numn("population_num")).sum() / numn("population_num").sum())
+    crit = reg[reg["zone_short"] == "Critique"].sort_values("score_global")
+    pop15 = float(num("acces_mg_pop_sup_15").sum()); popins = float(num("acces_mg_pop").sum())
+    part15 = pop15 / popins if popins > 0 else float("nan"); part15_nat = float(numn("acces_mg_pop_sup_15").sum() / numn("acces_mg_pop").sum())
+    try:
+        from ..indices import calculer_indices
+        ind = calculer_indices(master, data.get("patho"))
+        prio = [str(master.set_index("dept").loc[d, "Nom du département"]) for d in reg["dept"].astype(str) if ind.loc[d, "quadrant"] == "A"]
+    except Exception:
+        prio = []
+    lo = reg.loc[apl.idxmin()]; hi = reg.loc[apl.idxmax()]
+    st.markdown(
+        f'<div class="kpi-stack-header"><div class="eyebrow">{_esc(nom)}</div>'
+        '<h3>Ce qui pose problème <em>dans la région</em></h3></div>'
+        '<div class="nat-kpis">'
+        + _kpi_html("Habitants sous le repère APL 2,5", _pop_fmt(pop_sous), " hab.",
+                    f"{_fr(part_sous * 100)}\u202f% de la population régionale (France : {_fr(part_sous_nat * 100)}\u202f%) · DREES", "apl", crit=part_sous > part_sous_nat)
+        + _kpi_html("Disparités entre départements", f"{_fr(apl.min())} à {_fr(apl.max())}", " consult./hab.",
+                    f"APL de {_esc(str(lo['Nom du département']))} à {_esc(str(hi['Nom du département']))} · scores de {_fr(sc.min(), 0)} à {_fr(sc.max(), 0)} sur 100", "apl")
+        + _kpi_html("Départements en zone critique", f"{len(crit)}", f" sur {len(reg)}",
+                    (", ".join(_esc(str(x)) for x in crit["Nom du département"].head(4)) if len(crit) else "aucun · tiers des départements les moins bien placés au score"), "zone", crit=len(crit) > 0)
+        + _kpi_html("À examiner en priorité", f"{len(prio)}", f" sur {len(reg)}",
+                    (", ".join(_esc(x) for x in prio[:4]) + " · offre sous la médiane nationale et besoins au-dessus") if prio else "aucun département en quadrant « offre faible, besoins forts »")
+        + _kpi_html("À plus de 15 min d’un généraliste", (_fr(part15 * 100) + "\u202f%") if pd.notna(part15) else "N/D", "",
+                    f"{_pop_fmt(pop15)} habitants (France : {_fr(part15_nat * 100)}\u202f%) · INSEE 2025" if pd.notna(part15) else "temps INSEE non disponible", "temps_acces")
+        + '</div>'
+        f'<div class="nat-method">Références nationales en comparaison. Diagnostic détaillé, départements prioritaires et leviers : '
+        f'<a href="{internal_href("region", region_code=str(code))}" target="_self">fiche {_esc(nom)} →</a> · '
+        f'<a href="{internal_href("exploration")}" target="_self">Prioriser →</a></div>',
+        unsafe_allow_html=True)
+
+
+def _render_reperes_departement(master: pd.DataFrame, data: dict, code: str) -> None:
+    from ..scoring import fmt_classement_national, get_score_breakdown
+    rows = master[master["dept"] == code]
+    if rows.empty:
+        _render_reperes_france(master); return
+    r = rows.iloc[0]; nom = str(r["Nom du département"])
+    numn = lambda c: pd.to_numeric(master[c], errors="coerce")
+    v = lambda c: pd.to_numeric(pd.Series([r.get(c)]), errors="coerce").iloc[0]
+    nb = int(master["score_global"].notna().sum())
+    score = v("score_global"); zone = str(r.get("zone_short", "")); apl = v("apl_dept"); apl_med = float(numn("apl_dept").median())
+    part_apl = v("part_pop_apl_inf_2_5"); pop = v("population_num")
+    part15 = v("acces_mg_part_sup_15"); pop15 = v("acces_mg_pop_sup_15"); part15_nat = float(numn("acces_mg_part_sup_15").median())
+    med = v("med_gen_pour_100k"); med_nat = float(numn("med_gen_pour_100k").median())
+    p65 = v("pct_plus_65"); p65_nat = float(numn("pct_plus_65").median())
+    bd = [b for b in get_score_breakdown(r) if b["score"] is not None]
+    faibles = ", ".join(b["label"][0].lower() + b["label"][1:] for b in sorted(bd, key=lambda b: b["score"])[:2])
+    lecture = {"Critique": "tiers des départements les moins bien placés", "Intermédiaire": "tiers médian des départements",
+               "Favorable": "tiers des départements les mieux placés"}.get(zone, "sans score")
+    st.markdown(
+        f'<div class="kpi-stack-header"><div class="eyebrow">{_esc(nom)} ({code})</div>'
+        '<h3>Ce qui pose problème <em>ici</em></h3></div>'
+        '<div class="nat-kpis">'
+        + _kpi_html("Score Sant’active", _fr(score) if pd.notna(score) else "N/D", " /100",
+                    (f"{fmt_classement_national(r.get('rang_national'), nb)} sur {nb} · {lecture} · décroche sur {_esc(faibles)}" if pd.notna(score) else "données insuffisantes"),
+                    "score_global", crit=zone == "Critique")
+        + _kpi_html("Accessibilité aux généralistes (APL)", _fr(apl, 2) if pd.notna(apl) else "N/D", " consult./hab.",
+                    (f"médiane des départements {_fr(apl_med, 2)} · " + ((f"{_pop_fmt(part_apl * pop)} habitants ({_fr(part_apl * 100, 0)}\u202f%) sous le repère 2,5" if part_apl > 0 else "aucun habitant sous le repère 2,5") if pd.notna(part_apl) and pd.notna(pop) else "")) if pd.notna(apl) else "", "apl", crit=pd.notna(apl) and apl < 2.5)
+        + _kpi_html("Généralistes", _ent(med) if pd.notna(med) else "N/D", " /100k hab.",
+                    f"médiane {_ent(med_nat)} · RPPS 2026", "med_100k", crit=pd.notna(med) and med < med_nat * 0.8)
+        + _kpi_html("À plus de 15 min d’un généraliste", (_fr(part15 * 100) + "\u202f%") if pd.notna(part15) else "N/D", "",
+                    (f"{_ent(pop15)} habitants · médiane des départements {_fr(part15_nat * 100)}\u202f% · INSEE 2025" if pd.notna(part15) else "hors champ de la base INSEE (indicateur interne en repli sur la fiche)"), "temps_acces", crit=pd.notna(part15) and part15 > 0.03)
+        + _kpi_html("65 ans et plus", (_fr(p65) + "\u202f%") if pd.notna(p65) else "N/D", "",
+                    f"médiane {_fr(p65_nat)}\u202f% · recensement 2021", "pct_65", crit=pd.notna(p65) and p65 > p65_nat + 3)
+        + '</div>'
+        f'<div class="nat-method">Références nationales en comparaison (médianes des départements). '
+        f'<a href="{internal_href("dept", dept_code=code)}" target="_self">Diagnostic complet et leviers →</a> · '
+        f'<a href="{internal_href("dept", dept_code=code)}#communes" target="_self">Communes prioritaires →</a></div>',
+        unsafe_allow_html=True)
+
+
+def _render_reperes_commune(master: pd.DataFrame, data: dict, t) -> None:
+    """Commune : seulement ce qui existe à cette échelle (temps INSEE, APL communal, population) ; le
+    score et les comparaisons restent ceux du département, nommés comme tels."""
+    from ..commune_opportunity import load_acces_insee_communes, load_apl_communes, norm_commune_name
+    from ..scoring import fmt_classement_national
+    nom_c, dept = t.commune_nom, t.dept_code
+    rows = master[master["dept"] == dept]
+    if rows.empty:
+        _render_reperes_france(master); return
+    r = rows.iloc[0]; nb = int(master["score_global"].notna().sum())
+    # données communales : appariement par nom via le référentiel API Géo
+    temps = apl_c = popc = None; offre = None
+    try:
+        from pathlib import Path
+        from ..config import DATA_DIR
+        ref = pd.read_csv(Path(DATA_DIR) / "communes_population_geoapi.csv", dtype={"code_insee": str, "dept": str})
+        ref = ref[ref["dept"].astype(str).str.zfill(2) == dept]
+        key = norm_commune_name(nom_c)
+        hit = ref[ref["nom"].map(norm_commune_name) == key]
+        if not hit.empty:
+            code_insee = str(hit.iloc[0]["code_insee"]); popc = float(hit.iloc[0]["population"])
+            ins = load_acces_insee_communes(); row = ins[ins["code_insee"] == code_insee]
+            if not row.empty:
+                temps = float(row.iloc[0]["temps_acces"]); offre = bool(row.iloc[0]["offre_sur_place"])
+            apl_c = load_apl_communes().get(code_insee)
+    except Exception:
+        pass
+    cells = ""
+    if popc is not None:
+        cells += _kpi_html("Population", _ent(popc), " hab.", "population municipale · INSEE")
+    if temps is not None:
+        cells += _kpi_html("Temps vers un généraliste", _fr(temps, 0), " min",
+                           ("généraliste présent dans la commune · " if offre else "") + "moyenne des habitants, en voiture · INSEE 2025", "temps_acces", crit=temps > 15)
+    if apl_c is not None and pd.notna(apl_c):
+        cells += _kpi_html("APL de la commune", _fr(float(apl_c)), " consult./hab.", "repère de sous-densité 2,5 · DREES", "apl", crit=float(apl_c) < 2.5)
+    if not cells:
+        cells = _kpi_html("Données communales", "partielles", "", "temps d’accès et APL non appariés pour cette commune")
+    cells += _kpi_html(f"Département : {_esc(str(r['Nom du département']))}", _fr(r.get("score_global")) if pd.notna(pd.to_numeric(pd.Series([r.get('score_global')]), errors='coerce').iloc[0]) else "N/D", " /100",
+                       f"score Sant’active départemental · {fmt_classement_national(r.get('rang_national'), nb)} sur {nb} · zone {str(r.get('zone_short', '')).lower()}", "score_global")
+    st.markdown(
+        f'<div class="kpi-stack-header"><div class="eyebrow">{_esc(nom_c)} · {_esc(str(r["Nom du département"]))}</div>'
+        '<h3>Ce que l’on sait <em>à l’échelle de la commune</em></h3></div>'
+        f'<div class="nat-kpis">{cells}</div>'
+        '<div class="nat-method">Pas de score communal : le score, les leviers et la comparaison existent à l’échelle du département. '
+        f'<a href="{internal_href("commune", commune_code=t.code)}" target="_self">Fiche de la commune →</a> · '
+        f'<a href="{internal_href("dept", dept_code=dept)}" target="_self">Diagnostic du département →</a></div>',
+        unsafe_allow_html=True)
+
 
 def _render_national_kpis(master: pd.DataFrame) -> None:
     num = lambda c: pd.to_numeric(master[c], errors="coerce") if c in master.columns else pd.Series(dtype=float)

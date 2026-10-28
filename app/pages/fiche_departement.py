@@ -75,11 +75,15 @@ def render_topbar(r: pd.Series, data: dict) -> None:
     dept_name = str(r["Nom du département"])
     dept_code = str(r.get("dept", "")).zfill(2)
 
-    share = dept_share_context(r)
     pdf_bytes: bytes | None = None
     pdf_error: str | None = None
+    recos: list[dict] = []
     try:
         recos = _generate_recommendations(r, data["master"], data)
+    except Exception as exc:
+        pdf_error = str(exc)
+    share = dept_share_context(r, data["master"], recos)
+    try:
         pdf_bytes = generate_department_pdf(r, data["master"], recos, data)
     except Exception as exc:
         pdf_error = str(exc)
@@ -138,7 +142,7 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
     typologie_str = typologie_labels.get(str(r.get("typologie", "inconnu")), "N/D")
 
     badge_class = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
-    score_str = f"{float(score):.1f}" if pd.notna(score) else "N/D"
+    score_str = f"{float(score):.1f}".replace(".", ",") if pd.notna(score) else "N/D"
     classement_str = (
         fmt_classement_national(rang_num, nb_total)
         if pd.notna(rang_num)
@@ -162,7 +166,7 @@ def render_header(r: pd.Series, master: pd.DataFrame) -> None:
         '</div>'
         '<div class="fiche-meta fiche-meta--scores">'
         '<div class="fiche-meta-item">'
-        f'<span class="label">SCORE GLOBAL {info_tooltip("score_global", open_dir="right")}</span>'
+        f'<span class="label">SCORE SANT’ACTIVE {info_tooltip("score_global", open_dir="right")}</span>'
         f'<span class="value">{score_str}<span class="small">/100</span></span>'
         '</div>'
         '<div class="fiche-meta-item">'
@@ -286,15 +290,15 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
             if apl < APL_SEUIL_DESERT:
                 color = "crit"
                 verdict = f"sous le repère de sous-densité ({APL_SEUIL_DESERT})"
-                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.2f}".replace(".", ",")
             elif apl < apl_nat * 0.9:
                 color = "inter"
                 verdict = "sous la médiane des départements"
-                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.2f}".replace(".", ",")
             else:
                 color = "fav"
                 verdict = "au niveau ou au-dessus de la médiane des départements"
-                verdict_detail = f"médiane des départements\u202f: {apl_nat:.1f}"
+                verdict_detail = f"médiane des départements\u202f: {apl_nat:.2f}".replace(".", ",")
 
             st.markdown(
                 f'<div class="diagnostic-kpi">'
@@ -302,7 +306,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
                 f'APL · ACCESSIBILITÉ AUX MÉDECINS GÉNÉRALISTES {info_tooltip("apl")}'
                 f'</div>'
                 f'<div class="diagnostic-kpi-value {color}">'
-                f'{apl:.1f}<span class="max"> consult./an/hab.</span>'
+                f'{apl:.2f}'.replace('.', ',') + '<span class="max"> consult./an/hab.</span>'
                 f'</div>'
                 f'<div style="font-size:13px;color:var(--{color},#666);'
                 f'font-weight:500;margin:8px 0 4px;">'
@@ -549,7 +553,7 @@ def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
         score_pros, val_pros, "/100k", tooltip_key="med_100k",
     )
 
-    _render_bar("Établissements", "Hôpitaux + cliniques FINESS",
+    _render_bar("Établissements", "Sites hospitaliers FINESS (CH, CHR, SSR privés)",
                 score_etabs, val_etabs, "/100k")
 
     # ── Séparateur + facteurs de contexte ────────────────────────────────

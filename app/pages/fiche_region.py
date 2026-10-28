@@ -84,7 +84,7 @@ def render(data: dict) -> None:
 
     render_topbar(region_name)
     render_share_section(
-        region_name, region_code_val, region_depts, summary, priorities, leviers
+        region_name, region_code_val, region_depts, summary, priorities, leviers, master=master
     )
     render_hero(
         region_depts, region_name, summary, publics,
@@ -114,13 +114,14 @@ def render_share_section(
     summary: dict,
     priorities: pd.DataFrame,
     leviers: list[dict],
+    master: pd.DataFrame | None = None,
 ) -> None:
-    share = region_share_context(region_name, region_code, region_depts, summary)
+    share = region_share_context(region_name, region_code, region_depts, summary, priorities, leviers, master=master)
     pdf_bytes: bytes | None = None
     pdf_error: str | None = None
     try:
         pdf_bytes = generate_region_pdf(
-            region_name, region_code, region_depts, summary, priorities, leviers
+            region_name, region_code, region_depts, summary, priorities, leviers, master=master
         )
     except Exception as exc:
         pdf_error = str(exc)
@@ -844,11 +845,16 @@ def render_priorisation_technique(priorities: pd.DataFrame) -> None:
         '<div class="section-header">'
         '<div class="section-eyebrow">PRIORISATION</div>'
         '<h2 class="section-title">Dimensions <em>techniques.</em></h2>'
+        '<p class="section-lead">Deux lectures, à ne pas confondre. Le <strong>score de priorité</strong> (ci-dessus) '
+        'classe les départements sur le besoin et le volume ; la faisabilité n’y entre pas. La colonne '
+        '<strong>« Lecture »</strong> ci-dessous croise les trois niveaux, faisabilité comprise : elle repère '
+        'les départements où une expérimentation est à la fois justifiée et réalisable (« candidat expérimentation »). '
+        'Ce n’est pas un second score.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    cols = "36px 1fr 88px 88px 88px 110px"
+    cols = "36px 1fr 88px 88px 88px 150px"
     html = (
         f'<div class="sa-tbl-scroll"><div style="min-width:620px;">'
         f'<div style="display:grid;grid-template-columns:{cols};gap:0 10px;'
@@ -856,7 +862,7 @@ def render_priorisation_technique(priorities: pd.DataFrame) -> None:
         f'letter-spacing:0.08em;color:#6B6B68;text-transform:uppercase;">'
         f'<span>Rang</span><span>Département</span>'
         f'<span>Fragilité</span><span>Impact</span><span>Faisabilité</span>'
-        f'<span>Priorité (calc.)</span></div>'
+        f'<span>Lecture (fragilité × impact × faisabilité)</span></div>'
     )
     for _, row in priorities.iterrows():
         html += (
