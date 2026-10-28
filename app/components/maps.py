@@ -61,7 +61,7 @@ def _tile_config() -> tuple[str, str]:
 TILE_URL, TILE_ATTR = _tile_config()
 
 BORDER_COLOR = "#FFFFFF"
-BORDER_WIDTH = 0.8
+BORDER_WIDTH = 0.9
 HOVER_COLOR  = "#0A1938"
 
 # Dégradés par type d'indicateur
@@ -217,7 +217,7 @@ def render_national_choropleth(
     m = folium.Map(
         location=[46.5, 2.4],
         zoom_start=6,
-        tiles=TILE_URL,          # même fond que le simulateur (style neutre) ; les départements restent la seule information
+        tiles=TILE_URL,          # même fond que le simulateur (routes, relief, villes en teintes claires)
         attr=TILE_ATTR,
         zoom_control=True,
         scrollWheelZoom=False,   # la molette ne doit pas capturer le défilement de la page
@@ -284,9 +284,11 @@ def render_national_choropleth(
         # Territoire de référence : contour marqué, le reste de la France estompé
         if val is None or pd.isna(val):
             return {"fillColor": "#E8E6DD", "color": "#0A1938" if dans_hl else BORDER_COLOR,
-                    "weight": 2.2 if dans_hl else 0.6, "fillOpacity": 0.35 if not hl or dans_hl else 0.15}
+                    "weight": 2.2 if dans_hl else 0.7, "fillOpacity": 0.35 if not hl or dans_hl else 0.15}
+        # Aplat légèrement translucide : le fond (routes, relief, villes) reste perceptible sans altérer la lecture
+        # des classes ; contours blancs fins, territoire de référence cerné en bleu nuit.
         return {"fillColor": cmap(val), "color": "#0A1938" if dans_hl else BORDER_COLOR,
-                "weight": 2.2 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.86 if not hl or dans_hl else 0.42}
+                "weight": 2.4 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.74 if not hl or dans_hl else 0.32}
 
     def _highlight(feature: dict) -> dict:
         return {"fillColor": HOVER_COLOR, "color": HOVER_COLOR,

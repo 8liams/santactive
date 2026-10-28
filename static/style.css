@@ -2974,16 +2974,22 @@ img[alt="ESData, ESD Paris"] {
     background: var(--bg-paper, #FAFAF8);
     border-radius: 0 0 8px 8px;
     box-shadow: 0 1px 0 rgba(10, 25, 56, 0.05), 0 6px 14px -10px rgba(10, 25, 56, 0.22);
+    /* Marge intérieure du bloc arrondi : bord → 28 px → logo … recherche → 28 px → bord (largeur extérieure inchangée) */
+    padding: 0 28px !important;
+    box-sizing: border-box;
 }
 .st-key-sa_topnav {
     position: relative; z-index: 80;
     background: var(--bg-paper, #FAFAF8);
     border: none;
-    margin: 0 0 18px; padding: 10px 22px 12px;   /* marge intérieure symétrique : le logo et la recherche ne touchent pas les bords arrondis */
+    margin: 0 0 18px !important; padding: 10px 0 12px !important;
     gap: 0 !important;
 }
-/* Recherche territoriale centrée sur la ligne du logo et des liens (mesuré : 8 px trop haut sans ce réglage) */
-.st-key-sa_topnav .st-key-sa_territoire { margin: 8px 0 0 !important; }
+/* Centrage vertical structurel : la colonne de navigation reprend la hauteur réelle de la barre (suppression de la
+   marge négative que Streamlit applique au bloc Markdown) et la recherche n'a plus de décalage artificiel. */
+.st-key-sa_topnav [data-testid="stColumn"] { margin: 0 !important; min-width: 0; }
+.st-key-sa_topnav [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+.st-key-sa_topnav .st-key-sa_territoire { margin: 0 !important; height: 48px; min-height: 48px; }
 /* Alignement vertical précis : logo, liens et recherche centrés sur la même ligne */
 .st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center !important; }
 .st-key-sa_topnav [data-testid="stColumn"], .st-key-sa_topnav [data-testid="column"] { display: flex; align-items: center; }
@@ -3010,8 +3016,9 @@ img[alt="ESData, ESD Paris"] {
 .sa-nav-link--active { color: #1A3D8F !important; font-weight: 700; background: #E8EDF8; }
 .sa-nav-mobile { display: none; }
 @media screen and (max-width: 768px) {
-    .st-key-sa_topnav { margin-bottom: 10px; padding-left: 14px; padding-right: 14px; }
-    .st-key-sa_topnav .st-key-sa_territoire { margin: 4px 0 0 !important; }
+    [data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav) { padding: 0 14px !important; }
+    .st-key-sa_topnav { margin-bottom: 10px !important; padding: 6px 0 8px !important; }
+    .st-key-sa_topnav .st-key-sa_territoire { margin: 0 !important; }
     .sa-nav { justify-content: space-between; gap: 12px; }
     .sa-nav-links { display: none; }
     .sa-nav-mobile { display: block; position: relative; }
@@ -3354,19 +3361,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 .usage-grid--4 { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
 @media screen and (max-width: 768px) { .usage-grid--4 { grid-template-columns: 1fr 1fr; } }
 
-/* ─── Barre sticky : hauteur compacte et constante, contrôle territorial aligné ─ */
-.st-key-sa_topnav { padding: 5px 0; margin-bottom: 14px; }
-.st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center; min-height: 48px; }
-.st-key-sa_topnav [data-testid="stColumn"] { min-width: 0; }
-.st-key-sa_topnav [data-testid="stVerticalBlock"] { gap: 0 !important; }
-.st-key-sa_topnav [data-testid="element-container"], .st-key-sa_topnav .element-container { margin: 0 !important; }
-.sa-nav { min-height: 48px; }
-.st-key-sa_territoire { margin: 0 !important; }
-@media screen and (max-width: 768px) {
-    .st-key-sa_topnav { padding: 4px 0; }
-    .st-key-sa_topnav [data-testid="stHorizontalBlock"] { min-height: 0; row-gap: 6px !important; }
-    .sa-nav { min-height: 44px; }
-}
+/* (règles de la barre sticky : voir « Navigation principale », définition unique) */
 /* ─── Simulateur : définition de la nouvelle offre ──────────────────────── */
 .ign-def { border: 1px solid #C9D3EA; background: #F7F9FD; border-radius: 6px;
     padding: 9px 14px; font-size: 13px; line-height: 1.5; color: #2B2B2B; margin: 6px 0 12px; }
@@ -3382,7 +3377,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 /* Mobile : le conteneur de défilement laisse quelques pixels au-dessus de la barre collante ;
    un masque blanc évite que le contenu défilant n'apparaisse au-dessus du logo. */
 [data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav)::before {
-    content: ""; position: absolute; left: -16px; right: -16px; top: -14px; height: 14px; background: #FFFFFF;
+    content: ""; position: absolute; left: -16px; right: -16px; top: -14px; height: 14px; background: var(--bg-paper, #FAFAF8);
 }
 /* ─── Simulateur : synthèse courte sous les indicateurs ─────────────────── */
 .ign-synth { font-size: 15px; line-height: 1.55; color: #2B2B2B; margin: 10px 0 12px; max-width: 980px; }
