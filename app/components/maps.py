@@ -101,6 +101,18 @@ def quantile_bins(values, n_classes: int) -> list[float]:
     return out
 
 
+
+def zone_bins(master: pd.DataFrame) -> list[float]:
+    """Bornes des trois zones du score telles que calculées par le moteur (critique < intermédiaire < favorable)."""
+    sc = pd.to_numeric(master["score_global"], errors="coerce")
+    z = master["zone_short"].astype(str)
+    lo = float(sc.min()); hi = float(sc.max())
+    b1 = float(sc[z == "Critique"].max()) if (z == "Critique").any() else lo
+    b2 = float(sc[z == "Intermédiaire"].max()) if (z == "Intermédiaire").any() else b1
+    eps = 1e-6
+    return [lo - eps, b1 + eps, b2 + eps, hi + eps]
+
+
 def national_legend_classes(master: pd.DataFrame, metric: str, colormap_name: str, reverse: bool = False,
                             bins: list[float] | None = None) -> list[tuple[float, float, str]]:
     """Classes (borne basse, borne haute, couleur) identiques à celles de la carte nationale pour un indicateur."""
@@ -202,9 +214,12 @@ def render_national_choropleth(
     if bins:
         bins = [float(b) for b in bins]
         cmap = StepColormap(colors=colors[:len(bins) - 1], index=bins, vmin=bins[0], vmax=bins[-1])
+    elif metric == "score_global" and "zone_short" in master.columns and len(colors) == 3:
+        # Trois classes = exactement les zones du moteur (mêmes seuils que le classement)
+        bins = zone_bins(master)
+        cmap = StepColormap(colors=colors, index=bins, vmin=bins[0], vmax=bins[-1])
     else:
-        # Classes discrètes de quantiles : pour le score, trois classes = les terciles (zones critique,
-        # intermédiaire, favorable) ; pour les autres indicateurs, autant de classes que de couleurs.
+        # Classes discrètes de quantiles : autant de classes que de couleurs.
         # Classes de quantiles : chaque couleur couvre le même nombre de départements, les valeurs
         # extrêmes (Paris pour l'immobilier) n'écrasent plus l'échelle ; la légende reprend ces bornes.
         bins = quantile_bins(clean_values, len(colors))
