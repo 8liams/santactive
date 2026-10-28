@@ -79,6 +79,11 @@ def _zd_series(s: pd.Series) -> pd.Series:
     return s.map(uniq)
 
 
+# Version des données dérivées : incrémentée quand une colonne calculée est ajoutée, pour invalider
+# le cache de load_all_data (sa clé ne dépend que de son propre code, pas des fonctions appelées).
+DONNEES_VERSION = "2026-10-29a · acces_mg_part_sup_10"
+
+
 @st.cache_data(show_spinner="Chargement des données…")
 def load_all_data():
     """Charge tous les datasets et construit le master dataframe départemental.
@@ -86,6 +91,7 @@ def load_all_data():
     Retourne un tuple (master, medic, pros, immo, etabs, temps, env, patho).
     """
 
+    _version = DONNEES_VERSION  # fait partie du code de la fonction : change la clé de cache
     # ── Population ────────────────────────────────────────────────────────────
     pop = read_dataset(POP_PATH, POP_FILE_ID, sep=";")
     pop.columns = [c.replace("\r\n", " ").strip() for c in pop.columns]

@@ -205,6 +205,16 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     idx = labels.index(selected_label) if selected_label in labels else 0
     col_key, _lab, cmap_name, reverse_scale = INDICATORS[idx]
     if col_key not in master.columns or master[col_key].isna().all():
+        # Repli : la colonne INSEE 2025 est relue directement (cache de session antérieur à son ajout)
+        if col_key.startswith("acces_mg_"):
+            try:
+                from ..data_loading import load_acces_insee_dept
+                ins = load_acces_insee_dept()
+                if col_key in ins.columns:
+                    master = master.drop(columns=[c for c in ins.columns if c != "dept" and c in master.columns]).merge(ins, on="dept", how="left")
+            except Exception:
+                pass
+    if col_key not in master.columns or master[col_key].isna().all():
         st.caption(f"Indicateur « {selected_label} » non disponible, affichage du score Sant’active.")
         col_key, cmap_name, reverse_scale = "score_global", "score", False
 
