@@ -298,10 +298,15 @@ def generate_department_pdf(
              _fmt(apl, "{:.2f}") + " /hab.",
              f"Méd. nat. {_fmt(apl_nat, '{:.2f}')}",
              _compare(apl, apl_nat)),
-        _kpi("Temps d'accès médian",
-             _fmt(temps, "{:.0f}") + " min",
-             f"Méd. nat. {_fmt(temp_nat, '{:.0f}')} min",
-             _compare(temp_nat, temps)),  # inversé : moins = mieux
+        (_kpi("Hab. à > 15 min d'un généraliste",
+              _fmt(float(r.get("acces_mg_part_sup_15")) * 100, "{:.1f}") + " %",
+              f"Méd. nat. {_fmt(float(master['acces_mg_part_sup_15'].median()) * 100, '{:.1f}')} % · INSEE 2025",
+              _compare(float(master["acces_mg_part_sup_15"].median()), float(r.get("acces_mg_part_sup_15"))))
+         if "acces_mg_part_sup_15" in master.columns and pd.notna(r.get("acces_mg_part_sup_15")) else
+         _kpi("Temps d'accès médian (interne)",
+              _fmt(temps, "{:.0f}") + " min",
+              f"Méd. nat. {_fmt(temp_nat, '{:.0f}')} min",
+              _compare(temp_nat, temps))),  # inversé : moins = mieux
         _kpi("Médecins gén. / 100k",
              _fmt(med_gen, "{:.0f}"),
              f"Méd. nat. {_fmt(med_nat, '{:.0f}')}",

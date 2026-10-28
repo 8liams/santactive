@@ -575,9 +575,7 @@ div[data-testid="stExpander"] > details > summary::-webkit-details-marker {
     display: none !important;
 }
 div[data-testid="stExpander"] summary [data-testid="stIconMaterial"],
-div[data-testid="stExpander"] summary span[data-testid="stIconMaterial"],
-div[data-testid="stExpander"] summary > span:first-child,
-div[data-testid="stExpander"] summary > div:first-child {
+div[data-testid="stExpander"] summary span[data-testid="stIconMaterial"] {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
@@ -617,9 +615,11 @@ def render_donnees_detaillees(
         unsafe_allow_html=True,
     )
 
-    with st.expander("Données détaillées", expanded=False):
+    # La carte est hors du panneau dépliable : dans un panneau fermé, Leaflet
+    # s'initialise dans un conteneur sans dimension et la carte restait vide.
+    render_region_map(region_depts, data.get("geojson"))
+    with st.expander("Données détaillées : diagnostic chiffré, classement, priorisation", expanded=False):
         render_diagnostic_region(region_depts, region_name)
-        render_region_map(region_depts, data.get("geojson"))
         render_ranking_depts(region_depts)
         render_delais_detail(delais_region, region_name)
         render_priorisation_technique(priorities)
@@ -708,6 +708,18 @@ def render_region_map(region_depts: pd.DataFrame, geojson) -> None:
         return
 
     region_code_val = str(region_depts.iloc[0].get("Code région", ""))
+
+    def _coords(g):
+        if g["type"] == "Polygon":
+            for ring in g["coordinates"]:
+                yield from ring
+        elif g["type"] == "MultiPolygon":
+            for poly in g["coordinates"]:
+                for ring in poly:
+                    yield from ring
+    pts = [c for f in filtered_gj["features"] for c in _coords(f["geometry"])]
+    bounds = ([[min(p[1] for p in pts), min(p[0] for p in pts)], [max(p[1] for p in pts), max(p[0] for p in pts)]]
+              if pts else None)
     event = render_national_choropleth(
         master=region_depts,
         geojson=filtered_gj,
@@ -715,6 +727,7 @@ def render_region_map(region_depts: pd.DataFrame, geojson) -> None:
         colormap_name="score",
         height=450,
         key=f"region_map_{region_code_val}",
+        bounds=bounds,
     )
 
     if event and event.get("last_active_drawing"):

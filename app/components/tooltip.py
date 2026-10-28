@@ -60,18 +60,20 @@ TOOLTIPS: dict[str, dict[str, str]] = {
         ),
     },
     "temps_acces": {
-        "title": "Temps d'accès médian",
+        "title": "Temps d'accès à un médecin généraliste",
         "body": (
-            "Temps d'accès calculé pour chaque commune (en minutes ; "
-            "0 = offre présente dans la commune), agrégé par département en "
-            "médiane simple des communes (non pondérée par la population)."
+            "<strong>Repère INSEE 2025</strong> : pour chaque carreau habité de 200 m, "
+            "durée en voiture vers le médecin généraliste le plus proche (lieu d'exercice "
+            "réel, base permanente des équipements ; distancier Metric-OSRM). Part de la "
+            "population à plus de 15 min, médiane pondérée par la population. Guadeloupe, "
+            "Guyane et Mayotte sont hors champ."
             "<br><br>"
-            "<strong>⚠ À documenter :</strong> les communes à 0 min "
-            "correspondent à 99 % à des communes où un médecin généraliste "
-            "est recensé ; l'indicateur est donc proche d'un temps d'accès "
-            "au généraliste, et recoupe en partie l'APL."
+            "<strong>Dimension du score (20 %)</strong> : indicateur interne historique, "
+            "médiane des communes du temps vers la commune équipée la plus proche (0 = "
+            "généraliste présent dans la commune). La bascule du score vers le repère INSEE "
+            "est préparée (analyse de sensibilité) et soumise à validation."
             "<br><br>"
-            "<strong>Source :</strong> calcul interne de l'équipe"
+            "Accessibilité géographique seulement : ni capacité des cabinets, ni délais de rendez-vous."
         ),
     },
     "med_100k": {

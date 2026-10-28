@@ -926,16 +926,24 @@ def leviers_region(dept_codes: list[str], data: dict) -> list[dict]:
             a = agg.setdefault(lev.id, {"levier": lev, "depts": [], "scores": []})
             a["depts"].append((str(names.get(str(d).zfill(2), d)), ev["score"]))
             a["scores"].append(ev["score"])
+            a.setdefault("profils", []).append((ev["score"], p))
     out = []
     for lid, a in agg.items():
         lev = a["levier"]
+        # Formulation en clair : constat rédigé du département le plus concerné ;
+        # les conditions du catalogue (traçabilité) restent disponibles à part.
+        try:
+            constat = str(lev.texte(max(a["profils"], key=lambda x: x[0])[1]).get("probleme", "")).strip()
+        except Exception:
+            constat = ""
         depts = [n for n, _ in sorted(a["depts"], key=lambda x: -x[1])]
         out.append({
             "id": lid, "famille": lev.famille, "intitule": lev.titre, "depts": depts,
             "public_cible": lev.public, "horizon": lev.horizon, "dispositifs": lev.dispositifs,
-            "tension": " ; ".join(c.label for c in lev.conditions if c.requise) or lev.famille,
-            "justification": f"Conditions vérifiées dans {len(depts)} département{'s' if len(depts) > 1 else ''} "
-                             f"(score de correspondance moyen {sum(a['scores']) / len(a['scores']):.2f}).",
+            "tension": constat or lev.famille,
+            "conditions_catalogue": [c.label for c in lev.conditions if c.requise],
+            "justification": (f"Règle du catalogue vérifiée dans {len(depts)} département{'s' if len(depts) > 1 else ''} "
+                              f"({', '.join(depts[:3])}{'…' if len(depts) > 3 else ''})."),
             "score_moyen": sum(a["scores"]) / len(a["scores"]),
         })
     return out

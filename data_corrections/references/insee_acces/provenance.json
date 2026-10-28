@@ -1,0 +1,102 @@
+{
+  "source": "Insee, base permanente des équipements ; distancier Metric-OSRM ; population Filosofi",
+  "jeu": "Données sur la localisation et l'accès de la population aux équipements",
+  "url": "https://www.data.gouv.fr/datasets/donnees-sur-la-localisation-et-lacces-de-la-population-aux-equipements",
+  "licence": "Licence Ouverte 2.0",
+  "millesime": "2025",
+  "citation": "Sources : Insee, base permanente des équipements, distancier Metric-OSRM, © les contributeurs d'OpenStreetMap et du projet OSRM",
+  "types": {
+    "D265": "medecin_generaliste",
+    "D307": "pharmacie",
+    "D106": "urgences",
+    "D107": "maternite",
+    "D108": "centre_sante",
+    "D113": "maison_sante",
+    "D281": "infirmier"
+  },
+  "seuils_minutes": [
+    10,
+    15,
+    20,
+    30
+  ],
+  "champ": "France métropolitaine, Martinique, La Réunion (Guadeloupe, Guyane, Mayotte hors champ Filosofi)",
+  "date_traitement": "2026-10-28",
+  "fichiers": [
+    {
+      "fichier": "donnees_2025_reg02.parquet",
+      "taille": 41469142,
+      "sha256": "0a6e55ed58a324fcbee225a9ed95fa00d8eea253f31e61dcd9cf48f1cb386b7b"
+    },
+    {
+      "fichier": "donnees_2025_reg04.parquet",
+      "taille": 54861212,
+      "sha256": "03b545a0a4e0b5bcfcd6cc121e0ff6f1adea7d59363cd5fcd065fff4ce2b855e"
+    },
+    {
+      "fichier": "donnees_2025_reg11.parquet",
+      "taille": 476082759,
+      "sha256": "85a6c11afc3e7b572999acda8cb9bdfaf981157868eb6e36a9cb70c28ac6eef3"
+    },
+    {
+      "fichier": "donnees_2025_reg24.parquet",
+      "taille": 825690115,
+      "sha256": "2718637580564c455baac13590d547736c83327cea478ea4231ab9c04a60456e"
+    },
+    {
+      "fichier": "donnees_2025_reg27.parquet",
+      "taille": 861476546,
+      "sha256": "1bf6da85bb6b96eb7dd275cc4276d23e0d896bbd335257b3119f833054e543c2"
+    },
+    {
+      "fichier": "donnees_2025_reg28.parquet",
+      "taille": 1103079376,
+      "sha256": "52df194bf0f40164d870859b95d9f233e04edc5423b082ab94daaba47ba3d679"
+    },
+    {
+      "fichier": "donnees_2025_reg32.parquet",
+      "taille": 933951644,
+      "sha256": "d477ed4fbe091098a9709c78cd29091ea080331a4ce6d15636daa8a0408e688d"
+    },
+    {
+      "fichier": "donnees_2025_reg44.parquet",
+      "taille": 892529336,
+      "sha256": "92d7aa7ee6aa8960b0c4d6ff98acb4402176784f10536a20dac1c50ff264bcb6"
+    },
+    {
+      "fichier": "donnees_2025_reg52.parquet",
+      "taille": 1147553679,
+      "sha256": "fd1eb92d2af176ef8ab6a5efea771f9ea5176e0c7b482bd2fc42cb0eb68e4012"
+    },
+    {
+      "fichier": "donnees_2025_reg53.parquet",
+      "taille": 1230220434,
+      "sha256": "d5f054fe202131a5e168de3ca4d0a26f2003bbcb6a296ab0665b0972861a3076"
+    },
+    {
+      "fichier": "donnees_2025_reg75.parquet",
+      "taille": 2414485257,
+      "sha256": "db718ded9f59f7c17958da02a96f00df9ef22352342b6a92f59f8fe8648d0a0c"
+    },
+    {
+      "fichier": "donnees_2025_reg76.parquet",
+      "taille": 1745361059,
+      "sha256": "3cd38f14315fee09893ceabd52ca29fd8a62c5f169c13b3687edbf3743995917"
+    },
+    {
+      "fichier": "donnees_2025_reg84.parquet",
+      "taille": 1974307689,
+      "sha256": "772984a807817305997989b75503547b8be879bb75ce8d2d8f78e59c1eb4bd97"
+    },
+    {
+      "fichier": "donnees_2025_reg93.parquet",
+      "taille": 788053755,
+      "sha256": "01bf697bc3f5a53cec21fa6a911852489944cf8518bb859ccd579992bc7aa242"
+    },
+    {
+      "fichier": "donnees_2025_reg94.parquet",
+      "taille": 58703774,
+      "sha256": "6122617d68a6f0d7c1bba6a3efccf9bfad64deed72ef523a1d0839eb6ef79d02"
+    }
+  ]
+}

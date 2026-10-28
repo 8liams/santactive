@@ -1,4 +1,12 @@
-"""Page Comparer : 2 à 4 départements ou régions côte à côte."""
+"""Page Comparer : 2 à 4 départements ou régions côte à côte.
+
+Expérience : territoires choisis affichés en cartouches (retirables), ajout par
+recherche, suggestions (même région, profil similaire, situation contrastée),
+premier territoire pré-rempli depuis le territoire de référence. Résultats :
+ce que l'on apprend (écarts majeurs, meilleur / moins bon par dimension,
+points communs, conséquences possibles), tableau avec référence nationale,
+radar, accès aux fiches.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +16,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from .. import territoire as T
+from ..components.nav import internal_href
 from ..config import PALETTE, PLOTLY_TEMPLATE
 from ..router import navigate
 
@@ -22,11 +32,11 @@ COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
     ("Prix médian m²",       "prix_m2_moyen",         ".0f", " €"),
     ("Part des 65+",         "pct_plus_65",           ".1f", " %"),
-    ("Communes > 15 min",    "nb_communes_critiques", ".0f", ""),
+    ("Hab. à > 15 min d'un généraliste", "acces_mg_part_sup_15_pct", ".1f", " %"),
 ]
 
 NATIONAL_LOWER_IS_BETTER = {
-    "temps_acces_median", "nb_communes_critiques", "pct_plus_65", "prix_m2_moyen",
+    "temps_acces_median", "nb_communes_critiques", "pct_plus_65", "prix_m2_moyen", "acces_mg_part_sup_15_pct",
 }
 
 _RADAR_DIMENSIONS = [
@@ -38,6 +48,9 @@ _RADAR_DIMENSIONS = [
     ("temps_acces_median", "Proximité\nétablissements"),
 ]
 _RADAR_INVERTED = {"pct_plus_65", "prix_m2_moyen", "temps_acces_median"}
+
+# Dimensions commentées dans la synthèse (libellé lisible, unité, format)
+_SYNTH_METRICS = list(COMPARE_METRICS)
 
 
 def _pop_weighted_mean(depts: pd.DataFrame, col: str) -> float:
@@ -61,6 +74,7 @@ def build_regions_comparison_df(master: pd.DataFrame) -> pd.DataFrame:
             "Code région": str(code),
             "dept": "",
             "territory_type": "region",
+            "population_num": pd.to_numeric(group["population_num"], errors="coerce").sum(),
             "score_global": _pop_weighted_mean(group, "score_global"),
             "apl_dept": group["apl_dept"].median(),
             "temps_acces_median": _pop_weighted_mean(group, "temps_acces_median"),
@@ -71,9 +85,13 @@ def build_regions_comparison_df(master: pd.DataFrame) -> pd.DataFrame:
             "nb_communes_critiques": pd.to_numeric(
                 group["nb_communes_critiques"], errors="coerce"
             ).fillna(0).sum(),
+            "acces_mg_part_sup_15_pct": (float(pd.to_numeric(group["acces_mg_pop_sup_15"], errors="coerce").sum()
+                                               / pd.to_numeric(group["acces_mg_pop"], errors="coerce").sum() * 100)
+                                         if pd.to_numeric(group["acces_mg_pop"], errors="coerce").sum() > 0 else float("nan")),
             "score_acces": _pop_weighted_mean(group, "score_acces"),
             "score_pros": _pop_weighted_mean(group, "score_pros"),
             "score_etabs": _pop_weighted_mean(group, "score_etabs"),
+            "nb_depts": len(group),
         })
     return pd.DataFrame(rows)
 
@@ -84,153 +102,182 @@ def _territory_label(kind: str, *, plural: bool = False) -> str:
     return "départements" if plural else "département"
 
 
-def render(data: dict) -> None:
-    master: pd.DataFrame = data["master"]
-    regions_df = build_regions_comparison_df(master)
+# ── Sélection ─────────────────────────────────────────────────────────────────
 
-    st.markdown(
-        '<div class="fiche-header fiche-header-tool">'
-        '<div class="fiche-eyebrow">'
-        '<span class="code">OUTIL</span>'
-        '<span class="dot"></span>'
-        '<span class="region">Analyse multi-territoriale</span>'
-        '</div>'
-        '<div class="fiche-title-row">'
-        '<h1 class="fiche-title">Comparaison</h1>'
-        '</div>'
-        '<p class="fiche-header-lead">'
-        'Identifiez les écarts, les forces et les priorités entre plusieurs '
-        'territoires en quelques secondes pour mieux agir.'
-        '</p>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        '<p class="comparer-level-hint">'
-        'Comparer 2 à 4 <strong>départements</strong> ou '
-        '<strong>régions</strong> en fonction de leurs indicateurs clés.'
-        '</p>'
-        '<p class="comparer-level-hint comparer-level-step">'
-        'Choisissez votre niveau d&rsquo;analyse'
-        '</p>'
-        '<span class="comparer-toggle-anchor" aria-hidden="true"></span>',
-        unsafe_allow_html=True,
-    )
-
+def _init_selection(master: pd.DataFrame, regions_df: pd.DataFrame) -> None:
+    """Pré-remplissage : lien ?depts=, navigation programmatique, territoire de référence."""
+    t = T.get()
     if "comparer_territory_kind" not in st.session_state:
-        st.session_state["comparer_territory_kind"] = "dept"
-
-    # Lien direct partageable : ?view=comparer&depts=18,75,23
+        st.session_state["comparer_territory_kind"] = "region" if t.kind == "region" else "dept"
     qp_depts = st.query_params.get("depts")
     if qp_depts and "comparer_preselect" not in st.session_state \
             and st.session_state.get("_comparer_qp_applied") != qp_depts:
         st.session_state["_comparer_qp_applied"] = qp_depts
         st.session_state["comparer_preselect"] = [c.strip() for c in str(qp_depts).split(",") if c.strip()][:4]
-
     if "comparer_preselect" in st.session_state:
-        codes = st.session_state.pop("comparer_preselect")
+        codes = [str(c).zfill(2) for c in st.session_state.pop("comparer_preselect")]
         st.session_state["comparer_territory_kind"] = "dept"
-        names: list[str] = []
-        for code in codes:
-            row = master[master["dept"] == str(code).zfill(2)]
-            if not row.empty:
-                names.append(str(row.iloc[0]["Nom du département"]))
-        if names:
-            st.session_state["comparer_selection_dept"] = names[:4]
+        st.session_state["cmp_sel_dept"] = [c for c in codes if (master["dept"] == c).any()][:4]
+    elif "compare_base" in st.session_state:
+        base = str(st.session_state.pop("compare_base")).zfill(2)
+        st.session_state["comparer_territory_kind"] = "dept"
+        st.session_state["cmp_sel_dept"] = [base]
+    if "cmp_sel_dept" not in st.session_state:
+        st.session_state["cmp_sel_dept"] = [t.code] if t.kind == "dept" and (master["dept"] == t.code).any() else []
+    if "cmp_sel_region" not in st.session_state:
+        st.session_state["cmp_sel_region"] = [t.code] if t.kind == "region" and (regions_df["Code région"] == t.code).any() else []
+    # Rétro-compat : anciens multiselect par nom
+    if st.session_state.get("comparer_selection_dept") and not st.session_state["cmp_sel_dept"]:
+        names = st.session_state.pop("comparer_selection_dept")
+        st.session_state["cmp_sel_dept"] = master[master["Nom du département"].isin(names)]["dept"].astype(str).tolist()[:4]
 
-    toggle_col1, toggle_col2, _ = st.columns([1.15, 1.15, 4.7])
-    with toggle_col1:
-        if st.button(
-            "Départements",
-            type="primary" if st.session_state["comparer_territory_kind"] == "dept" else "secondary",
-            use_container_width=True,
-            key="comparer_btn_dept",
-        ):
-            st.session_state["comparer_territory_kind"] = "dept"
-            st.rerun()
-    with toggle_col2:
-        if st.button(
-            "Régions",
-            type="primary" if st.session_state["comparer_territory_kind"] == "region" else "secondary",
-            use_container_width=True,
-            key="comparer_btn_region",
-        ):
-            st.session_state["comparer_territory_kind"] = "region"
-            st.rerun()
 
-    is_region = st.session_state["comparer_territory_kind"] == "region"
-    kind = "region" if is_region else "dept"
-    mode_name = "Régions" if is_region else "Départements"
-    mode_desc = (
-        "Indicateurs agrégés à l'échelle régionale (17 régions, Mayotte exclue)."
-        if is_region
-        else "Indicateurs à l'échelle départementale (100 départements analysés)."
-    )
+def _similar(code: str, master: pd.DataFrame, n: int = 3, *, contraste: bool = False) -> list[str]:
+    """Départements de profil proche (score, part des 65+, densité) ou, en contraste, de zone opposée
+    mais de population comparable."""
+    r = master[master["dept"] == code]
+    if r.empty:
+        return []
+    r = r.iloc[0]
+    cand = master[master["dept"] != code].copy()
+    for c in ("score_global", "pct_plus_65", "densite", "population_num"):
+        cand[c] = pd.to_numeric(cand[c], errors="coerce")
+    sc, p65, dens, pop = (pd.to_numeric(pd.Series([r.get(c)]), errors="coerce").iloc[0]
+                          for c in ("score_global", "pct_plus_65", "densite", "population_num"))
+    if contraste:
+        zone = str(r.get("zone_short", ""))
+        cible = {"Critique": "Favorable", "Favorable": "Critique"}.get(zone, "Critique")
+        cand = cand[cand["zone_short"] == cible]
+        if pd.notna(pop) and pop > 0:
+            import math
+            cand = cand.assign(_d=(cand["population_num"] / pop).apply(
+                lambda x: abs(math.log(x)) if pd.notna(x) and x > 0 else 9.0)).sort_values("_d")
+        return cand["dept"].astype(str).head(n).tolist()
+    def _z(col, val):
+        s = cand[col]
+        sd = s.std() or 1.0
+        return ((s - val) / sd).abs() if pd.notna(val) else pd.Series(0.0, index=cand.index)
+    cand["_d"] = _z("score_global", sc) + _z("pct_plus_65", p65) + 0.5 * _z("densite", dens)
+    cand = cand[cand["typologie"] == r.get("typologie")] if (cand["typologie"] == r.get("typologie")).sum() >= n else cand
+    return cand.sort_values("_d")["dept"].astype(str).head(n).tolist()
+
+
+def _chip_html(name: str, sub: str, score, zone: str) -> str:
+    badge = {"Critique": "crit", "Intermédiaire": "inter", "Favorable": "fav"}.get(zone, "")
+    sc = f"{float(score):.0f}" if pd.notna(score) else "N/D"
+    return (f'<div class="cmp-chip"><div class="cmp-chip-name">{html.escape(name)}</div>'
+            f'<div class="cmp-chip-sub">{html.escape(sub)}</div>'
+            f'<div class="cmp-chip-score"><b>{sc}</b><span>/100</span>'
+            + (f'<i class="cmp-chip-zone {badge}">{html.escape(zone)}</i>' if zone and zone != "N/D" else "") + '</div></div>')
+
+
+def render(data: dict) -> None:
+    master: pd.DataFrame = data["master"].copy()
+    master["acces_mg_part_sup_15_pct"] = pd.to_numeric(master.get("acces_mg_part_sup_15"), errors="coerce") * 100
+    regions_df = build_regions_comparison_df(master)
+    _init_selection(master, regions_df)
+
     st.markdown(
-        f'<div class="comparer-mode-banner comparer-mode-{kind}">'
-        f'<span class="comparer-mode-kicker">Niveau actif</span>'
-        f'<strong class="comparer-mode-name">{mode_name}</strong>'
-        f'<span class="comparer-mode-desc">{mode_desc}</span>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+        '<div class="fiche-header fiche-header-tool">'
+        '<div class="fiche-eyebrow"><span class="code">OUTIL</span><span class="dot"></span>'
+        '<span class="region">Analyse multi-territoriale</span></div>'
+        '<div class="fiche-title-row"><h1 class="fiche-title">Comparer <em>des territoires</em></h1></div>'
+        '<p class="fiche-header-lead">Deux à quatre départements, ou deux à quatre régions, côte à côte : '
+        'où sont les écarts, qui est le mieux et le moins bien placé sur chaque dimension, et ce que cela implique.</p>'
+        '</div>', unsafe_allow_html=True)
+
+    kinds = {"dept": "Départements", "region": "Régions"}
+    kind = st.radio("Niveau de comparaison", list(kinds), format_func=kinds.get, horizontal=True,
+                    key="comparer_territory_kind")
+    is_region = kind == "region"
+    sel_key = f"cmp_sel_{kind}"
+    selected_codes: list[str] = list(st.session_state.get(sel_key, []))
 
     if is_region:
-        source_df = regions_df
-        options = (
-            regions_df.dropna(subset=["territory_name"])
-            .sort_values("territory_name")["territory_name"]
-            .tolist()
-        )
-        default: list[str] = []
+        source_df = regions_df.set_index("Code région")
+        all_codes = source_df.sort_values("territory_name").index.tolist()
+        name_of = {c: str(source_df.loc[c, "territory_name"]) for c in all_codes}
+        sub_of = {c: f"{int(source_df.loc[c, 'nb_depts'])} départements" for c in all_codes}
     else:
-        source_df = master.assign(
-            territory_name=master["Nom du département"],
-            territory_type="dept",
-        )
-        options = (
-            master.dropna(subset=["Nom du département"])
-            .sort_values("Nom du département")["Nom du département"]
-            .tolist()
-        )
-        default = st.session_state.get("comparer_selection_dept", [])
-        if not default and "compare_base" in st.session_state:
-            base = master[master["dept"] == st.session_state["compare_base"]]
-            if not base.empty:
-                default = [base.iloc[0]["Nom du département"]]
+        source_df = master.set_index("dept")
+        all_codes = source_df.sort_values("Nom du département").index.astype(str).tolist()
+        name_of = {c: str(source_df.loc[c, "Nom du département"]) for c in all_codes}
+        sub_of = {c: f"{c} · {source_df.loc[c, 'Nom de la région']}" for c in all_codes}
 
-    placeholder = (
-        "Ex : Bretagne, Occitanie"
-        if is_region
-        else "Ex : Ain, Aisne"
-    )
-    selected: list[str] = st.multiselect(
-        f"Sélectionnez 2 à 4 {_territory_label(kind, plural=True)}",
-        options=options,
-        # Une valeur déjà en session (pré-sélection) ne doit pas être doublée d'un défaut
-        default=None if f"comparer_selection_{kind}" in st.session_state else default,
-        max_selections=4,
-        placeholder=placeholder,
-        key=f"comparer_selection_{kind}",
-    )
+    # ── Cartouches des territoires choisis + ajout ───────────────────────────
+    st.markdown('<div class="section-eyebrow" style="margin-top:6px;">Territoires comparés</div>', unsafe_allow_html=True)
+    if selected_codes:
+        cols = st.columns(len(selected_codes) + (1 if len(selected_codes) < 4 else 0))
+        for i, code in enumerate(selected_codes):
+            row = source_df.loc[code]
+            with cols[i]:
+                st.markdown(_chip_html(name_of[code], sub_of[code], row.get("score_global"),
+                                       str(row.get("zone_short", "")) if not is_region else ""), unsafe_allow_html=True)
+                if st.button("Retirer", key=f"cmp_rm_{kind}_{code}", use_container_width=True):
+                    st.session_state[sel_key] = [c for c in selected_codes if c != code]
+                    st.rerun()
+        add_col = cols[-1] if len(selected_codes) < 4 else None
+    else:
+        add_col = st.container()
+    if add_col is not None:
+        with add_col:
+            restants = [c for c in all_codes if c not in selected_codes]
+            def _on_add():
+                v = st.session_state.get(f"cmp_add_{kind}")
+                if v and v not in st.session_state.get(sel_key, []):
+                    st.session_state[sel_key] = (st.session_state.get(sel_key, []) + [v])[:4]
+                st.session_state[f"cmp_add_{kind}"] = None
+            st.selectbox(f"Ajouter {'une région' if is_region else 'un département'}", restants, index=None,
+                         format_func=lambda c: f"{name_of[c]}" + ("" if is_region else f" ({c})"),
+                         placeholder="Rechercher et ajouter…", key=f"cmp_add_{kind}", on_change=_on_add)
 
-    if len(selected) < 2:
-        st.info(f"Sélectionnez au moins 2 {_territory_label(kind, plural=True)} pour lancer la comparaison.")
+    # ── Suggestions ──────────────────────────────────────────────────────────
+    if selected_codes and len(selected_codes) < 4:
+        base = selected_codes[0]
+        sugg: list[tuple[str, list[str]]] = []
+        if is_region:
+            autres = [c for c in all_codes if c not in selected_codes]
+            scores = source_df.loc[autres, "score_global"].astype(float)
+            base_sc = float(source_df.loc[base, "score_global"])
+            proches = (scores - base_sc).abs().sort_values().index.tolist()
+            sugg.append(("Profil proche", proches[:3]))
+            sugg.append(("Situation contrastée", (scores - base_sc).abs().sort_values(ascending=False).index.tolist()[:3]))
+        else:
+            reg = str(source_df.loc[base, "Code région"])
+            meme = [c for c in master.loc[master["Code région"].astype(str) == reg, "dept"].astype(str) if c not in selected_codes]
+            if meme:
+                sugg.append((f"Même région ({html.escape(str(source_df.loc[base, 'Nom de la région']))})", meme[:4]))
+            sugg.append(("Profil similaire", [c for c in _similar(base, master, 4) if c not in selected_codes][:3]))
+            sugg.append(("Situation contrastée", [c for c in _similar(base, master, 4, contraste=True) if c not in selected_codes][:3]))
+        for lab, codes in sugg:
+            codes = [c for c in codes if c and c not in selected_codes]
+            if not codes:
+                continue
+            c0, *cs = st.columns([1.1] + [1] * len(codes) + [max(0.1, 4 - len(codes))])
+            c0.markdown(f'<div class="cmp-sugg-lbl">{lab}</div>', unsafe_allow_html=True)
+            for col, code in zip(cs, codes):
+                if col.button(name_of[code], key=f"cmp_sugg_{kind}_{lab[:6]}_{code}", use_container_width=True):
+                    st.session_state[sel_key] = (selected_codes + [code])[:4]
+                    st.rerun()
+
+    if len(selected_codes) < 2:
+        st.markdown('<p class="sa-couverture" style="margin-top:10px;">Ajoutez au moins deux territoires pour lancer la comparaison. '
+                    'La référence nationale (médiane des 100 départements) est toujours affichée.</p>', unsafe_allow_html=True)
         return
 
+    selected = [name_of[c] for c in selected_codes]
     name_col = "territory_name" if is_region else "Nom du département"
     if is_region:
-        comp_df = regions_df[regions_df["territory_name"].isin(selected)].copy()
+        comp_df = regions_df[regions_df["Code région"].isin(selected_codes)].copy()
     else:
-        comp_df = source_df[source_df["Nom du département"].isin(selected)].copy()
-
+        comp_df = master[master["dept"].isin(selected_codes)].assign(territory_name=lambda d: d["Nom du département"]).copy()
     metrics = COMPARE_METRICS
 
+    # ── CE QU'ON APPREND ──────────────────────────────────────────────────────
+    _render_synthese(master, comp_df, selected, name_col=name_col, kind=kind)
+
     # ── TABLEAU COMPARATIF (avec référence nationale) ─────────────────────────
-    _render_comparison_table(
-        master, comp_df, selected, metrics, name_col=name_col, kind=kind,
-    )
+    _render_comparison_table(master, comp_df, selected, metrics, name_col=name_col, kind=kind)
 
     # ── RADAR COMPARATIF ──────────────────────────────────────────────────────
     st.markdown(
@@ -243,101 +290,112 @@ def render(data: dict) -> None:
         '</div>',
         unsafe_allow_html=True,
     )
-
     rank_base = _build_rank_base(master, regions_df)
     master_ranks = _compute_radar_ranks(rank_base)
-
     theta_labels = [d[1] for d in _RADAR_DIMENSIONS]
-    colors = [
-        PALETTE["bleu_regalien"],
-        PALETTE["rouge_critique"],
-        PALETTE["vert_sante"],
-        PALETTE["ambre_alerte"],
-    ]
-
+    colors = [PALETTE["bleu_regalien"], PALETTE["rouge_critique"], PALETTE["vert_sante"], PALETTE["ambre_alerte"]]
     fig = go.Figure()
     for i, name in enumerate(selected):
         row = master_ranks[master_ranks[name_col] == name]
         if row.empty:
             continue
         rv = row.iloc[0]
-        r_vals = []
-        for col, _ in _RADAR_DIMENSIONS:
-            v = rv.get(f"rank_{col}")
-            r_vals.append(float(v) if pd.notna(v) else 0.0)
-
+        r_vals = [float(rv.get(f"rank_{col}")) if pd.notna(rv.get(f"rank_{col}")) else 0.0 for col, _ in _RADAR_DIMENSIONS]
         color_hex = colors[i % len(colors)]
         rgb = _hex_to_rgb(color_hex)
-        fig.add_trace(
-            go.Scatterpolar(
-                r=r_vals + [r_vals[0]],
-                theta=theta_labels + [theta_labels[0]],
-                fill="toself",
-                fillcolor=f"rgba({rgb},0.15)",
-                line=dict(color=color_hex, width=2),
-                name=name,
-            )
-        )
-
-    layout_opts = {
-        k: v for k, v in PLOTLY_TEMPLATE["layout"].items()
-        if k not in ("margin", "title", "legend", "polar")
-    }
+        fig.add_trace(go.Scatterpolar(r=r_vals + [r_vals[0]], theta=theta_labels + [theta_labels[0]], fill="toself",
+                                      fillcolor=f"rgba({rgb},0.15)", line=dict(color=color_hex, width=2), name=name))
+    layout_opts = {k: v for k, v in PLOTLY_TEMPLATE["layout"].items() if k not in ("margin", "title", "legend", "polar")}
     fig.update_layout(
         **layout_opts,
-        polar=dict(
-            radialaxis=dict(
-                range=[0, 100],
-                visible=True,
-                tickfont=dict(size=10, color=PALETTE["gris_secondaire"]),
-                gridcolor=PALETTE["gris_bordure"],
-            ),
-            angularaxis=dict(
-                tickfont=dict(size=12, family="Marianne, sans-serif"),
-                gridcolor=PALETTE["gris_bordure"],
-            ),
-            bgcolor="#FFFFFF",
-        ),
-        height=520,
-        showlegend=True,
-        legend=dict(
-            orientation="h", yanchor="top", y=-0.08,
-            xanchor="center", x=0.5, font=dict(size=13),
-        ),
+        polar=dict(radialaxis=dict(range=[0, 100], visible=True, tickfont=dict(size=10, color=PALETTE["gris_secondaire"]),
+                                   gridcolor=PALETTE["gris_bordure"]),
+                   angularaxis=dict(tickfont=dict(size=12, family="Marianne, sans-serif"), gridcolor=PALETTE["gris_bordure"]),
+                   bgcolor="#FFFFFF"),
+        height=520, showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=-0.08, xanchor="center", x=0.5, font=dict(size=13)),
         margin=dict(l=80, r=80, t=20, b=60),
     )
     st.plotly_chart(fig, use_container_width=True)
 
     # ── LIENS VERS LES FICHES ─────────────────────────────────────────────────
-    st.markdown(
-        '<div class="section-header">'
-        '<div class="section-eyebrow">ACCÈS RAPIDE</div>'
-        '<h2 class="section-title">Ouvrir la fiche <em>complète.</em></h2>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    link_cols = st.columns(len(selected))
-    for i, name in enumerate(selected):
-        rows_t = comp_df[comp_df[name_col] == name]
-        if rows_t.empty:
+    links = "".join(
+        f'<a class="primary" href="{internal_href("region", region_code=c) if is_region else internal_href("dept", dept_code=c)}" target="_self">'
+        f'Fiche {html.escape(name_of[c])} →</a>' for c in selected_codes)
+    st.markdown(f'<div class="sa-parcours" style="margin-top:8px;">{links}</div>', unsafe_allow_html=True)
+
+
+def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list[str], *, name_col: str, kind: str) -> None:
+    """Ce qu'on apprend : écarts majeurs, meilleur / moins bon par dimension, points communs, implications."""
+    vals_by: dict[str, dict[str, float]] = {}
+    for _, col, _, _ in _SYNTH_METRICS:
+        if col not in comp_df.columns:
             continue
-        with link_cols[i]:
-            if is_region:
-                region_code_val = str(rows_t.iloc[0]["Code région"])
-                if st.button(
-                    f"Fiche {name} →",
-                    key=f"link_region_{region_code_val}",
-                    use_container_width=True,
-                ):
-                    navigate("region", region_code=region_code_val)
-            else:
-                dept_code_val = rows_t.iloc[0]["dept"]
-                if st.button(
-                    f"Fiche {name} →",
-                    key=f"link_{dept_code_val}",
-                    use_container_width=True,
-                ):
-                    navigate("dept", dept_code=dept_code_val)
+        v = comp_df.set_index(name_col)[col]
+        vals_by[col] = {n: float(v.get(n)) for n in selected if n in v.index and pd.notna(v.get(n))}
+    ecarts = []
+    for label, col, fmt, unit in _SYNTH_METRICS:
+        vals = vals_by.get(col, {})
+        if len(vals) < 2:
+            continue
+        nat = _national_reference(master, col)
+        lower = col in NATIONAL_LOWER_IS_BETTER
+        pire = (max if lower else min)(vals, key=vals.get)
+        mieux = (min if lower else max)(vals, key=vals.get)
+        rel = abs(vals[pire] - vals[mieux]) / abs(nat) if nat else 0.0
+        pos = {n: _position_vs_national(v, nat, col) for n, v in vals.items()} if nat is not None else {}
+        ecarts.append((rel, label, col, fmt, unit, pire, mieux, vals, pos, nat))
+    if not ecarts:
+        return
+    ecarts.sort(key=lambda e: e[0], reverse=True)
+    majeurs = [e for e in ecarts[:3] if e[0] >= 0.08]
+    communs = [e for e in ecarts if e[0] < 0.08 or (e[8] and len(set(e[8].values())) == 1 and "at" not in e[8].values())]
+
+    lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score global", "apl_dept": "l’accessibilité aux généralistes (APL)",
+              "temps_acces_median": "le temps d’accès", "med_gen_pour_100k": "la densité de généralistes",
+              "structures_pour_100k": "l’offre hospitalière", "prix_m2_moyen": "le prix du foncier", "pct_plus_65": "la part des 65 ans et plus"}
+    li = ""
+    for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:
+        li += (f"<li><strong>{lib_fr.get(col, label).capitalize()}</strong> : {html.escape(pire)} ({_fr(vals[pire], fmt)}{unit}) "
+               f"contre {html.escape(mieux)} ({_fr(vals[mieux], fmt)}{unit}), soit un écart de {rel * 100:.0f}\u202f% de la référence nationale"
+               + (f" ({_fr(nat, fmt)}{unit})" if nat is not None else "") + ".</li>")
+    ecarts_html = f"<ul class='cmp-list'>{li}</ul>" if li else "<p>Les territoires comparés sont proches sur toutes les dimensions.</p>"
+
+    rows = ""
+    for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in sorted(ecarts, key=lambda e: _SYNTH_METRICS.index(next(m for m in _SYNTH_METRICS if m[1] == e[2]))):
+        rows += (f"<tr><td class='metric-label'>{label}</td><td class='cell-above-nat'>{html.escape(mieux)} <span>{_fr(vals[mieux], fmt)}{unit}</span></td>"
+                 f"<td class='cell-below-nat'>{html.escape(pire)} <span>{_fr(vals[pire], fmt)}{unit}</span></td></tr>")
+    table = ("<table class='comparison-table-v2 cmp-best-worst'><thead><tr><th class='metric-col'>Dimension</th>"
+             "<th class='metric-col'>Le plus favorable</th><th class='metric-col'>Le moins favorable</th></tr></thead>"
+             f"<tbody>{rows}</tbody></table>")
+
+    pc = []
+    for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in ecarts:
+        if not pos:
+            continue
+        side = set(pos.values())
+        if side == {"worse"}:
+            pc.append(f"tous sous la référence nationale pour {lib_fr.get(col, label)}")
+        elif side == {"better"}:
+            pc.append(f"tous mieux placés que la référence pour {lib_fr.get(col, label)}")
+    communs_html = ("<p><strong>Points communs</strong> : " + " ; ".join(pc) + ".</p>") if pc else \
+        "<p><strong>Points communs</strong> : aucune dimension où tous les territoires sont du même côté de la référence nationale.</p>"
+
+    impl = []
+    for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:
+        lib, u, implication = _IMPLICATIONS.get(col, (label, unit, ""))
+        if implication and pos.get(pire) == "worse":
+            impl.append(f"<li>Pour {html.escape(pire)}, {implication}.</li>")
+    impl_html = (f"<p><strong>Conséquences possibles</strong></p><ul class='cmp-list'>{''.join(impl)}</ul>") if impl else ""
+
+    st.markdown(
+        '<div class="section-header"><div class="section-eyebrow">CE QU’ON APPREND</div>'
+        '<h2 class="section-title">Les écarts <em>qui comptent.</em></h2></div>'
+        f'<div class="cmp-synth"><div class="cmp-synth-main"><p><strong>Écarts majeurs</strong></p>{ecarts_html}{communs_html}{impl_html}'
+        '<p class="sa-couverture">Référence nationale = médiane des 100 départements. Un écart est jugé majeur au-delà de 8 % de cette référence. '
+        'Les indicateurs décrivent l’offre et le contexte : ils ne mesurent pas l’accès effectif aux rendez-vous.</p></div>'
+        f'<div class="cmp-synth-side">{table}</div></div>',
+        unsafe_allow_html=True)
 
 
 def _territory_code(comp_df: pd.DataFrame, name: str, is_region: bool) -> str:
@@ -453,6 +511,12 @@ _INTERPRETATIONS: dict[str, dict[str, str]] = {
         "all_at": "Structure démographique proche de la référence nationale.",
         "mixed": "Pression du vieillissement contrastée entre les territoires.",
     },
+    "acces_mg_part_sup_15_pct": {
+        "all_better": "Éloignement d'un généraliste moins fréquent que la référence nationale.",
+        "all_worse": "Part d'habitants à plus de 15 min d'un généraliste supérieure à la référence.",
+        "all_at": "Éloignement d'un généraliste proche de la référence nationale.",
+        "mixed": "Écarts marqués d'éloignement d'un généraliste entre territoires.",
+    },
     "nb_communes_critiques": {
         "all_better": "Isolement territorial limité.",
         "all_worse": "Part importante de communes éloignées des soins.",
@@ -472,6 +536,7 @@ _IMPLICATIONS: dict[str, tuple[str, str, str]] = {
     "prix_m2_moyen": ("prix médian au m²", " €", "le coût du foncier peut y freiner l'installation (à l'inverse, un prix bas est un levier)"),
     "pct_plus_65": ("part des 65 ans et plus", " %", "la demande de soins liée à l'âge y est plus forte (parcours gériatriques, autonomie)"),
     "nb_communes_critiques": ("communes à plus de 15 min", "", "l'isolement y concerne davantage de communes (transport solidaire, permanences itinérantes)"),
+    "acces_mg_part_sup_15_pct": ("part d'habitants à plus de 15 min d'un généraliste", " %", "l'éloignement géographique y justifie des réponses de proximité (antennes, permanences, transport solidaire) — mesure INSEE 2025, hors Guadeloupe, Guyane et Mayotte"),
 }
 
 
@@ -586,7 +651,7 @@ def _render_comparison_table(
         else:
             nat_cell = (
                 f'<td class="cell-national-ref" data-label="Réf. nationale">'
-                f'{format(nat, fmt)}{unit}</td>'
+                f'{_fr(nat, fmt)}{unit}</td>'
             )
 
         dept_cells = ""
@@ -606,7 +671,7 @@ def _render_comparison_table(
             }.get(pos or "", "")
             dept_cells += (
                 f'<td class="{klass}" data-label="{safe_name}">'
-                f'{format(v, fmt)}{unit}</td>'
+                f'{_fr(float(v), fmt)}{unit}</td>'
             )
 
         interpretation = _interpretation_territoriale(col, nat, dept_vals, selected)

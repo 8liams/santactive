@@ -37,6 +37,13 @@ APL_METHODE = _option("SANTACTIVE_APL_METHODE", "ponderee", ("mediane", "pondere
 ETABS_DEFINITION = _option("SANTACTIVE_ETABS_DEFINITION", "actuelle", ("actuelle", "court_sejour"))
 #   actuelle     : CH + CHR + établissements privés SSR
 #   court_sejour : CH + CHR + hôpitaux locaux + privés MCO + CLCC
+TEMPS_SOURCE = _option("SANTACTIVE_TEMPS_SOURCE", "interne", ("interne", "insee"))
+#   interne : médiane communale du fichier de l'équipe (0 = généraliste présent dans la
+#             commune, sinon minutes vers la commune équipée la plus proche) — mode
+#             historique du score, conservé tant que la bascule n'est pas validée
+#   insee   : médiane pondérée par la population du temps de trajet en voiture vers le
+#             généraliste le plus proche (Insee 2025, carreaux 200 m, Metric-OSRM) ;
+#             Guadeloupe, Guyane et Mayotte sans valeur (poids redistribué)
 
 # ─── Sources locales (prioritaires) ───────────────────────────────────────────
 DATA_DIR = Path("static/data")
@@ -59,6 +66,8 @@ MEDECINS_DREES_PATH  = DATA_DIR / "drees_medecins_dept_2026.csv"
 AUTRES_PS_DREES_PATH = DATA_DIR / "drees_autres_rpps_dept_2026.csv"
 IDEL_DREES_PATH      = DATA_DIR / "drees_infirmieres_liberales_dept_2023.csv"
 APL_DEPT_DREES_PATH  = DATA_DIR / "apl_mg_departemental_2023.csv"   # APL communal agrégé (DREES 2023)
+ACCES_INSEE_DEPT_PATH = DATA_DIR / "acces_insee_departements_2025.csv"   # accès routier INSEE 2025 (départements)
+ACCES_INSEE_COMMUNES_PATH = DATA_DIR / "acces_insee_mg_communes_2025.csv"  # idem, communes (généraliste)
 
 # Catégories FINESS (categetab) comptées comme « structures » selon la définition
 ETABS_CATEGORIES = {

@@ -123,6 +123,7 @@ def render_national_choropleth(
     reverse: bool = False,
     height: int = 560,
     key: str = "national_map",
+    bounds: list | None = None,
 ) -> dict | None:
     """Carte choroplèthe nationale avec tooltip adaptatif à l'indicateur."""
     st.markdown(_tooltip_style(), unsafe_allow_html=True)
@@ -177,7 +178,15 @@ def render_national_choropleth(
         min_lon=-6.5,
         max_lon=11.0,
     )
-    m.fit_bounds([[41.3, -5.2], [51.1, 9.6]], padding=(8, 8))
+    if bounds:   # emprise d'une région : cadrage sur ses départements (sinon France métropolitaine)
+        # Sans maxBounds : avec cette borne, Leaflet échouait (« Invalid LatLng ») au
+        # cadrage dans l'iframe encore sans hauteur, et la carte restait invisible.
+        for k in ("max_bounds", "maxBounds", "min_lat", "max_lat", "min_lon", "max_lon"):
+            m.options.pop(k, None)
+        m.options["min_zoom"] = 4
+        m.fit_bounds(bounds, padding=(16, 16))
+    else:
+        m.fit_bounds([[41.3, -5.2], [51.1, 9.6]], padding=(8, 8))
 
     # Enrichit les propriétés GeoJSON — valeur principale + contexte.
     # Copie superficielle (géométries partagées) : le deepcopy coûtait 0,02-0,4 s.

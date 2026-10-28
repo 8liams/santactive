@@ -302,10 +302,10 @@ def _build_pourquoi_maintenant(lev: dict, amplitude_pop: str) -> str:
     depts = lev.get("depts") or []
     n = len(depts)
     if tension:
-        return (
-            f"{tension.capitalize()} sur {n} département{'s' if n > 1 else ''} "
-            f"— {amplitude_pop}."
-        )
+        t = tension[0].upper() + tension[1:]          # pas capitalize() : il écraserait les majuscules des noms
+        if t.endswith((".", "!", "?")):               # constat rédigé (phrase complète)
+            return f"{t} Règle vérifiée dans {n} département{'s' if n > 1 else ''} ; {amplitude_pop}."
+        return f"{t} sur {n} département{'s' if n > 1 else ''} — {amplitude_pop}."
     return (
         f"Convergence des indicateurs régionaux sur {n} département"
         f"{'s' if n > 1 else ''} — {amplitude_pop}."

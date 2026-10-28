@@ -339,30 +339,40 @@ class TestParcoursEtSimulation(unittest.TestCase):
     """Simulation IGN (calcul pur), lecture capacité, liens de parcours, formulations régionales."""
 
     def test_simulation_ign_classes_et_gains(self):
-        from app.pages.acces_ign import gains, preparer, scenario
+        """Situation actuelle par carreau (Insee), scénario par isochrone : gains et rapprochés."""
+        import pandas as pd
+        from app.pages.acces_ign import _classe, gains, gains_par_commune, scenario, situation_communes
 
-        d = {"communes": [
-            {"code_insee": "1", "nom": "Offre", "population": 1000, "temps_ign_min": 0, "classe_iso_min": 10, "lon": 0.0, "lat": 0.0},
-            {"code_insee": "2", "nom": "Proche", "population": 500, "temps_ign_min": 17.4, "classe_iso_min": 15, "lon": 0.5, "lat": 0.0},
-            {"code_insee": "3", "nom": "Loin", "population": 300, "temps_ign_min": 27.0, "classe_iso_min": 30, "lon": 1.0, "lat": 0.0},
-            {"code_insee": "4", "nom": "TresLoin", "population": 200, "temps_ign_min": None, "classe_iso_min": 99, "lon": 5.0, "lat": 5.0},
-        ]}
-        com = preparer(d)
-        self.assertEqual(com.set_index("nom").loc["Offre", "classe_avant"], 0)
-        # itinéraire 17 min mais isochrone 15 : la plus favorable est retenue (cas Jouet-sur-l'Aubois)
-        self.assertEqual(com.set_index("nom").loc["Proche", "classe_avant"], 15)
-        self.assertTrue(com.set_index("nom").loc["Proche", "divergence"])
-        self.assertEqual(com.set_index("nom").loc["TresLoin", "classe_avant"], 99)
-        # nouvelle offre à « Loin » : carré de 0,8° autour, isochrones 10 et 15 identiques
+        carreaux = pd.DataFrame([
+            # commune A : généraliste présent, carreaux à 1–3 min
+            {"code_insee": "A", "lon": 0.0, "lat": 0.0, "pop": 800, "duree": 1.0, "commune_offre": "A"},
+            {"code_insee": "A", "lon": 0.05, "lat": 0.0, "pop": 200, "duree": 3.0, "commune_offre": "A"},
+            # commune B : 12 min (déjà ≤ 15), dans l'isochrone 10 du scénario → rapprochée
+            {"code_insee": "B", "lon": 0.5, "lat": 0.0, "pop": 500, "duree": 12.0, "commune_offre": "A"},
+            # commune C : 27 min, dans l'isochrone 10 → nouvellement couverte
+            {"code_insee": "C", "lon": 1.0, "lat": 0.0, "pop": 300, "duree": 27.0, "commune_offre": "A"},
+            # commune D : 40 min, hors isochrone → inchangée
+            {"code_insee": "D", "lon": 5.0, "lat": 5.0, "pop": 200, "duree": 40.0, "commune_offre": "A"},
+        ])
+        carreaux["classe"] = carreaux["duree"].apply(_classe)
+        communes = pd.DataFrame([{"code_insee": c, "nom": c, "lon": x, "lat": 0.0, "population": 1}
+                                 for c, x in (("A", 0.0), ("B", 0.5), ("C", 1.0), ("D", 5.0))])
+        sit = situation_communes(carreaux, communes).set_index("nom")
+        self.assertTrue(sit.loc["A", "offre"]); self.assertFalse(sit.loc["B", "offre"])
+        self.assertAlmostEqual(sit.loc["A", "t_moy"], 1.4)
+        self.assertEqual(sit.loc["C", "classe"], 30); self.assertEqual(sit.loc["D", "classe"], 99)
+        self.assertEqual(sit.loc["C", "pop_sup_15"], 300)
         carre = {"type": "Polygon", "coordinates": [[[0.2, -0.4], [1.8, -0.4], [1.8, 0.4], [0.2, 0.4], [0.2, -0.4]]]}
-        com2 = scenario(com, {10: carre, 15: carre})
-        gain, rapp = gains(com2, 15)
-        self.assertEqual(gain["nom"].tolist(), ["Loin"])          # 20–30 min → ≤ 10 min
-        self.assertEqual(rapp["nom"].tolist(), ["Proche"])        # déjà ≤ 15, passe à ≤ 10
-        gain20, _ = gains(com2, 20)
-        self.assertEqual(len(gain20), 1)
-        self.assertNotIn("Offre", rapp["nom"].tolist())
-        self.assertNotIn("TresLoin", com2.loc[com2["classe_apres"] <= 20, "nom"].tolist())
+        com = scenario(carreaux, {10: carre, 15: carre})
+        gain, rapp = gains(com, 15)
+        self.assertEqual(gain["code_insee"].tolist(), ["C"])      # 27 min → ≤ 10 min
+        self.assertEqual(rapp["code_insee"].tolist(), ["B"])      # 12 min → ≤ 10 min
+        gpc = gains_par_commune(gain, sit.reset_index())
+        self.assertEqual(gpc.iloc[0]["nom"], "C"); self.assertEqual(gpc.iloc[0]["pop_gain"], 300)
+        self.assertAlmostEqual(gpc.iloc[0]["part"], 1.0)
+        gain20, rapp20 = gains(com, 20)
+        self.assertEqual(len(gain20), 1); self.assertEqual(set(rapp20["code_insee"]), {"B"})
+        self.assertNotIn("D", com.loc[com["classe_apres"] <= 20, "code_insee"].tolist())
 
     def test_lecture_capacite(self):
         from app.commune_opportunity import capacite_class, top_communes_for_action
@@ -400,7 +410,12 @@ class TestParcoursEtSimulation(unittest.TestCase):
         html = " ".join(m.value for m in at.markdown)
         self.assertIn("Territoire pilote", html)
         self.assertIn("Retour au diagnostic", html)
-        self.assertEqual(len(at.selectbox), 1, "un seul sélecteur (commune) tant qu'il n'y a qu'un pilote")
+        from app.pages.acces_ign import pilotes_disponibles
+        labels = [sb.label for sb in at.selectbox]
+        self.assertIn("Commune d’implantation", labels)
+        self.assertEqual("Département pilote" in labels, len(pilotes_disponibles()) > 1,
+                         "le sélecteur de pilote n'apparaît que s'il y a plusieurs pilotes")
+        self.assertIn("Nouvellement couverts", html)
         at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
         at.query_params["view"] = "exploration"
         at.run()

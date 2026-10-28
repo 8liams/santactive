@@ -184,6 +184,8 @@ def _render_parcours(r: pd.Series) -> None:
     links = [f'<a href="#communes">Communes fragiles ↓</a>']
     if dept in pilotes_disponibles():
         links.append(f'<a class="primary" href="{internal_href("acces", dept_code=dept)}" target="_self">Simuler une implantation (pilote IGN) →</a>')
+    else:
+        links.append(f'<a href="{internal_href("acces", dept_code=dept)}" target="_self">Simulation routière : voir un pilote →</a>')
     links.append(f'<a href="{internal_href("comparer")}&depts={dept}" target="_self">Comparer →</a>')
     if region_code:
         links.append(f'<a href="{internal_href("region", region_code=region_code)}" target="_self">Région →</a>')
@@ -191,7 +193,8 @@ def _render_parcours(r: pd.Series) -> None:
         '<div class="sa-parcours">' + "".join(links) + '</div>'
         '<div class="sa-couverture">Couverture : <b>score et diagnostic</b> nationaux (100 départements) · '
         '<b>communes</b> : temps d\u2019accès et prix, partiels · <b>simulation routière</b> : pilote expérimental'
-        + (" (disponible ici)" if dept in pilotes_disponibles() else " (Cher uniquement pour l\u2019instant)") + '</div>',
+        + (" (disponible ici)" if dept in pilotes_disponibles() else
+           " (pilotes : " + ", ".join(pilotes_disponibles().values()) + ")") + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -249,10 +252,18 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
     else:
         complement = f"<em class='{css_class}'>{label_texte}</em>"
 
-    if nb_communes_critiques > 0:
+    part15 = to_num(r.get("acces_mg_part_sup_15"))
+    pop15 = to_num(r.get("acces_mg_pop_sup_15"))
+    if pd.notna(part15) and pd.notna(pop15):
+        if pop15 >= 500:
+            complement += (f", et {part15 * 100:.1f}\u202f% de ses habitants ({int(pop15):,} personnes) à plus de 15\u202fmin "
+                           "en voiture d'un médecin généraliste (INSEE 2025)").replace(",", "\u202f").replace(f"{part15 * 100:.1f}", f"{part15 * 100:.1f}".replace(".", ","))
+        else:
+            complement += ", et une population presque entièrement à moins de 15\u202fmin en voiture d'un généraliste (INSEE 2025)"
+    elif nb_communes_critiques > 0:
         commune_label = "commune" if nb_communes_critiques == 1 else "communes"
         complement += (f", et {nb_communes_critiques} {commune_label} "
-                       "avec un temps d'accès supérieur à 15\u202fmin")
+                       "avec un temps d'accès supérieur à 15\u202fmin (indicateur interne)")
 
     complement += "."
 
@@ -367,8 +378,24 @@ def render_scorecard(r: pd.Series, master: pd.DataFrame) -> None:
             f'<div class="sc-tile-val" style="color:{col};">{val}</div>'
             f'<div class="sc-tile-delta">{delta}</div></div>'
         )
+    # Conclusion en français : où le département décroche, où il tient
+    bd = [b for b in get_score_breakdown(r) if b["score"] is not None]
+    faibles = [b["label"][0].lower() + b["label"][1:] for b in sorted(bd, key=lambda b: b["score"]) if b["score"] < 33][:3]
+    fortes = [b["label"][0].lower() + b["label"][1:] for b in sorted(bd, key=lambda b: -b["score"]) if b["score"] >= 67][:2]
+    nom = html.escape(str(r.get("Nom du département", "Ce département")))
+    if faibles and fortes:
+        concl = f"{nom} décroche sur {', '.join(faibles)} ; il tient bon sur {' et '.join(fortes)}."
+    elif faibles:
+        concl = f"{nom} décroche sur {', '.join(faibles)}, sans dimension où il se distingue favorablement."
+    elif fortes:
+        concl = f"{nom} ne décroche sur aucune dimension et se distingue sur {' et '.join(fortes)}."
+    else:
+        concl = f"{nom} se situe dans la moyenne nationale sur l’ensemble des dimensions."
+    st.markdown(f'<p class="diagnostic-prose" style="font-size:15px;margin:0 0 10px;">{concl} '
+                f'<span style="color:#6B6B68;font-size:13px;">Chaque dimension est un rang parmi les 100 départements '
+                f'(50 = médiane) ; le poids indique sa part dans le score global.</span></p>', unsafe_allow_html=True)
     st.markdown(f'<div class="sc-tiles">{tiles}</div>', unsafe_allow_html=True)
-    with st.expander("Détail des six dimensions (valeurs, sources, explications)"):
+    with st.expander("Comprendre le diagnostic : valeurs, sources et calcul des six dimensions"):
         _render_scorecard_detail(r, master)
 
 
@@ -497,10 +524,24 @@ def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
     _render_bar("Accessibilité APL", "Consultations disponibles / hab.",
                 score_apl, val_apl, "/hab.", indent=True)
     _couv_t = to_num(r.get("couverture_temps"))
-    _render_bar("Accessibilité physique",
-                "Temps d'accès communal (médiane simple) · 0 = offre dans la commune"
-                + (f" · ⚠ {_couv_t:.0%} des communes couvertes" if pd.notna(_couv_t) and _couv_t < 0.9 else ""),
-                score_temps, val_temps, "min", indent=True)
+    from ..config import TEMPS_SOURCE
+    if TEMPS_SOURCE == "insee":
+        _sub_t = "Temps en voiture vers le généraliste le plus proche, médiane pondérée par la population (INSEE 2025)"
+    else:
+        _sub_t = ("Indicateur interne : médiane des communes du temps vers la commune équipée la plus proche "
+                  "(0 = généraliste présent)"
+                  + (f" · ⚠ {_couv_t:.0%} des communes couvertes" if pd.notna(_couv_t) and _couv_t < 0.9 else ""))
+    _render_bar("Accessibilité physique", _sub_t, score_temps, val_temps, "min", indent=True)
+    _part15 = to_num(r.get("acces_mg_part_sup_15"))
+    _tmed_insee = to_num(r.get("acces_mg_t_med"))
+    if pd.notna(_part15):
+        st.markdown(
+            f'<div style="padding-left:28px;border-left:2px solid #E8E6DD;margin:-8px 0 16px 8px;font-size:12.5px;color:#4B4B48;line-height:1.5;">'
+            f'<strong>Repère INSEE 2025</strong> (hors score{" — active en mode insee" if TEMPS_SOURCE == "insee" else ""}) : '
+            f'{_part15 * 100:.1f}\u202f% des habitants à plus de 15 min en voiture d\u2019un généraliste'
+            + (f", médiane {_tmed_insee:.1f} min" if pd.notna(_tmed_insee) else "")
+            + ' · carreaux de 200 m, distancier Metric-OSRM, lieu d\u2019exercice réel.</div>'.replace("\\u202f", "\u202f"),
+            unsafe_allow_html=True)
 
     _render_bar(
         "Professionnels de santé",
@@ -569,7 +610,7 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         '<em>action de santé.</em></h2>'
         '<p class="section-lead">'
         "Trois lectures distinctes, au choix : le <strong>besoin d\u2019accès</strong> (temps de trajet "
-        "vers une offre de médecine générale), la <strong>capacité</strong> (APL communal DREES : une offre "
+        "en voiture vers un médecin généraliste, INSEE 2025), la <strong>capacité</strong> (APL communal DREES : une offre "
         "présente peut être insuffisante) et la <strong>priorité d\u2019action</strong> (score qui croise le besoin "
         "d\u2019accès, la population et des conditions de déploiement approchées). La carte et le classement "
         "suivent la même lecture ; la faisabilité réelle se confirme localement."
@@ -644,17 +685,27 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     mode = modes[choix]
 
     temps_num = pd.to_numeric(comm_data["temps_acces"], errors="coerce")
-    nb_sur_place = int((temps_num <= 0).sum())
+    offre = comm_data["offre_sur_place"].fillna(False).astype(bool) if "offre_sur_place" in comm_data.columns else (temps_num <= 0)
+    source_insee = comm_data.attrs.get("source_temps") == "insee"
+    nb_sur_place = int(offre.sum())
     nb_15 = int((temps_num > 15).sum())
     pop_15 = pd.to_numeric(comm_data.loc[temps_num > 15, "population"], errors="coerce").sum()
     if mode == "besoin":
-        note = (f"<strong>Besoin d\u2019accès.</strong> Temps de trajet communal vers l\u2019offre de médecine générale "
-                f"la plus proche (indicateur interne, 0 = offre dans la commune). {nb_15} communes sont à plus de "
-                f"15 min, soit {int(pop_15):,} habitants. Le classement liste les communes les plus éloignées, "
-                f"avec leur population : il mesure une distance, pas un volume.").replace(",", "\u202f")
+        if source_insee:
+            pop_loc_15 = pd.to_numeric(comm_data.get("part_sup_15"), errors="coerce").fillna(0) * pd.to_numeric(comm_data.get("pop_localisee"), errors="coerce").fillna(0)
+            note = (f"<strong>Besoin d\u2019accès.</strong> Temps moyen de trajet en voiture des habitants de chaque commune "
+                    f"vers le médecin généraliste le plus proche (INSEE 2025, carreaux de 200 m, lieu d\u2019exercice réel). "
+                    f"{nb_15} communes dépassent 15 min en moyenne ; {int(pop_loc_15.sum()):,} habitants du département vivent à plus "
+                    f"de 15 min. Les {nb_sur_place} communes où un généraliste est recensé forment une classe à part. "
+                    f"Le classement liste les communes les plus éloignées : il mesure une distance, pas un volume.").replace(",", "\u202f")
+        else:
+            note = (f"<strong>Besoin d\u2019accès.</strong> Temps de trajet communal vers l\u2019offre de médecine générale "
+                    f"la plus proche (indicateur interne, 0 = offre dans la commune). {nb_15} communes sont à plus de "
+                    f"15 min, soit {int(pop_15):,} habitants. Le classement liste les communes les plus éloignées, "
+                    f"avec leur population : il mesure une distance, pas un volume.").replace(",", "\u202f")
     elif mode == "capacite":
         apl_c = pd.to_numeric(comm_data["apl_commune"], errors="coerce")
-        nb_sous = int((apl_c < 2.5).sum()); nb_offre_sous = int(((apl_c < 2.5) & (temps_num <= 0)).sum())
+        nb_sous = int((apl_c < 2.5).sum()); nb_offre_sous = int(((apl_c < 2.5) & offre).sum())
         pop_sous = pd.to_numeric(comm_data.loc[apl_c < 2.5, "population"], errors="coerce").sum()
         note = (f"<strong>Capacité.</strong> APL communal DREES 2023 (consultations de médecine générale accessibles par an "
                 f"et par habitant, repère de sous-densité 2,5). {nb_sous} communes sont sous le repère, soit {int(pop_sous):,} "
@@ -854,6 +905,7 @@ def render_recommandations(r: pd.Series, master: pd.DataFrame, data: dict) -> No
                 with col:
                     _render_reco_card(recos[i + j], r, data)
 
+    st.markdown('<div id="leviers"></div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="reco-meth-note">{_RECO_METH_NOTE}</p>',
         unsafe_allow_html=True,

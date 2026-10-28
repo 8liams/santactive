@@ -50,12 +50,20 @@ _BESOIN_CLASSES: list[tuple[float, str, str]] = [
 OFFRE_SUR_PLACE = ("Offre dans la commune", "#D9E3D4")
 
 
-def besoin_class(temps) -> tuple[str, str]:
-    """(libellé, couleur) de la classe de temps d'accès ; 0 = offre sur place."""
+def _offre(temps, offre=None) -> bool:
+    """Présence d'un généraliste dans la commune : indicateur explicite (BPE, bool)
+    ou, à défaut, convention historique du fichier interne (temps 0)."""
+    if offre is not None and not (isinstance(offre, float) and pd.isna(offre)):
+        return bool(offre)
+    return pd.notna(temps) and float(temps) <= 0
+
+
+def besoin_class(temps, offre=None) -> tuple[str, str]:
+    """(libellé, couleur) de la classe de temps d'accès ; offre sur place = classe à part."""
     if pd.isna(temps):
         return "N/D", "#E8E6DD"
     t = float(temps)
-    if t <= 0:
+    if _offre(temps, offre):
         return OFFRE_SUR_PLACE
     for seuil, label, color in _BESOIN_CLASSES:
         if t > seuil:
@@ -93,11 +101,11 @@ def load_apl_communes() -> dict[str, float]:
     return _APL_CACHE
 
 
-def capacite_class(apl, temps) -> tuple[str, str]:
+def capacite_class(apl, temps, offre=None) -> tuple[str, str]:
     """(libellé, couleur) de la lecture capacité pour une commune."""
     if pd.isna(apl):
         return "N/D", "#E8E6DD"
-    offre = pd.notna(temps) and float(temps) <= 0
+    offre = _offre(temps, offre)
     a = float(apl)
     if offre:
         if a < 2.5:
@@ -106,6 +114,31 @@ def capacite_class(apl, temps) -> tuple[str, str]:
             return CAPACITE_LEGENDE[1]
         return CAPACITE_LEGENDE[2]
     return CAPACITE_LEGENDE[3] if a < 2.5 else CAPACITE_LEGENDE[4]
+
+
+# Accès routier au généraliste le plus proche, par commune — INSEE 2025 (carreaux
+# 200 m, Metric-OSRM, lieu d'exercice réel BPE). Remplace l'indicateur interne pour
+# la lecture communale lorsqu'il couvre le département (sinon repli sur l'interne).
+_INSEE_PATH = "static/data/acces_insee_mg_communes_2025.csv"
+_INSEE_CACHE: pd.DataFrame | None = None
+
+
+def load_acces_insee_communes() -> pd.DataFrame:
+    """code_insee, dep, temps_acces (temps moyen pondéré, min), part_sup_15, offre_sur_place, pop_localisee."""
+    global _INSEE_CACHE
+    if _INSEE_CACHE is None:
+        try:
+            df = pd.read_csv(_INSEE_PATH, dtype={"code_insee": str, "dep": str})
+            _INSEE_CACHE = pd.DataFrame({
+                "code_insee": df["code_insee"].str.zfill(5), "dep": df["dep"].astype(str),
+                "temps_acces": pd.to_numeric(df["t_moy"], errors="coerce").round(1),
+                "part_sup_15": pd.to_numeric(df["part_sup_15"], errors="coerce"),
+                "offre_sur_place": df["equipe"].astype(int) == 1,
+                "pop_localisee": pd.to_numeric(df["pop"], errors="coerce"),
+            })
+        except (OSError, ValueError, KeyError):
+            _INSEE_CACHE = pd.DataFrame(columns=["code_insee", "dep", "temps_acces", "part_sup_15", "offre_sur_place", "pop_localisee"])
+    return _INSEE_CACHE
 
 
 # Alias compatibilité interne
@@ -231,9 +264,11 @@ def build_facteur_principal(row: pd.Series, dept_medians: dict[str, float]) -> s
     temps_med = to_num(dept_medians.get("temps"))
     prix_med = to_num(dept_medians.get("prix"))
     parts: list[str] = []
+    offre = _offre(temps, row.get("offre_sur_place"))
     if pd.notna(temps):
-        if temps <= 0:
-            parts.append("offre de médecine générale présente dans la commune (0 min)")
+        if offre:
+            parts.append("généraliste présent dans la commune"
+                         + (f" (trajet moyen {temps:.0f} min)" if temps > 0 else ""))
         else:
             cmp = (f", {temps / temps_med:.1f}× la médiane du département ({temps_med:.0f} min)"
                    if pd.notna(temps_med) and temps_med > 0 else "")
@@ -258,11 +293,26 @@ def build_commune_opportunity_df(
     code_to_name: dict[str, str] | None = None,
     population_by_code: dict[str, float] | None = None,
 ) -> pd.DataFrame:
-    """Calcule le score d'opportunité d'action pour chaque commune du département."""
+    """Calcule le score d'opportunité d'action pour chaque commune du département.
+
+    Temps d'accès communal : INSEE 2025 (temps moyen en voiture vers le généraliste
+    le plus proche, carreaux 200 m, présence d'un généraliste = BPE) lorsque le
+    département est couvert ; sinon fichier interne (0 = généraliste présent).
+    ``df.attrs["source_temps"]`` vaut « insee » ou « interne »."""
     if temps_df.empty or immo_df.empty:
         return pd.DataFrame()
 
     temps_by_code = _aggregate_by_code(temps_df, "temps_acces", "mean", name_to_code)
+    temps_by_code["offre_sur_place"] = pd.to_numeric(temps_by_code.get("temps_acces"), errors="coerce") <= 0
+    source_temps = "interne"
+    dept = str(temps_df["code_departement"].iloc[0]).zfill(2) if "code_departement" in temps_df.columns else ""
+    insee = load_acces_insee_communes()
+    if dept and not insee.empty:
+        sub = insee[insee["dep"] == dept]
+        if len(sub) >= max(3, 0.8 * len(temps_by_code)):
+            temps_by_code = sub.rename(columns={"code_insee": "code_commune"})[
+                ["code_commune", "temps_acces", "part_sup_15", "offre_sur_place", "pop_localisee"]].copy()
+            source_temps = "insee"
     prix_by_code = _aggregate_by_code(immo_df, "prix_m2", "median", name_to_code)
 
     if temps_by_code.empty or prix_by_code.empty:
@@ -271,6 +321,7 @@ def build_commune_opportunity_df(
     df = temps_by_code.merge(prix_by_code, on="code_commune", how="inner")
     if df.empty:
         return pd.DataFrame()
+    df.attrs["source_temps"] = source_temps
 
     code_to_name = code_to_name or {}
     df["commune"] = df["code_commune"].map(code_to_name).fillna(df["code_commune"])
@@ -331,23 +382,24 @@ def build_commune_opportunity_df(
     # disposent déjà d'une offre (temps 0) ne sont pas classées — elles sont
     # affichées comme telles sur la carte, et exclues du Top 10.
     temps_num = pd.to_numeric(df["temps_acces"], errors="coerce")
+    df["offre_sur_place"] = df["offre_sur_place"].fillna(False).astype(bool)
     level_data = df["score_action"].apply(
         lambda s: action_priority_level(float(s)) if pd.notna(s) else ("N/D", "#E8E6DD")
     )
     df["niveau"] = level_data.apply(lambda x: x[0])
     df["color_hex"] = level_data.apply(lambda x: x[1])
-    sur_place = temps_num.notna() & (temps_num <= 0)
+    sur_place = df["offre_sur_place"]
     df.loc[sur_place, "niveau"] = OFFRE_SUR_PLACE[0]
     df.loc[sur_place, "color_hex"] = OFFRE_SUR_PLACE[1]
     df["value"] = df["score_action"]
     # Lecture « besoin d'accès » : classe de temps de trajet
-    besoin = temps_num.apply(besoin_class)
-    df["besoin_label"] = besoin.apply(lambda x: x[0])
-    df["besoin_color"] = besoin.apply(lambda x: x[1])
+    besoin = [besoin_class(t, o) for t, o in zip(temps_num, df["offre_sur_place"])]
+    df["besoin_label"] = [b[0] for b in besoin]
+    df["besoin_color"] = [b[1] for b in besoin]
     # Lecture « capacité » : APL communal DREES 2023
     apl = load_apl_communes()
     df["apl_commune"] = df["code_commune"].astype(str).str.zfill(5).map(apl)
-    cap = [capacite_class(a, t) for a, t in zip(df["apl_commune"], temps_num)]
+    cap = [capacite_class(a, t, o) for a, t, o in zip(df["apl_commune"], temps_num, df["offre_sur_place"])]
     df["capacite_label"] = [c[0] for c in cap]
     df["capacite_color"] = [c[1] for c in cap]
     return df
@@ -390,7 +442,8 @@ def top_communes_for_action(
         cands = comm_data[apl.notna() & (apl < 2.5)].copy()
         cands["_pop"] = pd.to_numeric(cands.get("population"), errors="coerce").fillna(0)
         return cands.sort_values(["_pop", "apl_commune"], ascending=[False, True]).drop(columns=["_pop"]).head(limit).reset_index(drop=True)
-    candidates = comm_data[temps.notna() & (temps > 0)].dropna(subset=[score_col]).copy()
+    offre = comm_data["offre_sur_place"].fillna(False).astype(bool) if "offre_sur_place" in comm_data.columns else (temps <= 0)
+    candidates = comm_data[temps.notna() & ~offre].dropna(subset=[score_col]).copy()
     if candidates.empty:
         return pd.DataFrame()
     if mode == "besoin":

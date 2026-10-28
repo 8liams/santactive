@@ -36,6 +36,8 @@ from .config import (
     PROS_PATH,
     TEMPS_FILE_ID,
     TEMPS_PATH,
+    TEMPS_SOURCE,
+    ACCES_INSEE_DEPT_PATH,
 )
 
 
@@ -300,6 +302,16 @@ def load_all_data():
         master["apl_dept"] = pd.to_numeric(master["apl_median_dept"], errors="coerce")
     master["apl_methode"] = APL_METHODE
 
+    # ── Accès routier aux généralistes — INSEE 2025 (carreaux 200 m, Metric-OSRM) ──
+    # Indicateur officiel, lu en parallèle de l'indicateur interne : il alimente
+    # les diagnostics et, si SANTACTIVE_TEMPS_SOURCE=insee, la dimension « temps »
+    # du score (voir config.TEMPS_SOURCE et docs/EVOLUTIONS_MOTEUR.md §14).
+    master = master.merge(load_acces_insee_dept(), on="dept", how="left")
+    master["temps_source"] = TEMPS_SOURCE
+    if TEMPS_SOURCE == "insee":
+        master["temps_acces_interne_median"] = master["temps_acces_median"]
+        master["temps_acces_median"] = master["acces_mg_t_med"]
+
     # ── Indicateurs dérivés ───────────────────────────────────────────────────
     # Couverture du fichier temps d'accès : communes présentes / référentiel geo.api
     master["couverture_temps"] = master["nb_communes"] / master["nb_communes_ref"].replace(0, pd.NA)
@@ -362,6 +374,34 @@ def _pop_communes_critiques(temps_raw: pd.DataFrame) -> pd.DataFrame:
         })
     g = pd.DataFrame(rows, columns=cols)
     return g
+
+
+@st.cache_data(show_spinner=False)
+def load_acces_insee_dept() -> pd.DataFrame:
+    """Accès routier au médecin généraliste le plus proche, par département (INSEE 2025).
+
+    Source : Insee, base permanente des équipements 2025, distancier Metric-OSRM,
+    population carroyée Filosofi (scripts/donnees/calculer_acces_insee.py).
+    Colonnes : acces_mg_t_med (médiane pondérée par la population, minutes),
+    acces_mg_t_moy, acces_mg_t_p90, acces_mg_part_sup_15 / _20 / _30 (parts de
+    population au-delà du seuil), acces_mg_pop_sup_15 (habitants), acces_mg_nb_communes_sup_15
+    (communes dont le temps moyen dépasse 15 min), acces_mg_pop (population localisée).
+    Guadeloupe, Guyane et Mayotte sont hors champ (NaN).
+    """
+    cols = ["dept", "acces_mg_t_med", "acces_mg_t_moy", "acces_mg_t_p90", "acces_mg_part_sup_15",
+            "acces_mg_part_sup_20", "acces_mg_part_sup_30", "acces_mg_pop_sup_15", "acces_mg_nb_communes_sup_15",
+            "acces_mg_nb_communes_equipees", "acces_mg_pop"]
+    path = Path(ACCES_INSEE_DEPT_PATH)
+    if not path.exists():
+        return pd.DataFrame(columns=cols)
+    d = pd.read_csv(path, dtype={"dept": str})
+    d = d[d["type"] == "D265"].copy()
+    d["acces_mg_pop_sup_15"] = d["part_sup_15"] * d["pop"]
+    d = d.rename(columns={"t_med": "acces_mg_t_med", "t_moy": "acces_mg_t_moy", "t_p90": "acces_mg_t_p90",
+                          "part_sup_15": "acces_mg_part_sup_15", "part_sup_20": "acces_mg_part_sup_20",
+                          "part_sup_30": "acces_mg_part_sup_30", "nb_communes_sup_15": "acces_mg_nb_communes_sup_15",
+                          "nb_communes_equipees": "acces_mg_nb_communes_equipees", "pop": "acces_mg_pop"})
+    return d[cols]
 
 
 @st.cache_data(show_spinner=False)
