@@ -2055,8 +2055,8 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
 .diagnostic-kpi {
     background: #FFFFFF;
     border: 1px solid #E8E6DD;
-    border-top: 3px solid #1A3D8F;
     border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(10, 25, 56, 0.04);
     padding: 24px 28px;
     transition: box-shadow 0.18s;
 }
@@ -2422,29 +2422,40 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
         margin-bottom: 0 !important;
     }
 
-    /* ── Tableaux → cartes (pas de scroll horizontal) ───────────────────── */
+    /* ── Tableaux larges : défilement horizontal dans leur propre conteneur, jamais de la page ── */
     .sa-tbl-scroll {
         width: 100% !important;
         max-width: 100% !important;
-        overflow-x: hidden !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        padding-bottom: 4px;
     }
-    .sa-tbl-scroll table {
-        min-width: 0 !important;
-        width: 100% !important;
+    .sa-tbl-scroll::before {
+        content: "Faire glisser pour voir toutes les colonnes \2192";
+        display: block; font-size: 11px; color: #6B6B68; margin: 0 0 6px; letter-spacing: .02em;
     }
-    .region-priority-table,
-    .region-ranking-table {
-        min-width: 0 !important;
-    }
-    .commune-action-table {
-        min-width: 0 !important;
-    }
+    .sa-tbl-scroll table, .sa-tbl-scroll > div[style*="min-width"] { min-width: 560px !important; width: max-content; max-width: none; }
+    .sa-tbl-scroll table { width: 100%; }
+    .region-priority-table table, .region-ranking-table table, .commune-action-table { min-width: 560px !important; }
 
-    /* ── Tableaux natifs Streamlit ──────────────────────────────────────── */
+    /* ── Tableaux natifs Streamlit : défilement interne ────────────────── */
     [data-testid="stDataFrame"] {
-        overflow-x: hidden !important;
+        overflow-x: auto !important;
         max-width: 100% !important;
     }
+
+    /* ── Colonnes Streamlit : une seule colonne sur petit écran (les exceptions — barre de
+       navigation, carrousel DOM — sont définies plus loin et gardent la priorité) ── */
+    .block-container [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
+    .block-container [data-testid="stColumn"] { flex: 1 1 100% !important; min-width: 100% !important; }
+    /* Cartes et encadrés : hauteur naturelle, texte qui ne déborde jamais */
+    .diagnostic-kpi, .sc-tile, .kpi-card, .reco-card, .cap-conclusion, .ign-def, .usage-card, .meth-step, .meth-grid2 > div {
+        height: auto !important; min-height: 0 !important; overflow-wrap: anywhere; word-break: break-word;
+    }
+    .diagnostic-kpi { padding: 16px 16px !important; }
+    .diagnostic-kpi-value { font-size: 30px !important; }
+    .sc-tile-val { font-size: 22px !important; }
 
     /* ── Mini-cartes DOM-TOM : carrousel horizontal local ─────────────────── */
     .st-key-home_dom_cartouches {
@@ -3446,3 +3457,24 @@ div[data-testid="stButtonGroup"] label[data-testid="stWidgetLabel"] p { font-siz
 /* Carte nationale : apparition en fondu au changement d'indicateur (évite le basculement brutal) */
 .st-key-home_map_kpi iframe[title*="folium"] { animation: sa-fade .45s ease-out; }
 @keyframes sa-fade { from { opacity: .25; } to { opacity: 1; } }
+
+/* ─── Expanders : chevron dessiné en CSS (sur iPhone, l'icône Material pouvait s'afficher en toutes
+   lettres « keyboard_arrow_right ») ; en-tête compact et lien d'aide sur une ligne ───────────────── */
+div[data-testid="stExpander"] summary { display: flex !important; align-items: center !important; gap: 8px; min-height: 0 !important; line-height: 1.35; }
+div[data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
+div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {
+    font-size: 0 !important; color: transparent !important; width: 18px !important; height: 18px !important; flex: 0 0 18px;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='none' stroke='%231A3D8F' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='M9 6l6 6-6 6'/></svg>") center / 16px 16px no-repeat;
+    transition: transform .18s ease; overflow: hidden;
+}
+div[data-testid="stExpander"] details[open] > summary [data-testid="stExpanderToggleIcon"],
+div[data-testid="stExpander"] details[open] > summary [data-testid="stIconMaterial"] { transform: rotate(90deg); }
+div[data-testid="stExpander"] summary p { margin: 0 !important; }
+
+/* ─── Barre collante : les ancres et titres ne passent pas sous le header ─────────────────────── */
+html, [data-testid="stMain"], section.main { scroll-padding-top: 100px; }
+[id], h1, h2, h3, .section-header { scroll-margin-top: 100px; }
+@media (max-width: 768px) {
+    html, [data-testid="stMain"], section.main { scroll-padding-top: 136px; }
+    [id], h1, h2, h3, .section-header { scroll-margin-top: 136px; }
+}

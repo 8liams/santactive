@@ -43,6 +43,16 @@ def _raison(e: dict) -> str:
     return " · ".join(parts)
 
 
+
+def _est_mobile() -> bool:
+    """Téléphone (largeur étroite) d'après l'agent utilisateur : mise en page Plotly adaptée."""
+    try:
+        ua = str(st.context.headers.get("User-Agent", ""))
+    except Exception:
+        return False
+    return ("Mobi" in ua or "iPhone" in ua or "Android" in ua) and "iPad" not in ua
+
+
 def render(data: dict) -> None:
     render_breadcrumb([NavCrumb("Accueil", "home"), NavCrumb("Prioriser")], key_prefix="explo_bc")
     master = data["master"]
@@ -171,16 +181,32 @@ def render(data: dict) -> None:
                                  name="territoire de référence", hoverinfo="skip"))
     fig.add_vline(x=o_med, line=dict(color="#9C9A92", dash="dot", width=1))
     fig.add_hline(y=b_med, line=dict(color="#9C9A92", dash="dot", width=1))
-    for (x, y, tx) in ((8, 97, "offre faible · besoins forts"), (92, 97, "offre correcte · besoins forts"),
-                       (8, 3, "offre faible · besoins modérés"), (92, 3, "offre correcte · besoins modérés")):
-        fig.add_annotation(x=x, y=y, text=tx, showarrow=False, font=dict(size=10, color="#9C9A92"))
+    mobile = _est_mobile()
+    coins = ((4, 97, "offre faible<br>besoins forts", "left"), (96, 97, "offre correcte<br>besoins forts", "right"),
+             (4, 3, "offre faible<br>besoins modérés", "left"), (96, 3, "offre correcte<br>besoins modérés", "right"))
+    for (x, y, tx, anc) in coins:
+        fig.add_annotation(x=x, y=y, text=tx if mobile else tx.replace("<br>", " · "), showarrow=False, xanchor=anc,
+                           yanchor="top" if y > 50 else "bottom", align=anc, font=dict(size=9 if mobile else 10, color="#9C9A92"))
+    if mobile:
+        # Libellés des points : seulement les codes, pour ne rien couper sur un écran étroit
+        for tr in fig.data:
+            if tr.mode and "text" in tr.mode:
+                tr.text = [str(t).split(" ")[0] for t in tr.text]
+                tr.textfont = dict(size=8, color="#4B4B48")
     fig.update_layout(
-        height=520, margin=dict(l=20, r=20, t=10, b=40), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#FAFAF8",
-        xaxis=dict(title="Offre et accès (100 = le mieux doté)", range=[0, 100], gridcolor="#E8E6DD"),
-        yaxis=dict(title="Besoins sanitaires (100 = besoins les plus forts)", range=[0, 100], gridcolor="#E8E6DD"),
-        legend=dict(orientation="h", y=-0.18), font=dict(family="Marianne, Inter, sans-serif", size=12),
+        height=460 if mobile else 520,
+        margin=dict(l=6, r=6, t=8, b=10) if mobile else dict(l=20, r=20, t=10, b=40),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#FAFAF8", autosize=True,
+        xaxis=dict(title=dict(text="Offre et accès (100 = le mieux doté)", font=dict(size=11 if mobile else 12)), range=[0, 100],
+                   gridcolor="#E8E6DD", tickfont=dict(size=10 if mobile else 12)),
+        yaxis=dict(title=dict(text="Besoins (100 = les plus forts)" if mobile else "Besoins sanitaires (100 = besoins les plus forts)",
+                              font=dict(size=11 if mobile else 12)), range=[0, 100], gridcolor="#E8E6DD",
+                   tickfont=dict(size=10 if mobile else 12)),
+        legend=dict(orientation="h", y=-0.28 if mobile else -0.18, x=0, xanchor="left", font=dict(size=10 if mobile else 12),
+                    itemwidth=30),
+        font=dict(family="Marianne, Inter, sans-serif", size=11 if mobile else 12),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
 
     counts = sel["quadrant"].value_counts()
     cols = st.columns(4)

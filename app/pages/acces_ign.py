@@ -613,8 +613,13 @@ def _carte_base(carreaux: pd.DataFrame, zones: dict | None, sit: pd.DataFrame, *
         "padding:10px 12px;border-radius:4px;border:1px solid #C9C6BA;line-height:1.7;max-width:270px;}"
         ".sa-ign-legend div{white-space:normal;line-height:1.35;margin:2px 0;}"
         ".sa-ign-legend i{flex:0 0 auto;}"
-        "@media (max-width:520px){.sa-ign-legend{max-width:54%;font-size:9.5px;padding:6px 8px;line-height:1.4;}"
-        ".sa-ign-legend div{line-height:1.2;margin:1px 0;}.sa-ign-legend i{width:9px;height:9px;margin-right:4px;}}"
+        ".sa-ign-legend summary{list-style:none;cursor:pointer;font-weight:700;font-size:11px;color:#1A3D8F;letter-spacing:.06em;text-transform:uppercase;}"
+        ".sa-ign-legend summary::-webkit-details-marker{display:none;}.sa-ign-legend summary::after{content:' \\25BE';}"
+        ".sa-ign-legend[open] summary::after{content:' \\25B4';}.sa-ign-legend[open] summary{margin-bottom:6px;}"
+        ".sa-ign-legend:not([open]){padding:6px 10px;}"
+        "@media (max-width:640px){.sa-ign-legend{max-width:64%;font-size:10px;padding:6px 8px;line-height:1.35;}"
+        ".sa-ign-legend-body{max-height:40vh;overflow:auto;}"
+        ".sa-ign-legend div{line-height:1.25;margin:1px 0;}.sa-ign-legend i{width:10px;height:10px;margin-right:5px;}}"
         ".sa-ign-legend b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#6B6B68;margin-bottom:4px;}"
         ".sa-ign-legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:middle;}"
         ".sa-ign-legend i.pt{border-radius:50%;width:10px;height:10px;}"
@@ -687,10 +692,14 @@ def _legende(m: folium.Map, seuil: int | None, mode: str | None, continu: bool =
             scen += (f'<div><i style="background:{_NEUF};"></i>habitants passant sous {seuil} min</div>'
                      '<div><i style="background:#1B5E3F;opacity:.6;"></i>habitants déjà sous le seuil, trajet raccourci</div>')
         communes += f'<div><i class="pt" style="background:#fff;border:3px solid {_NEUF};"></i>commune avec habitants nouvellement couverts</div>'
-    legend = f'<div class="sa-ign-legend">{base}{communes}{scen}</div>'
+    legend = (f'<details class="sa-ign-legend" open><summary>Légende</summary>'
+              f'<div class="sa-ign-legend-body">{base}{communes}{scen}</div></details>')
     m.get_root().html.add_child(folium.Element(
         '<div class="leaflet-bottom leaflet-left" style="pointer-events:none;">'
-        f'<div class="leaflet-control" style="margin:0 0 24px 12px;">{legend}</div></div>'))
+        f'<div class="leaflet-control" style="margin:0 0 24px 12px;pointer-events:auto;">{legend}</div></div>'))
+    # Sur téléphone, la légende est repliée au chargement (un bouton « Légende » l'ouvre).
+    m.get_root().script.add_child(folium.Element(
+        "if (window.innerWidth < 640) { document.querySelectorAll('details.sa-ign-legend').forEach(function(d){ d.removeAttribute('open'); }); }"))
 
 
 def _note_continu(dept: str, continu: dict | None) -> None:
