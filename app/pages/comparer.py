@@ -16,18 +16,20 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from ..config import APL_SOURCE_LABEL, TEMPS_LABEL_COURT
+
 from .. import territoire as T
 from ..components.nav import internal_href
 from ..config import PALETTE, PLOTLY_TEMPLATE
 from ..router import navigate
 
-# Médiane APL nationale (ANCT 2023) — même référence que l'accueil et les fiches dept.
+# Médiane APL nationale (DREES, millésime actif) — même référence que l'accueil et les fiches dept.
 APL_NATIONAL_REF = None  # référence = médiane des valeurs départementales (voir _national_reference)
 
 COMPARE_METRICS: list[tuple[str, str, str, str]] = [
     ("Score global",         "score_global",          ".1f", "/100"),
     ("APL (DREES)",          "apl_dept",       ".1f", "/hab."),
-    ("Temps d'accès médian (indicateur interne, score)", "temps_acces_median", ".1f", " min"),
+    (f"Temps d'accès médian ({TEMPS_LABEL_COURT}, score)", "temps_acces_median", ".1f", " min"),
     ("Médecins / 100k",      "med_gen_pour_100k",     ".0f", ""),
     ("Structures / 100k",    "structures_pour_100k",  ".1f", ""),
     ("Prix médian m²",       "prix_m2_moyen",         ".0f", " €"),
@@ -352,7 +354,7 @@ def _render_synthese(master: pd.DataFrame, comp_df: pd.DataFrame, selected: list
     communs = [e for e in ecarts if e[0] < 0.08 or (e[8] and len(set(e[8].values())) == 1 and "at" not in e[8].values())]
 
     lib_fr = {"acces_mg_part_sup_15_pct": "la part d’habitants à plus de 15 min d’un généraliste", "score_global": "le score global", "apl_dept": "l’accessibilité aux généralistes (APL)",
-              "temps_acces_median": "le temps d’accès (indicateur interne)", "med_gen_pour_100k": "la densité de généralistes",
+              "temps_acces_median": f"le temps d’accès ({TEMPS_LABEL_COURT})", "med_gen_pour_100k": "la densité de généralistes",
               "structures_pour_100k": "l’offre hospitalière", "prix_m2_moyen": "le prix du foncier", "pct_plus_65": "la part des 65 ans et plus"}
     li = ""
     for rel, label, col, fmt, unit, pire, mieux, vals, pos, nat in majeurs:
@@ -701,7 +703,7 @@ def _render_comparison_table(
         '</div>'
         '<p style="font-size:11px;color:#6B6B68;margin-top:12px;">'
         'Référence nationale = médiane calculée sur les 100 départements analysés '
-        '(APL\u202f: médiane des valeurs départementales, DREES 2023). '
+        f'(APL\u202f: médiane des valeurs départementales, {APL_SOURCE_LABEL}). '
         'Vert = au-dessus de la médiane (ou en dessous si l\'indicateur est '
         'défavorable), rouge = en dessous.'
         f'{region_note}'

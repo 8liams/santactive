@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .config import APL_MILLESIME, TEMPS_SOURCE
+
 
 # ── Dimensions et pondérations ────────────────────────────────────────────────
 DIMENSIONS: dict[str, dict] = {
@@ -12,7 +14,7 @@ DIMENSIONS: dict[str, dict] = {
         "weight": 0.30,
         "hib":    True,
         "label":  "Accessibilité soins de ville (APL)",
-        "source": "ANCT 2023",
+        "source": f"DREES {APL_MILLESIME}",
     },
     "medecins": {
         "col":    "med_gen_pour_100k",
@@ -33,7 +35,7 @@ DIMENSIONS: dict[str, dict] = {
         "weight": 0.20,
         "hib":    False,
         "label":  "Accessibilité physique",
-        "source": "Calcul interne FINESS + INSEE",
+        "source": "INSEE 2025 (accès aux équipements)" if TEMPS_SOURCE == "insee" else "Calcul interne FINESS + INSEE",
     },
     "seniors": {
         "col":    "pct_plus_65",
@@ -210,18 +212,21 @@ def compute_scores(master: pd.DataFrame) -> pd.DataFrame:
             )
         ),
         axis=1,
-    ).round(1)
+    )
+    # Valeur non arrondie conservée pour le classement (départage des égalités au dixième) ;
+    # la valeur affichée reste arrondie au dixième.
+    df["score_global_raw"] = df["score_global"]
+    df["score_global"] = df["score_global"].round(1)
 
     # score_pros = score_medecins (alias rétro-compat)
     df["score_pros"] = df["score_medecins"]
 
     # ── Rang national ─────────────────────────────────────────────────────
+    # Rangs uniques 1..N : score non arrondi croissant, puis code département (départage
+    # déterministe d'une égalité stricte, règle documentée dans la Méthodologie).
     scored_mask = df["score_global"].notna()
-    df.loc[scored_mask, "rang_national"] = (
-        df.loc[scored_mask, "score_global"]
-        .rank(method="min", ascending=True)
-        .astype(int)
-    )
+    ordre = df.loc[scored_mask].sort_values(["score_global_raw", "dept"], kind="mergesort")
+    df.loc[ordre.index, "rang_national"] = np.arange(1, len(ordre) + 1)
     df.loc[~scored_mask, "rang_national"] = np.nan
     df["nb_classes"] = int(scored_mask.sum())
 

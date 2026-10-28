@@ -690,7 +690,8 @@ def _render_vue_departement(data, dept, nom_dept, carreaux, sit, zones, seuil, t
 
 def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, seuil, sim_geoms, part_sup, tot, loin, key_sim,
                       *, point: tuple[float, float, str] | None = None, anomalie: str | None = None) -> None:
-    """Étape 2 : scénario d'implantation (définition, impact, puis la carte avant / après / gain)."""
+    """Étape 2 : scénario d'implantation. Ordre de lecture : indicateurs d'impact, synthèse courte,
+    carte, tableau des communes bénéficiaires, panneau dépliable (hypothèses, méthode, limites)."""
     master = data["master"]
     com = carreaux
     gain = rapp = pd.DataFrame()
@@ -703,14 +704,6 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
         for k in [k for k in st.session_state if str(k).startswith(f"ign_sim_{dept}_")]:
             st.session_state.pop(k, None)
     st.button(f"← Vue d’ensemble de {nom_dept}", key=f"ign_back_{dept}", on_click=_retour)
-
-    # ── Ce qu'est la nouvelle offre ──────────────────────────────────────────
-    st.markdown(
-        f'<div class="ign-def"><span class="ign-def-lbl">Nouvelle offre simulée</span> un point hypothétique de consultation de médecine '
-        f'générale, placé <strong>{_POINT_LIB.get(lib_pt, lib_pt)} de {html.escape(choix)}</strong> '
-        f'({lat_pt:.4f}, {lon_pt:.4f}). Aucune hypothèse sur la capacité du cabinet, le nombre de médecins ni les rendez-vous : '
-        f'la simulation mesure seulement qui se trouverait à moins de {seuil} min en voiture de ce point.</div>',
-        unsafe_allow_html=True)
 
     if not sim_geoms:
         st.warning("Le service d’isochrones IGN n’a pas répondu (lenteur, erreur ou quota). Aucun scénario n’est affiché ; "
@@ -734,54 +727,40 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
         gain, rapp = gains(com, seuil)
         gpc = gains_par_commune(gain, sit)
         avant = float(com.loc[com["duree"] > seuil, "pop"].sum())
-        apres = avant - float(gain["pop"].sum())
+        n_gain = float(gain["pop"].sum()); n_rapp = float(rapp["pop"].sum())
+        apres = avant - n_gain
 
+        # 1. Indicateurs clés d'impact
         m1, m2, m3, m4 = st.columns(4)
-        m1.markdown(_kpi("Nouvellement couverts", f"+{_fmt(gain['pop'].sum())}",
+        m1.markdown(_kpi("Nouvellement couverts", f"+{_fmt(n_gain)}",
                          f"habitants qui passeraient sous {seuil} min, dans {len(gpc)} commune{'s' if len(gpc) != 1 else ''}", _NEUF), unsafe_allow_html=True)
-        m2.markdown(_kpi("Rapprochés", f"{_fmt(rapp['pop'].sum())}", f"habitants déjà sous {seuil} min dont le trajet raccourcirait", "#1B5E3F"), unsafe_allow_html=True)
+        m2.markdown(_kpi("Rapprochés", f"{_fmt(n_rapp)}", f"habitants déjà sous {seuil} min dont le trajet raccourcirait", "#1B5E3F"), unsafe_allow_html=True)
         m3.markdown(_kpi(f"Au-delà de {seuil} min aujourd’hui", f"{_fmt(avant)}",
                          f"habitants ({_pct(avant / tot, 1)} du département)", "#D9772B"), unsafe_allow_html=True)
         m4.markdown(_kpi("Après le scénario", f"{_fmt(apres)}",
                          f"habitants resteraient au-delà de {seuil} min ({_pct(apres / tot, 1)})", "#D9772B"), unsafe_allow_html=True)
 
-        situ = (f"<strong>{html.escape(choix)}</strong> ({_fmt(row['pop'])} habitants localisés) : temps moyen actuel "
-                f"{row['t_moy']:.0f} min vers un généraliste"
-                + (", un généraliste y est déjà recensé" if row["offre"] else ", aucun généraliste recensé dans la commune") + ".")
-        if len(gpc):
-            lst = ", ".join(f"{html.escape(str(r['nom']))} ({_fmt(r['pop_gain'])} hab., {r['t_avant']:.0f} min → ≤ {int(r['classe_apres'])} min)"
-                            for _, r in gpc.head(8).iterrows())
-            texte = (f"{situ} Une offre de médecine générale à {html.escape(choix)} placerait <strong>{_fmt(gain['pop'].sum())} habitants</strong> "
-                     f"de {len(gpc)} commune{'s' if len(gpc) != 1 else ''} à moins de {seuil} min : {lst}" + (" …" if len(gpc) > 8 else "") + ".")
+        # 2. Synthèse courte, sans jargon
+        if n_gain > 0:
+            synth = (f"Une nouvelle offre de médecine générale à <strong>{html.escape(choix)}</strong> permettrait à "
+                     f"<strong>{_fmt(n_gain)} habitants supplémentaires</strong> de rejoindre un généraliste en moins de {seuil} minutes en voiture. "
+                     f"Les gains concernent {len(gpc)} commune{'s' if len(gpc) != 1 else ''}"
+                     + (f", d’abord {html.escape(str(gpc.iloc[0]['nom']))} ({_fmt(gpc.iloc[0]['pop_gain'])} habitants)" if len(gpc) > 1 else "") + ".")
         else:
-            texte = (f"{situ} <strong>Personne ne passerait sous {seuil} min</strong> : les habitants situés à moins de "
-                     f"{seuil} min de {html.escape(choix)} le sont déjà d’un généraliste existant. Ce zéro ne signifie pas "
-                     f"qu’une implantation serait sans intérêt : elle raccourcirait des trajets, soulagerait les cabinets "
-                     f"voisins et pourrait répondre à un manque de capacité, que cette mesure géographique ne voit pas.")
-        if len(rapp):
-            texte += f" Par ailleurs {_fmt(rapp['pop'].sum())} habitants déjà sous le seuil verraient leur trajet raccourci."
-        texte += (" <span style='color:#6B6B68;'>Estimation théorique de proximité : capacité du cabinet, rendez-vous disponibles, "
-                  "transports en commun et habitants des départements voisins ne sont pas pris en compte.</span>")
-        st.markdown(f'<p class="dim-switch-note">{texte}</p>', unsafe_allow_html=True)
+            synth = (f"Une nouvelle offre à <strong>{html.escape(choix)}</strong> ne placerait <strong>personne de plus</strong> sous {seuil} minutes : "
+                     f"les habitants à moins de {seuil} min de {html.escape(choix)} le sont déjà d’un généraliste existant. Ce zéro ne signifie pas "
+                     f"qu’une implantation serait sans intérêt : capacité des cabinets et délais de rendez-vous ne sont pas mesurés ici.")
+        if n_rapp > 0:
+            synth += f" Par ailleurs, {_fmt(n_rapp)} habitants déjà couverts bénéficieraient d’un trajet plus court."
+        synth += (f" <span class='sa-dim'>Estimation de proximité théorique (point placé {_POINT_LIB.get(lib_pt, lib_pt)}), "
+                  f"pas une garantie de prise en charge.</span>")
+        st.markdown(f'<p class="ign-synth">{synth}</p>', unsafe_allow_html=True)
         if part_sup < 0.01 and float(carreaux.loc[carreaux["duree"] > seuil, "pop"].sum()) < 1000:
             note = _urbain_note(dept, nom_dept, master, part_sup, seuil)
             if note:
                 st.markdown(f'<div class="sa-notice sa-notice--info">{note}</div>', unsafe_allow_html=True)
-        if len(gpc):
-            rows = "".join(
-                f'<tr><td class="metric-label">{html.escape(str(r["nom"]))}</td><td data-label="Nouvellement couverts">{_fmt(r["pop_gain"])} hab.</td>'
-                f'<td data-label="Part de la commune">{_pct(r["part"])}</td><td data-label="Trajet moyen aujourd’hui">{r["t_avant"]:.0f} min</td>'
-                f'<td data-label="Avec la nouvelle offre">≤ {int(r["classe_apres"])} min</td></tr>'
-                for _, r in gpc.head(15).iterrows())
-            st.markdown('<div class="sa-tbl-scroll"><table class="comparison-table-v2 commune-action-table"><thead><tr>'
-                        '<th class="metric-col">Commune</th><th class="metric-col">Habitants nouvellement couverts</th>'
-                        '<th class="metric-col">Part de la commune</th><th class="metric-col">Trajet moyen aujourd’hui</th>'
-                        '<th class="metric-col">Avec la nouvelle offre</th></tr></thead>'
-                        f'<tbody>{rows}</tbody></table></div>'
-                        + (f'<p class="sa-couverture">{len(gpc) - 15} autres communes concernées, gains plus faibles.</p>' if len(gpc) > 15 else ""),
-                        unsafe_allow_html=True)
 
-    # ── Carte : situation actuelle / avec la nouvelle offre / gain seulement ─
+    # 3. Carte : situation actuelle / avec la nouvelle offre / gain seulement
     v1, v2 = st.columns([2.2, 1])
     modes = ["Situation actuelle", "Avec la nouvelle offre", "Gain seulement"] if valide else ["Situation actuelle"]
     mode = v1.radio("Affichage de la carte", modes, index=1 if valide else 0, horizontal=True, key=f"ign_mode_{dept}_{int(valide)}")
@@ -802,8 +781,6 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
                            tooltip=f"Isochrone IGN {s_} min depuis la nouvelle offre").add_to(fg)
             fg.add_to(m)
         if mode == "Avec la nouvelle offre":
-            # Transformation visible : les carreaux dont la classe change prennent la couleur de leur nouvelle classe ;
-            # ceux qui passent sous le seuil reçoivent en plus un contour marine.
             change = com[com["classe_neuf"] < com["classe"]]
             for cl in sorted(change["classe_neuf"].unique()):
                 g = _union_squares(change[change["classe_neuf"] == cl])
@@ -838,10 +815,42 @@ def _render_resultats(data, dept, nom_dept, carreaux, sit, zones, row, choix, se
     _legende(m, seuil, mode)
     folium.LayerControl(collapsed=True).add_to(m)
     st_folium(m, use_container_width=True, height=580, returned_objects=[], key=f"ign_map_{dept}_{choix}_{seuil}_{mode}_{cadrage}")
-    st.caption("Deux calculs routiers distincts : la situation actuelle vient des carreaux Insee (distancier Metric-OSRM, adresses réelles des "
-               "généralistes), le scénario des isochrones IGN (BD TOPO, moteur Valhalla) depuis le point d’implantation. Conséquence : à la "
-               "limite d’une isochrone, un carreau peut basculer d’une classe à une minute près ; les surfaces « après » sont les carreaux "
-               "Insee contenus dans l’isochrone, pas l’isochrone elle-même.")
+
+    # 4. Tableau des communes bénéficiaires
+    if len(gpc):
+        st.markdown(f'<h4 class="subsection-title" style="margin-top:10px;">Communes bénéficiaires (seuil {seuil} min)</h4>', unsafe_allow_html=True)
+        rows = "".join(
+            f'<tr><td class="metric-label">{html.escape(str(r["nom"]))}</td><td data-label="Nouvellement couverts">{_fmt(r["pop_gain"])} hab.</td>'
+            f'<td data-label="Part de la commune">{_pct(r["part"])}</td><td data-label="Trajet moyen aujourd’hui">{r["t_avant"]:.0f} min</td>'
+            f'<td data-label="Avec la nouvelle offre">≤ {int(r["classe_apres"])} min</td></tr>'
+            for _, r in gpc.head(15).iterrows())
+        st.markdown('<div class="sa-tbl-scroll"><table class="comparison-table-v2 commune-action-table"><thead><tr>'
+                    '<th class="metric-col">Commune</th><th class="metric-col">Habitants nouvellement couverts</th>'
+                    '<th class="metric-col">Part de la commune</th><th class="metric-col">Trajet moyen aujourd’hui</th>'
+                    '<th class="metric-col">Avec la nouvelle offre</th></tr></thead>'
+                    f'<tbody>{rows}</tbody></table></div>'
+                    + (f'<p class="sa-couverture">{len(gpc) - 15} autres communes concernées, gains plus faibles.</p>' if len(gpc) > 15 else ""),
+                    unsafe_allow_html=True)
+
+    # 5. Hypothèses, méthode, incertitudes et limites (dépliable)
+    with st.expander("Hypothèses, méthode de calcul et limites du scénario"):
+        st.markdown(
+            f"**Nouvelle offre simulée.** Un point hypothétique de consultation de médecine générale, placé {_POINT_LIB.get(lib_pt, lib_pt)} de "
+            f"{choix} ({lat_pt:.4f}, {lon_pt:.4f}). Aucune hypothèse sur la capacité du cabinet, le nombre de médecins ni les rendez-vous : "
+            f"la simulation mesure seulement qui se trouverait à moins de {seuil} min en voiture de ce point. Le point retenu est la mairie "
+            f"(le centre géométrique d’une commune étendue peut tomber hors du réseau routier) ; à défaut le carreau habité le plus peuplé.\n\n"
+            "**Situation actuelle.** Carreaux habités de 200 m (Insee 2025, population Filosofi) et durée en voiture vers le généraliste le plus "
+            "proche (BPE 2025, lieu d’exercice réel, distancier Metric-OSRM).\n\n"
+            "**Scénario.** Isochrones IGN Géoplateforme (BD TOPO, moteur Valhalla, voiture, départ) à 10, 15 et 20 min depuis le point d’implantation. "
+            "Un carreau contenu dans l’isochrone S passe à ≤ S min. « Nouvellement couverts » : carreaux au-delà du seuil aujourd’hui et dans "
+            "l’isochrone du seuil ; « rapprochés » : déjà sous le seuil, mais dans une isochrone plus serrée que leur temps actuel. Une isochrone "
+            "dégénérée (point non raccordé au réseau) est détectée et le scénario déclaré indisponible plutôt qu’affiché à zéro.\n\n"
+            "**Incertitudes.** Deux distanciers différents (OSRM pour l’existant, Valhalla pour le scénario) : à la limite d’une isochrone, un carreau "
+            "peut basculer d’une classe à une minute près. Les surfaces « après » sont les carreaux Insee contenus dans l’isochrone, pas l’isochrone "
+            "elle-même. Population carroyée arrondie ; les habitants des départements voisins ne sont pas comptés.\n\n"
+            "**Ce qui n’est pas mesuré.** Capacité et patientèle des cabinets, délais de rendez-vous, transports en commun, offre hors département : "
+            "il s’agit d’un gain de proximité théorique, pas d’un gain de prise en charge."
+        )
     _render_situation(dept, nom_dept, carreaux, sit, tot, loin, data)
 
 

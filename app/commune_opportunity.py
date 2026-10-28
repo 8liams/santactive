@@ -75,10 +75,10 @@ def besoin_legend_items() -> list[tuple[str, str]]:
     return [(label, color) for _, label, color in _BESOIN_CLASSES] + [OFFRE_SUR_PLACE]
 
 
-# Lecture « capacité » : APL communal DREES 2023 (consultations accessibles par an
+# Lecture « capacité » : APL communal DREES (millésime config.APL_MILLESIME ; consultations accessibles par an
 # et par habitant), repère de sous-densité 2,5 — mesure théorique de capacité,
 # pas une file d'attente observée.
-_APL_PATH = "static/data/apl_communes_2023.csv"
+from .config import APL_COMMUNES_PATH as _APL_PATH
 _APL_CACHE: dict[str, float] | None = None
 CAPACITE_LEGENDE: list[tuple[str, str]] = [
     ("Offre présente, APL < 2,5 (capacité insuffisante)", "#D4663B"),
@@ -90,7 +90,7 @@ CAPACITE_LEGENDE: list[tuple[str, str]] = [
 
 
 def load_apl_communes() -> dict[str, float]:
-    """APL communal 2023 par code INSEE (vide si le fichier est absent)."""
+    """APL communal (millésime actif) par code INSEE (vide si le fichier est absent)."""
     global _APL_CACHE
     if _APL_CACHE is None:
         try:
@@ -396,7 +396,7 @@ def build_commune_opportunity_df(
     besoin = [besoin_class(t, o) for t, o in zip(temps_num, df["offre_sur_place"])]
     df["besoin_label"] = [b[0] for b in besoin]
     df["besoin_color"] = [b[1] for b in besoin]
-    # Lecture « capacité » : APL communal DREES 2023
+    # Lecture « capacité » : APL communal DREES (millésime actif)
     apl = load_apl_communes()
     df["apl_commune"] = df["code_commune"].astype(str).str.zfill(5).map(apl)
     cap = [capacite_class(a, t, o) for a, t, o in zip(df["apl_commune"], temps_num, df["offre_sur_place"])]
@@ -424,7 +424,7 @@ def top_communes_for_action(
     - « priorite » : score d'action décroissant (besoin 45 %, population 35 %,
       faisabilité 20 %, inchangé) ;
     - « besoin » : temps de trajet décroissant, puis population ;
-    - « capacite » : communes sous le repère APL 2,5 (DREES 2023), les plus
+    - « capacite » : communes sous le repère APL 2,5 (DREES, millésime actif), les plus
       peuplées d'abord, qu'elles aient ou non une offre sur place.
     Dans les deux premiers cas, les communes qui disposent déjà d'une offre de médecine
     générale (temps 0) ne sont pas classées : une action d'accès n'y a pas

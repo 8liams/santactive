@@ -15,6 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from ..components.nav import NavCrumb, dept_link_html, internal_href, render_breadcrumb
+from ..config import APL_MILLESIME
 from ..scoring import get_score_breakdown
 
 
@@ -49,7 +50,7 @@ def render(data: dict) -> None:
                 f'<div style="font-size:11px;color:#6B6B68;line-height:1.4;">{ctx}</div></div>')
     c = st.columns(4)
     c[0].markdown(kpi("Sous le repère APL 2,5", f"{pop_sous / 1e6:.1f}".replace(".", ","), "M hab.",
-                      f"{_fr(pop_sous / pop.sum() * 100)} % de la population vit dans une commune sous le repère de sous-densité · DREES 2023", "#A51C30"), unsafe_allow_html=True)
+                      f"{_fr(pop_sous / pop.sum() * 100)} % de la population vit dans une commune sous le repère de sous-densité · DREES {APL_MILLESIME}", "#A51C30"), unsafe_allow_html=True)
     c[1].markdown(kpi("APL médiane des départements", _fr(apl_med), "consult./hab.",
                       f"{int((num('apl_dept') < 2.5).sum())} départements sous 2,5 · {int((num('apl_dept') < apl_med).sum())} sous la médiane"), unsafe_allow_html=True)
     c[2].markdown(kpi("À plus de 15 min d’un généraliste", _fr(part15 * 100) if pd.notna(part15) else "N/D", "%",
@@ -119,6 +120,6 @@ def render(data: dict) -> None:
         f'<a href="{internal_href("comparer")}" target="_self">Comparer des territoires →</a>'
         f'<a href="{internal_href("acces")}" target="_self">Simuler une implantation →</a>'
         f'<a href="{internal_href("methodologie")}" target="_self">Méthodologie →</a></div>'
-        '<p class="sa-couverture" style="margin-top:10px;">Sources : DREES (APL 2023, RPPS 2026), INSEE (RP 2021 ; accès aux équipements 2025), '
-        'FINESS 2026, CNAM 2023, DVF 2025. Aucun indicateur national ne mesure l’accès effectif aux rendez-vous.</p>',
+        f'<p class="sa-couverture" style="margin-top:10px;">Sources : DREES (APL {APL_MILLESIME}, RPPS 2026), INSEE (RP 2021 ; accès aux équipements 2025), '
+        f'FINESS 2026, CNAM 2023, DVF 2025. Aucun indicateur national ne mesure l’accès effectif aux rendez-vous.</p>',
         unsafe_allow_html=True)

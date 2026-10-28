@@ -9,15 +9,15 @@ inter-départementaux, l'évolution démographique et l'activité réelle des
 futurs installés.
 
 Formule (calculée commune par commune dans
-scripts/donnees/calculer_apl_departemental.py, source DREES APL 2023) :
+scripts/donnees/calculer_apl_departemental.py, source DREES APL, millésime config.APL_MILLESIME) :
     déficit(seuil) = Σ_c pop_std_c × max(0, seuil − APL_c)
     ETP(seuil)     = déficit / activité annuelle d'un ETP
 Activité d'un ETP : convention DREES de l'indicateur APL = 5 400 consultations,
 visites et téléconsultations par an (bornes d'activité libérale 3 600–6 000,
 d'où la fourchette). Seuils : 2,5 (repère de sous-densité du zonage) et 3,0.
 
-Activée seulement si static/data/apl_mg_departemental_2023.csv est présent
-(candidat : data_corrections/references/drees/apl_mg_departemental_2023.csv).
+Activée seulement si static/data/apl_mg_departemental_<millésime>.csv est présent
+(config.APL_MILLESIME ; produit par scripts/donnees/calculer_apl_departemental.py).
 """
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from .config import DATA_DIR
+from .config import APL_DEPT_DREES_PATH, APL_MILLESIME
 
-APL_DEPT_PATH = DATA_DIR / "apl_mg_departemental_2023.csv"
+APL_DEPT_PATH = APL_DEPT_DREES_PATH
 ETP_CONSULTATIONS = 5400          # convention DREES (1 ETP) — indicateur APL
 ETP_BORNES = (6000, 3600)         # bornes d'activité libérale DREES → fourchette ETP (basse, haute)
 
@@ -95,7 +95,7 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         '<div class="section-header">'
         '<div class="section-eyebrow">RENFORCEMENT THÉORIQUE DE CAPACITÉ MÉDICALE</div>'
         '<h2 class="section-title">Combien d\'offre de <em>médecine générale</em> manquerait-il\u00a0?</h2>'
-        '<p class="section-lead">Lecture fondée sur l\'APL communal DREES 2023 (accessibilité potentielle localisée, en '
+        f'<p class="section-lead">Lecture fondée sur l\'APL communal DREES {APL_MILLESIME} (accessibilité potentielle localisée, en '
         'consultations par habitant et par an). Le renforcement est exprimé en ETP, c\'est-à-dire en '
         '<strong>équivalents temps plein</strong> de médecine générale\u202f: un ordre de grandeur théorique, '
         'pas un effectif officiel de médecins manquants.</p>'
@@ -138,7 +138,7 @@ def render_simulation_capacite(r: pd.Series) -> bool:
         f'<div class="diagnostic-kpi-context"><span style="font-size:11px;color:#6B6B68;">{sub}</span></div>'
         f'</div>', unsafe_allow_html=True)
     kpi(c1, "APL moyen pondéré", _fmt(sim["apl_moyen_pondere"], ".2f"),
-        "consultations par habitant et par an · DREES 2023 · repère de sous-densité 2,5")
+        f"consultations par habitant et par an · DREES {APL_MILLESIME} · repère de sous-densité 2,5")
     kpi(c2, "Population sous le repère 2,5", f"{sim['part_pop_apl_inf_2_5'] * 100:.0f}\u202f%",
         f"{sim['nb_communes_inf_2_5']} commune{'s' if sim['nb_communes_inf_2_5'] != 1 else ''} sur {sim['nb_communes']}")
     kpi(c3, "Renforcement théorique étudié", f"≈ {mid:.0f} ETP" if c["deficit"] else "0 ETP",
@@ -156,6 +156,6 @@ def render_simulation_capacite(r: pd.Series) -> bool:
             f"**Disparités communales.** APL pondéré du premier au troisième quartile\u202f: {fr(sim['apl_p25'])} – {fr(sim['apl_p75'])}.\n\n"
             f"**Limites.** Simulation statique\u202f: offre existante supposée inchangée\u202f; déficit calculé commune par commune alors qu\u2019un "
             f"médecin installé relève aussi l\u2019APL des communes voisines (rayon de 20 min dans la méthode DREES)\u202f: le total tend à surestimer. "
-            f"Les ETP ne sont pas des médecins physiques. APL 2023, population standardisée 2021. Source\u202f: DREES, APL aux médecins "
-            f"généralistes 2023 (Licence Ouverte).")
+            f"Les ETP ne sont pas des médecins physiques. APL {APL_MILLESIME}, population standardisée. Source\u202f: DREES, APL aux médecins "
+            f"généralistes {APL_MILLESIME} (Licence Ouverte).")
     return True

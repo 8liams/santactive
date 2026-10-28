@@ -10,7 +10,7 @@ Usage :
 """
 from __future__ import annotations
 
-from ..config import APL_AGREGATION
+from ..config import APL_AGREGATION, APL_MILLESIME
 
 # ── Dictionnaire centralisé de toutes les définitions ────────────────────────
 TOOLTIPS: dict[str, dict[str, str]] = {
@@ -32,7 +32,7 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             + APL_AGREGATION + "."
             "<br><br>"
             "<strong>Source :</strong> ANCT / Observatoire des territoires · "
-            "Millésime 2023"
+            f"Millésime {APL_MILLESIME}"
         ),
     },
     "score_global": {
@@ -68,10 +68,10 @@ TOOLTIPS: dict[str, dict[str, str]] = {
             "population à plus de 15 min, médiane pondérée par la population. Guadeloupe, "
             "Guyane et Mayotte sont hors champ."
             "<br><br>"
-            "<strong>Dimension du score (20 %)</strong> : indicateur interne historique, "
-            "médiane des communes du temps vers la commune équipée la plus proche (0 = "
-            "généraliste présent dans la commune). La bascule du score vers le repère INSEE "
-            "est préparée (analyse de sensibilité) et soumise à validation."
+            "<strong>Dimension du score (20 %)</strong> : depuis le 28 octobre 2026, la médiane "
+            "pondérée INSEE alimente le score ; la part de la population à plus de 15 min reste "
+            "un repère complémentaire de fragilité. L’ancien indicateur interne (médiane des "
+            "communes du temps vers la commune équipée la plus proche) est conservé pour l’audit."
             "<br><br>"
             "Accessibilité géographique seulement : ni capacité des cabinets, ni délais de rendez-vous."
         ),

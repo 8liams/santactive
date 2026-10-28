@@ -59,9 +59,9 @@ _ROW = ('<div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr;padding:
 
 def _cfg() -> dict:
     """Paramètres actifs du moteur, pour que la page décrive ce qui est exécuté."""
-    from ..config import (APL_AGREGATION, APL_LABEL, APL_METHODE, ETABS_CATEGORIES,
+    from ..config import (APL_AGREGATION, APL_LABEL, APL_METHODE, APL_MILLESIME, ETABS_CATEGORIES,
                           ETABS_DEFINITION, SOURCE_EFFECTIFS, TEMPS_SOURCE)
-    return dict(apl_methode=APL_METHODE, apl_label=APL_LABEL, apl_agregation=APL_AGREGATION,
+    return dict(apl_methode=APL_METHODE, apl_label=APL_LABEL, apl_agregation=APL_AGREGATION, apl_millesime=APL_MILLESIME,
                 etabs_def=ETABS_DEFINITION, etabs_cats=ETABS_CATEGORIES[ETABS_DEFINITION],
                 source=SOURCE_EFFECTIFS, temps=TEMPS_SOURCE)
 
@@ -117,7 +117,9 @@ def render(data: dict) -> None:
         "Chaque indicateur est normalisé en <strong>rang percentile</strong> parmi les départements analysés : 50 = médiane, "
         "100 = le mieux placé, 0 = le moins bien placé. Cette normalisation est insensible aux valeurs extrêmes (Paris, Guyane).",
         "Le score global est la <strong>moyenne pondérée des dimensions disponibles</strong> ; si une dimension manque, son poids est "
-        "redistribué sur les autres. Un département avec moins de trois dimensions n’a pas de score. Les zones critique, "
+        "redistribué sur les autres. Un département avec moins de trois dimensions n’a pas de score. Le rang national (1 = le moins bien "
+        "placé) est calculé sur le score non arrondi ; une égalité stricte est départagée par le code du département, de sorte que les "
+        "rangs sont uniques de 1 à 100. Les zones critique, "
         "intermédiaire et favorable sont les <strong>terciles</strong> de ce classement (33 / 34 / 33 départements par construction) : "
         "elles situent un territoire, elles ne mesurent pas une évolution et ne constituent pas une classification officielle.",
     )
@@ -134,13 +136,13 @@ def render(data: dict) -> None:
         "court_sejour": "Sites FINESS de court séjour : CH, CHR, hôpitaux locaux, privés MCO, centres de lutte contre le cancer, pour 100&#8239;000 hab.",
     }[cfg["etabs_def"]]
     temps_ligne = {
-        "interne": "<strong>Mode actif : indicateur interne.</strong> Médiane des communes du temps vers la commune équipée la plus proche "
+        "interne": "<strong>Mode historique (audit) : indicateur interne.</strong> Médiane des communes du temps vers la commune équipée la plus proche "
                    "(0 = généraliste présent dans la commune).<br><span style=\"color:#9C9A92;\">Fichier de l’équipe · 2026 · méthode de production non documentée</span>",
-        "insee": "<strong>Mode actif : INSEE.</strong> Médiane pondérée par la population du temps en voiture vers le généraliste le plus proche "
-                 "(carreaux de 200 m).<br><span style=\"color:#9C9A92;\">Insee · BPE 2025 · Metric-OSRM · hors Guadeloupe, Guyane, Mayotte</span>",
+        "insee": "Médiane pondérée par la population du temps en voiture vers le généraliste le plus proche "
+                 "(carreaux de 200 m) ; la part de population à plus de 15 min est un repère complémentaire, hors score.<br><span style=\"color:#9C9A92;\">Insee · BPE 2025 · Metric-OSRM · hors Guadeloupe, Guyane, Mayotte · actif depuis le 28 octobre 2026</span>",
     }[cfg["temps"]]
     rows = [
-        ("Accessibilité soins de ville", "Dimension principale", "30 %", apl_ligne + '<br><span style="color:#9C9A92;">DREES · APL aux médecins généralistes · 2023</span>', "Haut = bon"),
+        ("Accessibilité soins de ville", "Dimension principale", "30 %", apl_ligne + f'<br><span style="color:#9C9A92;">DREES · APL aux médecins généralistes · {cfg["apl_millesime"]}</span>', "Haut = bon"),
         ("Accessibilité physique", "Temps de trajet", "20 %", temps_ligne, "Bas = bon"),
         ("Densité médecins généralistes", "Offre professionnelle", "20 %", med_ligne, "Haut = bon"),
         ("Offre hospitalière", "Structures de soins", "15 %", etabs_ligne + '<br><span style="color:#9C9A92;">FINESS · mars 2026 · nombre de sites, pas de capacité</span>', "Haut = bon"),
@@ -173,13 +175,14 @@ def render(data: dict) -> None:
         "communes ou territoires de vie-santé ; il n’existe pas de définition légale du « désert médical ».",
         f"<strong>Agrégation départementale active : {cfg['apl_agregation']}</strong> — pondération prescrite par la DREES pour tout APL agrégé. "
         "Lectures complémentaires sur chaque fiche : part de population sous 2,5, quartiles communaux pondérés, nombre de communes sous 2,5.",
-        f"Référence nationale affichée : médiane des {nb_scores} valeurs départementales ({apl_nat:.2f}). APL national pondéré DREES 2023 : 3,74 ; "
-        "16,6 % de la population vit dans une commune sous 2,5 (11,2 millions d’habitants, recalcul direct sur le fichier communal).",
-        "<strong>Millésime 2024 disponible.</strong> La DREES a publié l’APL 2024 (34 890 communes, population 2022) : APL national 3,72, "
-        "18,2 % de la population sous 2,5 ; à l’échelle des départements, le classement est très stable (écart de rang médian 2, "
-        "4 départements bougent de 10 rangs ou plus ; baisse la plus forte en Lozère, hausse la plus forte à Paris). Le millésime 2023 "
-        "reste celui du score tant que la bascule n’a pas été validée ; le fichier 2024 est calculé et prêt "
-        "(data_corrections/references/drees/apl_mg_departemental_2024.csv).",
+        f"<strong>Millésime actif : {cfg['apl_millesime']}</strong> (validé le 28 octobre 2026). Référence nationale affichée : médiane des "
+        f"{nb_scores} valeurs départementales ({apl_nat:.2f}). APL 2024 (34 890 communes, population 2022) : 18,2 % de la population vit dans une "
+        "commune sous 2,5 (12,3 millions d’habitants, recalcul direct sur le fichier communal) contre 16,6 % en 2023.",
+        "<strong>Compatibilité 2023 → 2024.</strong> Même définition (APL aux médecins généralistes tous âges, population standardisée par "
+        "l’âge, omnipraticiens libéraux et salariés de centres de santé, France hors Mayotte), même pondération d’agrégation. Variation moyenne "
+        "−0,04 consultation par habitant (69 départements en baisse, 31 en hausse ; corrélation 0,99) ; à pondérations inchangées, 4 départements "
+        "changent de zone du seul fait du millésime (Aveyron et Corrèze sortent de la zone critique, Drôme et Tarn-et-Garonne y entrent). Le "
+        "millésime 2023 reste disponible pour l’audit (option SANTACTIVE_APL_MILLESIME=2023), sans être présenté comme actif.",
         "Source : DREES, « Accessibilité potentielle localisée aux professionnels de santé », millésimes 2022–2024, France hors Mayotte, "
         "Licence Ouverte 2.0.",
     )
@@ -199,8 +202,8 @@ def render(data: dict) -> None:
         ["Champ", "34 863 communes ; 25,5 % à 0 ; 1 241 communes à plus de 15 min",
          "34 833 communes, 64,1 M d’habitants localisés ; hors Guadeloupe, Guyane, Mayotte"],
         ["Résultat national", "Médiane des départements : 6 min", "0,8 % de la population à plus de 15 min d’un généraliste (514 000 habitants), 0,18 % à plus de 20 min"],
-        ["Usage dans l’outil", "Dimension « temps » du score (mode interne, actif par défaut)",
-         "Diagnostics (accueil, fiches, comparaison, PDF), lecture communale, situation actuelle du simulateur ; dimension du score en mode insee"],
+        ["Usage dans l’outil", "Aucun dans le produit depuis le 28 octobre 2026 ; conservé pour l’audit historique (option SANTACTIVE_TEMPS_SOURCE=interne)",
+         "Dimension « temps » du score (médiane pondérée), diagnostics (accueil, fiches, comparaison, PDF), lecture communale, situation actuelle du simulateur ; la part à plus de 15 min est un repère complémentaire"],
     ])
     _prose(
         "<strong>Ce que l’audit a montré.</strong> Les zéros de l’indicateur interne ne sont pas des temps nuls mais une présence : sur les "
@@ -208,10 +211,12 @@ def render(data: dict) -> None:
         "les deux mesures sont cohérentes (corrélation de Spearman 0,87), mais l’indicateur interne sous-compte les communes éloignées "
         "(par exemple 5 contre 30 en Saône-et-Loire, 13 contre 31 dans la Nièvre) et il ignore la population. Le chiffre de « 98,8 % de communes à "
         "zéro » qui circulait dans un bilan antérieur était erroné.",
-        f"<strong>Conséquences sur le score (analyse de sensibilité, scripts/analyse/sensibilite_temps_acces.py).</strong> Remplacer la dimension "
-        "« temps » par la médiane INSEE pondérée déplace 20 départements de 10 rangs ou plus et change la zone de 14 d’entre eux (corrélation des "
-        "scores 0,97) ; par la part de population à plus de 15 min : 14 départements et 8 changements de zone (corrélation 0,98). Ce n’est pas "
-        f"un changement silencieux : le mode actif est « {cfg['temps']} », la bascule se fait par l’option SANTACTIVE_TEMPS_SOURCE après validation.",
+        f"<strong>Bascule du score (validée le 28 octobre 2026 ; audit : scripts/analyse/audit_migration_score.py).</strong> La dimension « temps » "
+        "utilise désormais la médiane INSEE pondérée par la population, retenue plutôt que la part à plus de 15 min parce qu’elle mesure la même "
+        "grandeur que l’ancienne dimension (un temps médian) et couvre tous les habitants ; la part à plus de 15 min reste affichée comme repère "
+        "de fragilité. Effet propre du temps INSEE, à APL constant : corrélation des scores 0,97, 20 départements déplacés de 10 rangs ou plus, "
+        "14 changements de zone, un département sort des priorités (Aude), 9 voient leurs leviers modifiés. Les deux indicateurs ne mesurent "
+        f"pas exactement la même chose (médiane communale non pondérée contre médiane pondérée des habitants) : les écarts sont attendus. Mode actif : « {cfg['temps']} ».",
         "<strong>Lecture communale.</strong> Sur les fiches, la carte « besoin d’accès » et le classement communal utilisent désormais le temps moyen "
         "INSEE par commune lorsque le département est couvert (repli explicite sur l’indicateur interne sinon, par exemple en Guyane) ; la présence "
         "d’un généraliste vient de la BPE.",
@@ -261,7 +266,7 @@ def render(data: dict) -> None:
     # ══════════════════════════════════════════════════════════════════════════
     _section("SOURCES", "Les données <em>et leurs millésimes.</em>")
     _table(["Donnée", "Producteur", "Millésime", "Maille", "Usage", "Limite principale"], [
-        ["APL aux médecins généralistes", "DREES", "2023 (2024 disponible)", "Commune", "Score (30 %), part sous 2,5, capacité communale, simulation ETP", "Hors Mayotte ; mesure théorique"],
+        ["APL aux médecins généralistes", "DREES", f"{cfg['apl_millesime']} (2023 conservé pour l’audit)", "Commune", "Score (30 %), part sous 2,5, capacité communale, simulation ETP", "Hors Mayotte ; mesure théorique"],
         ["Effectifs de médecins (RPPS)", "DREES", "1<sup>er</sup> janv. 2026", "Département", "Densité de généralistes (20 %), spécialités", "Personnes, pas ETP ; salariés inclus"],
         ["Infirmières libérales (SNDS)", "DREES", "2023", "Département", "Relais de proximité (leviers)", "Libérales seulement"],
         ["Population, âges, densité", "INSEE RP", "2021", "Département", "Dénominateurs, part des 65+ (10 %)", "Décalage avec 2026"],
@@ -271,9 +276,9 @@ def render(data: dict) -> None:
         ["Pathologies (cartographie)", "CNAM", "2023", "Département × âge", "Besoins (indices, leviers, publics)", "Patients pris en charge, pas besoins non couverts"],
         ["Transactions immobilières (DVF)", "DGFiP", "2025", "Commune, département", "Contexte foncier (5 %), proxy de déploiement communal", "Zones peu denses mal couvertes"],
         ["Délais d’attente (enquête)", "DREES", "2016-2017", "France entière", "Délais indicatifs par spécialité (modulés par l’APL)", "Estimation, pas mesure"],
-        ["Isochrones routières", "IGN Géoplateforme (BD TOPO, Valhalla)", "temps réel, cache 24 h", "Point", "Scénario du simulateur", "Centre de commune ; quotas du service"],
+        ["Isochrones routières", "IGN Géoplateforme (BD TOPO, Valhalla)", "temps réel, cache 24 h", "Point", "Scénario du simulateur", "Un point par commune (mairie) ; quotas du service"],
         ["Contours et population des communes", "API Géo (Etalab)", "2026", "Commune", "Cartes communales, simulateur (centre, mairie = point d’implantation)", "—"],
-        ["Temps d’accès interne", "Équipe Sant’active", "2026", "Commune", "Dimension « temps » du score (mode interne)", "Méthode non documentée ; 0 = présence"],
+        ["Temps d’accès interne (historique)", "Équipe Sant’active", "2026", "Commune", "Aucun usage actif ; audit et repli communal hors champ INSEE", "Méthode non documentée ; 0 = présence"],
         ["Professionnels (fichier équipe)", "Équipe Sant’active", "2026", "Code postal", "Présence locale d’une spécialité", "Pas d’effectifs ; lignes démultipliées par code postal"],
         ["Score environnemental", "SPF / DREAL", "variable", "Région", "Information seule", "Hors score"],
     ])
@@ -320,6 +325,27 @@ def render(data: dict) -> None:
     _hr()
 
     # ══════════════════════════════════════════════════════════════════════════
+    # 8 bis. HISTORIQUE DES CHANGEMENTS DE MÉTHODE
+    # ══════════════════════════════════════════════════════════════════════════
+    _section("HISTORIQUE", "Les changements de méthode, <em>datés et justifiés.</em>",
+             lead="Aucune pondération ni source du score n’est modifiée sans analyse de sensibilité et validation explicite ; chaque changement est consigné ici et dans docs/EVOLUTIONS_MOTEUR.md.")
+    _table(["Date", "Changement", "Justification", "Effet mesuré"], [
+        ["28 oct. 2026", "Dimension « temps » du score : médiane INSEE 2025 pondérée par la population (remplace l’indicateur interne)",
+         "Source officielle, méthode documentée, pondération par les habitants ; l’indicateur interne confondait présence et temps nul",
+         "Corrélation des scores 0,97 ; 14 changements de zone ; 1 sortie des priorités (Aude)"],
+        ["28 oct. 2026", "APL : millésime 2024 (remplace 2023)", "Millésime le plus récent, définition inchangée",
+         "Corrélation 0,99 ; 4 changements de zone ; 1 sortie des priorités (Vosges)"],
+        ["28 oct. 2026", "Les deux changements réunis (production actuelle)", "—",
+         "Corrélation 0,97 ; 18 départements déplacés de 10 rangs ou plus ; 14 changements de zone ; 25 départements prioritaires (27 avant) ; leviers modifiés pour 15 départements"],
+        ["oct. 2026", "APL départemental : moyenne pondérée par la population standardisée (méthode DREES) au lieu de la médiane communale",
+         "Consigne DREES pour tout APL agrégé", "Documenté dans docs/EVOLUTIONS_MOTEUR.md §12"],
+        ["oct. 2026", "Densité de généralistes : effectifs DREES/RPPS 2026 au lieu des lignes du fichier de l’équipe", "Effectifs de personnes plutôt que présences", "Idem"],
+    ])
+    _prose("Les anciens indicateurs restent calculés et disponibles pour l’audit (colonnes historiques, fichiers 2023, options d’environnement), "
+           "mais ne sont plus présentés comme actifs dans le produit.")
+    _hr()
+
+    # ══════════════════════════════════════════════════════════════════════════
     # 9. COUVERTURE ET LIMITES
     # ══════════════════════════════════════════════════════════════════════════
     _section("COUVERTURE ET LIMITES", "Ce que Sant’active <em>ne fait pas.</em>")
@@ -328,10 +354,10 @@ def render(data: dict) -> None:
                              "lecture partielle (temps INSEE, APL DREES, prix DVF ; pas de données de santé communales). Simulateur : 98 départements (métropole, Martinique, La Réunion)."),
         ("02", "Accès effectif non mesuré", "Ni le temps de trajet, ni l’APL ne disent si un rendez-vous est possible. Les délais affichés sont des estimations."),
         ("03", "Score = offre et accès", "70 % du score mesure l’offre de médecine générale ; les besoins pèsent 10 %. Les indices offre × besoins corrigent cette lecture sans remplacer le score."),
-        ("04", "Décalages temporels", "INSEE RP 2021, CNAM 2023, APL 2023 (2024 disponible), BPE 2025, RPPS 2026, FINESS 2026, DVF 2025, délais 2016-2017."),
+        ("04", "Décalages temporels", f"INSEE RP 2021, CNAM 2023, APL {cfg['apl_millesime']}, BPE 2025, RPPS 2026, FINESS 2026, DVF 2025, délais 2016-2017."),
         ("05", "Outre-mer", "Mayotte hors score ; Guadeloupe, Guyane et Mayotte hors champ de la base INSEE d’accès (repli sur l’indicateur interne) ; "
                             "La Réunion et la Martinique couvertes, y compris par le simulateur."),
-        ("06", "Indicateur interne de temps d’accès", "Méthode de production non documentée ; sa bascule vers l’INSEE dans le score est préparée et soumise à validation."),
+        ("06", "Outre-mer et temps d’accès", "Guadeloupe et Guyane n’ont pas de temps INSEE : leur score repose sur cinq dimensions (poids redistribué) ; leur lecture communale se replie sur l’indicateur interne, signalé comme tel."),
         ("07", "Simulation", "Gain de proximité théorique : pas de capacité, pas de rendez-vous, pas de flux interdépartementaux ; deux distanciers."),
         ("08", "Priorités et leviers", "Aides à la décision fondées sur des règles transparentes ; elles ne remplacent ni l’expertise locale ni une évaluation de politique publique."),
         ("09", "Capacité théorique (ETP)", "Les ETP de la simulation de capacité convertissent un déficit de consultations sous un seuil d’APL (5 400 actes par ETP, convention DREES) : "

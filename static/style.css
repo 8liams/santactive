@@ -3320,3 +3320,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 [data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav)::before {
     content: ""; position: absolute; left: -16px; right: -16px; top: -14px; height: 14px; background: #FFFFFF;
 }
+/* ─── Simulateur : synthèse courte sous les indicateurs ─────────────────── */
+.ign-synth { font-size: 15px; line-height: 1.55; color: #2B2B2B; margin: 10px 0 12px; max-width: 980px; }
+.ign-synth strong { color: #0A1938; }
+.ign-synth .sa-dim { color: #6B6B68; font-size: 13px; }

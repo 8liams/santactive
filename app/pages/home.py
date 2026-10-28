@@ -9,7 +9,7 @@ import streamlit as st
 
 from ..components.nav import internal_href
 from ..components.tooltip import info_tooltip
-from ..config import APL_LABEL_COURT
+from ..config import APL_LABEL_COURT, APL_SOURCE_LABEL, TEMPS_LABEL_COURT
 from ..router import navigate
 
 
@@ -209,8 +209,8 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
     hl_codes = set(T.dept_codes(t, master)) if not t.is_national else set()
     bounds = _bounds_for(geojson, hl_codes) if hl_codes else None
     sub = {"score_global": "Score Sant’active · 100 départements · cliquez sur un département pour ouvrir sa fiche",
-           "apl_dept": f"{APL_LABEL_COURT} · DREES 2023",
-           "temps_acces_median": "Temps d’accès médian · minutes · indicateur interne (dimension du score)",
+           "apl_dept": f"{APL_LABEL_COURT} · {APL_SOURCE_LABEL}",
+           "temps_acces_median": f"Temps d’accès médian · minutes · {TEMPS_LABEL_COURT} (dimension du score)",
            "med_gen_pour_100k": "Généralistes pour 100 000 habitants · DREES 2026",
            "prix_m2_moyen": "Prix médian au m² · DVF 2025",
            "pct_plus_65": "Part des 65 ans et plus · INSEE 2021"}.get(col_key, "")
@@ -298,8 +298,7 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
     med_med = num("med_gen_pour_100k").median()
     part_apl = num("part_pop_apl_inf_2_5")
     pop = num("population_num")
-    # Population sous le repère APL 2,5 : Σ part départementale × population INSEE 2021 (11,2 M) ;
-    # recalcul direct sur le fichier communal DREES 2023 : 11 210 951 hab. (16,6 %).
+    # Population sous le repère APL 2,5 : Σ part départementale × population INSEE 2021 (APL 2024 : 12,3 M, 18,2 % sur le fichier communal).
     pop_sous_seuil = float((part_apl * pop).sum()) if not part_apl.empty and not pop.empty else float("nan")
     # Accès routier INSEE 2025 : population à plus de 15 min en voiture d'un généraliste
     # (France métropolitaine + Martinique + La Réunion ; Guadeloupe, Guyane, Mayotte hors champ)
@@ -318,14 +317,15 @@ def _render_national_kpis(master: pd.DataFrame) -> None:
                 f'<div class="nat-kpi-ctx">{ctx}</div></div>')
 
     fmt_pop = (f"{pop_sous_seuil / 1e6:.1f}".replace(".", ",") + " M") if pd.notna(pop_sous_seuil) else "N/D"
+    _part_sous = (f"{pop_sous_seuil / float(pop.sum()) * 100:.1f}".replace(".", ",") + "\u202f%") if pd.notna(pop_sous_seuil) and pop.sum() > 0 else "n.d."
     st.markdown(
         '<div class="kpi-stack-header"><div class="eyebrow">France entière</div>'
         '<h3>Les repères <em>nationaux</em></h3></div>'
         '<div class="nat-kpis">'
         + kpi("APL médiane", f"{apl_med:.1f}".replace(".", ",") if pd.notna(apl_med) else "N/D", " consult./hab.",
-              "médiane des départements · DREES 2023 · repère de sous-densité : 2,5", "apl")
+              f"médiane des départements · {APL_SOURCE_LABEL} · repère de sous-densité : 2,5", "apl")
         + kpi("Sous le repère APL", fmt_pop, " hab.",
-              "habitants d\u2019une commune sous APL 2,5, soit 16,6\u202f% · DREES 2023")
+              f"habitants d\u2019une commune sous APL 2,5, soit {_part_sous} · {APL_SOURCE_LABEL}")
         + kpi("Généralistes", f"{med_med:.0f}" if pd.notna(med_med) else "N/D", " /100k hab.",
               "densité médiane · RPPS 1ᵉʳ janv. 2026", "med_100k")
         + kpi("À plus de 15 min d\u2019un généraliste", f"{part_15 * 100:.1f}".replace(".", ",") if pd.notna(part_15) else "N/D", " %",

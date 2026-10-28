@@ -37,13 +37,17 @@ APL_METHODE = _option("SANTACTIVE_APL_METHODE", "ponderee", ("mediane", "pondere
 ETABS_DEFINITION = _option("SANTACTIVE_ETABS_DEFINITION", "actuelle", ("actuelle", "court_sejour"))
 #   actuelle     : CH + CHR + établissements privés SSR
 #   court_sejour : CH + CHR + hôpitaux locaux + privés MCO + CLCC
-TEMPS_SOURCE = _option("SANTACTIVE_TEMPS_SOURCE", "interne", ("interne", "insee"))
+TEMPS_SOURCE = _option("SANTACTIVE_TEMPS_SOURCE", "insee", ("interne", "insee"))
+#   insee   : médiane pondérée par la population du temps de trajet en voiture vers le
+#             généraliste le plus proche (Insee 2025, carreaux 200 m, Metric-OSRM) —
+#             mode actif depuis le 28 octobre 2026 (validation William) ;
+#             Guadeloupe, Guyane et Mayotte sans valeur (poids redistribué)
 #   interne : médiane communale du fichier de l'équipe (0 = généraliste présent dans la
 #             commune, sinon minutes vers la commune équipée la plus proche) — mode
-#             historique du score, conservé tant que la bascule n'est pas validée
-#   insee   : médiane pondérée par la population du temps de trajet en voiture vers le
-#             généraliste le plus proche (Insee 2025, carreaux 200 m, Metric-OSRM) ;
-#             Guadeloupe, Guyane et Mayotte sans valeur (poids redistribué)
+#             historique, conservé pour l'audit (docs/EVOLUTIONS_MOTEUR.md §17)
+APL_MILLESIME = _option("SANTACTIVE_APL_MILLESIME", "2024", ("2023", "2024"))
+#   2024 : millésime actif depuis le 28 octobre 2026 (même définition DREES : APL aux
+#          médecins généralistes tous âges, population standardisée) ; 2023 : historique
 
 # ─── Sources locales (prioritaires) ───────────────────────────────────────────
 DATA_DIR = Path("static/data")
@@ -65,7 +69,8 @@ MEDIC_PATH = DATA_DIR / "medicaments.csv"
 MEDECINS_DREES_PATH  = DATA_DIR / "drees_medecins_dept_2026.csv"
 AUTRES_PS_DREES_PATH = DATA_DIR / "drees_autres_rpps_dept_2026.csv"
 IDEL_DREES_PATH      = DATA_DIR / "drees_infirmieres_liberales_dept_2023.csv"
-APL_DEPT_DREES_PATH  = DATA_DIR / "apl_mg_departemental_2023.csv"   # APL communal agrégé (DREES 2023)
+APL_DEPT_DREES_PATH  = DATA_DIR / f"apl_mg_departemental_{APL_MILLESIME}.csv"   # APL communal agrégé (DREES, millésime actif)
+APL_COMMUNES_PATH    = DATA_DIR / f"apl_communes_{APL_MILLESIME}.csv"           # APL communal (lecture communale, capacité)
 ACCES_INSEE_DEPT_PATH = DATA_DIR / "acces_insee_departements_2025.csv"   # accès routier INSEE 2025 (départements)
 ACCES_INSEE_COMMUNES_PATH = DATA_DIR / "acces_insee_mg_communes_2025.csv"  # idem, communes (généraliste)
 
@@ -80,6 +85,13 @@ ETABS_CATEGORIES = {
                      "Etablissement Soins Obstétriques Chirurgico-Gynécologiques",
                      "Centre de Lutte Contre Cancer"],
 }
+TEMPS_LABELS = {"insee": "INSEE 2025", "interne": "indicateur interne"}
+TEMPS_LABEL_COURT = TEMPS_LABELS[TEMPS_SOURCE]          # « INSEE 2025 » : libellé de la source active du temps d'accès
+TEMPS_DESCRIPTION = {
+    "insee": "médiane pondérée par la population du temps en voiture vers le généraliste le plus proche (INSEE 2025, carreaux de 200 m)",
+    "interne": "médiane des communes du temps vers la commune équipée la plus proche (fichier interne, 0 = généraliste présent)",
+}[TEMPS_SOURCE]
+APL_SOURCE_LABEL = f"DREES {APL_MILLESIME}"
 APL_LABELS = {"mediane": "APL médian communal", "ponderee": "APL moyen pondéré (méthode DREES)"}
 APL_LABEL = APL_LABELS[APL_METHODE]
 APL_LABEL_COURT = {"mediane": "APL médian", "ponderee": "APL pondéré"}[APL_METHODE]

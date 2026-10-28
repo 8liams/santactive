@@ -11,7 +11,7 @@ import streamlit as st
 from ..audio_diagnostic import build_audio_diagnostic_text, render_audio_diagnostic_button
 from ..components import render_alert, zone_badge_html
 from ..components.tooltip import info_tooltip
-from ..config import CMAP, PALETTE, PATHOS_EXCLUDED
+from ..config import CMAP, PALETTE, PATHOS_EXCLUDED, APL_MILLESIME
 from ..components.share_bar import dept_share_context, render_fiche_share_bar
 from ..components.maps import DEPT_CENTER
 from ..components.nav import NavCrumb, internal_href, render_breadcrumb
@@ -314,7 +314,7 @@ def render_diagnostic(r: pd.Series, master: pd.DataFrame, data: dict) -> None:
                 f'</div>'
                 f'<div style="font-size:10px;color:#9C9A92;margin-top:10px;'
                 f'letter-spacing:0.08em;text-transform:uppercase;">'
-                f'Source ANCT · Observatoire des territoires · 2023'
+                f'Source DREES · APL {APL_MILLESIME}'
                 f'&nbsp;·&nbsp;'
                 f'{APL_AGREGATION} · repère sous-densité &lt; 2,5'
                 f'</div>'
@@ -537,7 +537,7 @@ def _render_scorecard_detail(r: pd.Series, master: pd.DataFrame) -> None:
     if pd.notna(_part15):
         st.markdown(
             f'<div style="padding-left:28px;border-left:2px solid #E8E6DD;margin:-8px 0 16px 8px;font-size:12.5px;color:#4B4B48;line-height:1.5;">'
-            f'<strong>Repère INSEE 2025</strong> (hors score{" — active en mode insee" if TEMPS_SOURCE == "insee" else ""}) : '
+            f'<strong>Repère INSEE 2025</strong> ({"la médiane alimente le score, la part à plus de 15 min est un repère complémentaire" if TEMPS_SOURCE == "insee" else "hors score"}) : '
             f'{_part15 * 100:.1f}\u202f% des habitants à plus de 15 min en voiture d\u2019un généraliste'
             + (f", médiane {_tmed_insee:.1f} min" if pd.notna(_tmed_insee) else "")
             + ' · carreaux de 200 m, distancier Metric-OSRM, lieu d\u2019exercice réel.</div>'.replace("\\u202f", "\u202f"),
@@ -707,7 +707,7 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
         apl_c = pd.to_numeric(comm_data["apl_commune"], errors="coerce")
         nb_sous = int((apl_c < 2.5).sum()); nb_offre_sous = int(((apl_c < 2.5) & offre).sum())
         pop_sous = pd.to_numeric(comm_data.loc[apl_c < 2.5, "population"], errors="coerce").sum()
-        note = (f"<strong>Capacité.</strong> APL communal DREES 2023 (consultations de médecine générale accessibles par an "
+        note = (f"<strong>Capacité.</strong> APL communal DREES {APL_MILLESIME} (consultations de médecine générale accessibles par an "
                 f"et par habitant, repère de sous-densité 2,5). {nb_sous} communes sont sous le repère, soit {int(pop_sous):,} "
                 f"habitants, dont {nb_offre_sous} disposent pourtant d\u2019une offre sur place : la présence d\u2019un praticien "
                 f"n\u2019implique pas une capacité suffisante. Mesure théorique (offre pondérée par la distance), pas un délai "
@@ -743,7 +743,7 @@ def render_carte_communale(r: pd.Series, data: dict) -> None:
     elif mode == "capacite":
         comm_data["map_color"] = comm_data["capacite_color"]
         comm_data["map_value"] = pd.to_numeric(comm_data["apl_commune"], errors="coerce")
-        label, legend = "Capacité (APL communal 2023)", list(CAPACITE_LEGENDE)
+        label, legend = f"Capacité (APL communal {APL_MILLESIME})", list(CAPACITE_LEGENDE)
         fields = ["nom", "tt_apl", "capacite_label", "tt_temps", "tt_pop"]
         aliases = ["Commune", "APL communal", "Lecture", "Temps d\u2019accès", "Habitants"]
     else:
@@ -777,7 +777,7 @@ def _render_top_communes_action(comm_data: pd.DataFrame, mode: str = "priorite")
         col4 = "Classe de besoin"
     elif mode == "capacite":
         titre = 'Top 10 des communes <em>sous le repère APL 2,5</em> les plus peuplées.'
-        lead = "APL communal DREES 2023 inférieur à 2,5, avec ou sans offre sur place. Habitants = population municipale INSEE."
+        lead = f"APL communal DREES {APL_MILLESIME} inférieur à 2,5, avec ou sans offre sur place. Habitants = population municipale INSEE."
         col4 = "Lecture capacité"
     else:
         titre = 'Top 10 des communes où une action <em>serait prioritaire</em>.'

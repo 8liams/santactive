@@ -350,3 +350,47 @@ département. Non intégré au score.
   Simuler → choix explicite du département) ; entrée régionale ou nationale du
   simulateur = choix du département (aucune substitution) ; mentions « pilote »
   retirées.
+
+## 17. Migration du score : temps INSEE 2025 et APL 2024 (28 octobre 2026, validée par William)
+
+- **Règles actives** : dimension « temps » (20 %) = médiane pondérée par la population
+  du temps en voiture vers le généraliste le plus proche (INSEE 2025, colonne
+  `acces_mg_t_med`) ; APL (30 %) = APL moyen pondéré DREES, millésime 2024 ;
+  pondérations, rangs percentiles, terciles, quadrants et catalogue de leviers
+  inchangés. La part de population à plus de 15 min reste un repère
+  complémentaire de fragilité (affichée, hors score).
+- **Configuration** : `SANTACTIVE_TEMPS_SOURCE` (défaut `insee`, `interne` pour
+  l'audit) ; `SANTACTIVE_APL_MILLESIME` (défaut `2024`, `2023` pour l'audit) ;
+  chemins `APL_DEPT_DREES_PATH`, `APL_COMMUNES_PATH` dérivés ; libellés
+  `TEMPS_LABEL_COURT`, `APL_SOURCE_LABEL` utilisés par les pages, le PDF et la
+  Méthodologie. Fichiers ajoutés : `static/data/apl_mg_departemental_2024.csv`,
+  `static/data/apl_communes_2024.csv` (exporteur paramétré par millésime).
+- **Sauvegarde et audit** : score avant migration dans
+  `data_corrections/references/audit_migration/score_v1_temps_interne_apl2023.csv` ;
+  étiquette Git `avant-migration-score` ; audit des quatre combinaisons par
+  `scripts/analyse/audit_migration_score.py` → `audit_migration_departements.csv`
+  et `audit_migration_resume.md`.
+- **Bilan chiffré (V1 → V4)** : corrélation des scores 0,966 ; écart de rang médian 5,
+  maximum 27 (Corse-du-Sud) ; 18 départements déplacés de 10 rangs ou plus ;
+  14 changements de zone (entrent en critique : Côtes-d'Armor, Deux-Sèvres,
+  Tarn-et-Garonne ; en sortent : Allier, Aveyron, Corrèze ; passent de
+  favorable à intermédiaire : Maine-et-Loire, Morbihan, Guadeloupe, Martinique ;
+  d'intermédiaire à favorable : Corse-du-Sud, Haute-Corse, Marne, Puy-de-Dôme) ;
+  quadrant A : 25 départements (27 avant ; sortent Aude et Vosges) ; leviers
+  modifiés pour 15 départements. Effet propre du temps INSEE (V2) : 14 zones,
+  20 déplacements ≥ 10 rangs ; effet propre de l'APL 2024 (V3) : 4 zones,
+  aucun déplacement ≥ 10 rangs (corrélation 0,997).
+- **Compatibilité APL 2024** : même définition DREES (généralistes tous âges,
+  population standardisée, hors Mayotte), mêmes colonnes et agrégation ;
+  18,2 % de la population sous 2,5 (16,6 % en 2023) ; 7 départements sous 2,5
+  (5 en 2023).
+- **Limites** : Guadeloupe et Guyane sans temps INSEE (score sur cinq dimensions,
+  repli communal et PDF sur l'indicateur interne, nommé comme tel) ; les deux
+  temps ne mesurent pas la même grandeur ; l'APL 2024 intègre l'évolution réelle
+  de l'offre.
+- **Simulateur** : hiérarchie des résultats réordonnée (indicateurs, synthèse
+  courte, carte, tableau des communes bénéficiaires, panneau dépliable
+  d'hypothèses et de limites) ; cartographie conservée.
+- **Rang national** : calculé sur le score non arrondi (cinq égalités au dixième
+  apparaissaient avec le temps INSEE, d'où des rangs en double) ; égalité stricte
+  départagée par le code du département ; rangs uniques de 1 à 100 (`score_global_raw`).

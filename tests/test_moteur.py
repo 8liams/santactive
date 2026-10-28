@@ -149,8 +149,9 @@ class TestRegions(unittest.TestCase):
         self.assertIn(gy["fragilite"], ("forte", "très forte"))
         self.assertNotEqual(gy["impact"], "majeur")  # valait « majeur » d'office avant
         _, _, _, _, prio_na, *_ = _region_chain("75")
-        dordogne = prio_na[prio_na["dept"] == "24"].iloc[0]
-        self.assertGreater(gy["_frag_score"], dordogne["_frag_score"])
+        # Depuis la migration (28 octobre 2026), la Guyane n'a pas de temps INSEE : sa fragilité se calcule sur
+        # cinq dimensions et passe légèrement sous la Dordogne ; elle reste au-dessus de la médiane néo-aquitaine.
+        self.assertGreater(gy["_frag_score"], float(prio_na["_frag_score"].median()))
 
     def test_classement_unique_page_pdf(self):
         for code in ("24", "75", "11"):
@@ -209,8 +210,9 @@ class TestRecommandations(unittest.TestCase):
     def test_temps_zero_non_remplace(self):
         from app.pages.fiche_departement import _generate_recommendations
 
-        r = _row("29")  # Finistère : temps d'accès médian = 0
-        self.assertEqual(float(r["temps_acces_median"]), 0.0)
+        r = _row("29")  # Finistère : indicateur interne à 0 (présence), médiane INSEE 2,3 min dans le score
+        self.assertEqual(float(r["temps_acces_interne_median"]), 0.0)
+        self.assertTrue(2 < float(r["temps_acces_median"]) < 3)
         for rec in _generate_recommendations(r, DATA["master"], DATA):
             self.assertNotIn("10 minutes", rec["prose"])
 
@@ -577,10 +579,10 @@ class TestValeursDeReference(unittest.TestCase):
     def test_apl_ponderee_reference(self):
         m = DATA["master"].set_index("dept")
         self.assertEqual(m["apl_methode"].iloc[0], "ponderee")
-        self.assertAlmostEqual(float(m.loc["2B", "apl_dept"]), 3.70, delta=0.02)
+        self.assertAlmostEqual(float(m.loc["2B", "apl_dept"]), 3.86, delta=0.02)   # APL 2024 (3,70 en 2023)
         self.assertAlmostEqual(float(m.loc["2B", "apl_median_dept"]), 0.30, delta=0.01)
         self.assertAlmostEqual(float(m.loc["973", "part_pop_apl_inf_2_5"]), 0.68, delta=0.01)
-        self.assertEqual(int((m["apl_dept"] < 2.5).sum()), 5)
+        self.assertEqual(int((m["apl_dept"] < 2.5).sum()), 7)   # APL 2024 (5 en 2023)
 
     def test_insee_et_finess_corriges(self):
         m = DATA["master"].set_index("dept")
@@ -589,7 +591,7 @@ class TestValeursDeReference(unittest.TestCase):
         self.assertEqual(int(m.loc["971", "nb_etabs"]), 85); self.assertEqual(int(m.loc["972", "nb_etabs"]), 80)
         self.assertEqual(int(m.loc["2A", "nb_etabs"]), 27); self.assertEqual(int(m.loc["2B", "nb_etabs"]), 24)
         self.assertEqual(int(m["nb_dimensions_ok"].min()), 5)   # 57/67/68 sans DVF ; DOM désormais à 6
-        self.assertEqual(int((m["nb_dimensions_ok"] == 6).sum()), 97)
+        self.assertEqual(int((m["nb_dimensions_ok"] == 6).sum()), 95)   # temps INSEE absent en Guadeloupe et Guyane (97 en mode interne)
 
     def test_integrite_master(self):
         m = DATA["master"]
@@ -602,8 +604,12 @@ class TestValeursDeReference(unittest.TestCase):
         self.assertEqual(int(zones.sum()), 100)
         self.assertTrue(all(33 <= int(zones[z]) <= 34 for z in ("Critique", "Intermédiaire", "Favorable")))
         self.assertEqual(sorted(m["rang_national"].astype(int).unique())[:2], [1, 2])
-        for c in ["med_gen_pour_100k", "structures_pour_100k", "temps_acces_median", "apl_dept"]:
+        for c in ["med_gen_pour_100k", "structures_pour_100k", "apl_dept"]:
             self.assertFalse(m[c].isna().any(), c)
+        # temps INSEE : Guadeloupe et Guyane hors champ (poids redistribué) ; l'indicateur interne reste disponible pour l'audit
+        self.assertEqual(set(m.loc[m["temps_acces_median"].isna(), "dept"]), {"971", "973"})
+        self.assertFalse(m["temps_acces_interne_median"].isna().any())
+        self.assertEqual(m["temps_source"].iloc[0], "insee"); self.assertEqual(m["apl_methode"].iloc[0], "ponderee")
 
     def test_scores_reproductibles(self):
         """Le score global est une fonction déterministe des 6 colonnes (recalcul indépendant)."""

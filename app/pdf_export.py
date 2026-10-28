@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from datetime import date
 
-from .config import APL_LABEL_COURT
+from .config import APL_LABEL_COURT, APL_MILLESIME
 from typing import Any
 
 import pandas as pd
@@ -137,7 +137,7 @@ def _page_cb(dept_name: str):
         canvas.drawString(MARGIN, 11 * mm, f"Sant'active · Rapport confidentiel · {dept_name}")
         canvas.drawCentredString(
             W / 2, 8 * mm,
-            "Sources : INSEE 2021 · Professionnels de santé (retraitement 2026) · FINESS 2026 · DVF 2025 · CNAM 2023 · DREES · ANCT 2023",
+            f"Sources : INSEE RP 2021 · INSEE accès aux équipements 2025 · DREES RPPS 2026 · DREES APL {APL_MILLESIME} · FINESS 2026 · DVF 2025 · CNAM 2023",
         )
         canvas.drawRightString(W - MARGIN, 11 * mm, f"Page {doc.page}")
         canvas.restoreState()
@@ -263,7 +263,8 @@ def generate_department_pdf(
     _section_heading("Indicateurs clés", story)
 
     apl     = r.get("apl_dept")
-    temps   = r.get("temps_acces_median")
+    # Repli hors champ INSEE (Guadeloupe, Guyane) : indicateur interne, nommé comme tel dans le PDF
+    temps   = r.get("temps_acces_interne_median") if "temps_acces_interne_median" in r.index else r.get("temps_acces_median")
     med_gen = r.get("med_gen_pour_100k")
     prix    = r.get("prix_m2_moyen")
     pct65   = r.get("pct_plus_65")
@@ -272,7 +273,7 @@ def generate_department_pdf(
     score_etabs = r.get("score_etabs")
 
     apl_nat   = master["apl_dept"].median()   if "apl_dept"   in master.columns else None
-    temp_nat  = master["temps_acces_median"].median() if "temps_acces_median" in master.columns else None
+    temp_nat  = (master["temps_acces_interne_median"] if "temps_acces_interne_median" in master.columns else master["temps_acces_median"]).median() if "temps_acces_median" in master.columns else None
     med_nat   = master["med_gen_pour_100k"].median()  if "med_gen_pour_100k"  in master.columns else None
     pct65_nat = master["pct_plus_65"].median()        if "pct_plus_65"        in master.columns else None
 
@@ -303,7 +304,7 @@ def generate_department_pdf(
               f"Méd. nat. {_fmt(float(master['acces_mg_part_sup_15'].median()) * 100, '{:.1f}')} % · INSEE 2025",
               _compare(float(master["acces_mg_part_sup_15"].median()), float(r.get("acces_mg_part_sup_15"))))
          if "acces_mg_part_sup_15" in master.columns and pd.notna(r.get("acces_mg_part_sup_15")) else
-         _kpi("Temps d'accès médian (interne)",
+         _kpi("Temps d'accès (interne, hors INSEE)",
               _fmt(temps, "{:.0f}") + " min",
               f"Méd. nat. {_fmt(temp_nat, '{:.0f}')} min",
               _compare(temp_nat, temps))),  # inversé : moins = mieux
@@ -366,7 +367,7 @@ def generate_department_pdf(
             '<i><font size="8" color="#666666">Simulation statique, pas un effectif officiel de '
             'médecins manquants : offre existante supposée inchangée, déficit calculé commune par '
             'commune (effets de voisinage ignorés, tendance à surestimer), ETP différents des médecins '
-            'physiques. Source : DREES, APL aux médecins généralistes 2023.</font></i>',
+            f'physiques. Source : DREES, APL aux médecins généralistes {APL_MILLESIME}.</font></i>',
             _s("simn", fontSize=8, textColor=colors.HexColor("#666666"), leading=11),
         ))
         story.append(Spacer(1, 14))

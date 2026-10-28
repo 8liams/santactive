@@ -313,7 +313,7 @@ def render(data: dict) -> None:
             "https://www.data.gouv.fr/fr/datasets/finess-extraction-du-fichier-des-etablissements/",
         ),
         (
-            "APL · ANCT · Observatoire des territoires 2023",
+            "APL · DREES · millésime 2024",
             "Accessibilité Potentielle Localisée aux médecins généralistes",
             "https://www.observatoire-des-territoires.gouv.fr/",
         ),

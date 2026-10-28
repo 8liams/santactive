@@ -80,7 +80,7 @@ Le **score global** Sant'active v2 est une moyenne pondérée de **6 dimensions*
 | Part des 65 ans et plus | 10 % |
 | Prix immobilier médian | 5 % |
 
-La dimension « temps d'accès » utilise par défaut l'indicateur interne historique (`SANTACTIVE_TEMPS_SOURCE=interne`). L'indicateur officiel Insee 2025 (temps en voiture vers le généraliste le plus proche, carreaux de 200 m) est chargé en parallèle : il alimente les diagnostics, la lecture communale et le simulateur d'implantation, et peut remplacer la dimension du score (`SANTACTIVE_TEMPS_SOURCE=insee`) après validation de l'analyse de sensibilité (`scripts/analyse/sensibilite_temps_acces.py`). Voir `docs/EVOLUTIONS_MOTEUR.md` §14.
+La dimension « temps d'accès » du score utilise depuis le 28 octobre 2026 l'indicateur officiel Insee 2025 (médiane pondérée par la population du temps en voiture vers le généraliste le plus proche ; `SANTACTIVE_TEMPS_SOURCE=insee`, défaut). L'indicateur interne historique reste disponible pour l'audit (`SANTACTIVE_TEMPS_SOURCE=interne`). L'APL utilise le millésime DREES 2024 (`SANTACTIVE_APL_MILLESIME=2024`, défaut ; `2023` pour l'audit). Audit de la migration : `scripts/analyse/audit_migration_score.py` et `data_corrections/references/audit_migration/`.
 
 Si une dimension manque, son poids est redistribué sur les dimensions disponibles.
 Un score global n'est calculé que si **au moins 3 dimensions** sont disponibles.
