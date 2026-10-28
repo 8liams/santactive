@@ -140,8 +140,10 @@ if view == "dept" and st.session_state.get("dept_code") and (master["dept"] == s
     _T.follow_dept(str(st.session_state["dept_code"]))
 elif view == "region" and st.session_state.get("region_code"):
     _T.follow_region(str(st.session_state["region_code"]))
-elif view == "commune" and st.session_state.get("dept_code"):
-    _T.follow_dept(str(st.session_state["dept_code"]))
+elif view == "commune" and "|" in str(st.session_state.get("commune_code", "")):
+    _cd = str(st.session_state["commune_code"]).split("|", 1)[1].zfill(2)
+    if (master["dept"] == _cd).any():
+        _T.follow_dept(_cd)
 
 render_topnav(view, master, with_search=True)
 
