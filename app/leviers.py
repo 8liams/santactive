@@ -662,16 +662,36 @@ def _t_dom(p):
 
 
 def _t_maintien(p):
+    """Aucun levier déclenché : veille, et poches communales d'éloignement si elles
+    existent (le score départemental ne doit pas les masquer). Les seuils des
+    leviers de proximité (≥ 3 % de la population à plus de 15 min) ne sont pas
+    atteints : on le dit, avec les volumes observés."""
+    nb = p.get("nb_communes_critiques")
+    pop15 = p.get("pop_communes_critiques")
+    part15 = p.get("part_pop_communes_critiques")
+    poches = pd.notna(nb) and nb > 0
+    probleme = (f"{p['nom_sujet']} ne déclenche aucun signal d'alerte départemental parmi les conditions suivies "
+                f"(APL pondéré {_f(p['apl_dept'])}, {_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k, "
+                "prévalences et démographie dans la norme).")
+    indicateurs = [f"score global {_f(p['score_global'])}/100", f"APL pondéré {_f(p['apl_dept'])}"]
+    action = ("Maintenir l'offre et anticiper les départs en retraite des généralistes ; partager les "
+              "organisations qui fonctionnent avec les départements voisins.")
+    if poches:
+        probleme += (f" Des poches d'éloignement subsistent : {int(nb)} communes à plus de 15 min d'une offre de "
+                     f"médecine générale, soit {_n(pop15)} habitants ({_pc(part15)} de la population), "
+                     "sous le seuil de 3 % qui déclenche les leviers de proximité.")
+        indicateurs.append(f"{int(nb)} communes > 15 min ({_n(pop15)} hab.)")
+        action += (" Pour les communes éloignées, examiner des réponses légères et ciblées (permanences, "
+                   "transport à la demande, téléconsultation assistée) à partir du zoom territorial ci-dessous.")
     return {
-        "probleme": f"{p['nom_sujet']} ne déclenche aucun signal d'alerte parmi les conditions suivies "
-                    f"(APL pondéré {_f(p['apl_dept'])}, {_f(p['med_gen_pour_100k'], '.0f')} généralistes /100k, "
-                    "prévalences et démographie dans la norme).",
-        "indicateurs": [f"score global {_f(p['score_global'])}/100", f"APL pondéré {_f(p['apl_dept'])}"],
-        "action": "Maintenir l'offre et anticiper les départs en retraite des généralistes ; partager les "
-                  "organisations qui fonctionnent avec les départements voisins.",
-        "pourquoi": "Une situation favorable se dégrade d'abord par la démographie médicale : "
-                    "le suivi des âges des praticiens est le signal à surveiller.",
-        "secteurs": "",
+        "probleme": probleme,
+        "indicateurs": indicateurs,
+        "action": action,
+        "pourquoi": "Une situation favorable se dégrade d'abord par la démographie médicale : "
+                    "le suivi des âges des praticiens est le signal à surveiller."
+                    + (" Les poches d'éloignement, trop peu peuplées pour un dispositif départemental, "
+                       "relèvent d'une réponse communale ou intercommunale." if poches else ""),
+        "secteurs": _secteurs_eloignes(p) if poches else "",
         "mise_en_oeuvre": "Observatoire départemental, anticipation des cessations d'activité (DREES, Ordre).",
     }
 

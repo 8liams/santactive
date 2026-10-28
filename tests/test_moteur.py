@@ -254,6 +254,87 @@ class TestPages(unittest.TestCase):
         self.assertIn("0 min", html)
 
 
+class TestInterface(unittest.TestCase):
+    """Refonte UI : cohérence carte / classement communal, recherche, outre-mer, veille."""
+
+    def _comm(self):
+        from app.commune_opportunity import build_commune_opportunity_df, norm_commune_name
+
+        temps = pd.DataFrame({"commune": ["Alpha", "Beta", "Gamma", "Delta", "Omega"],
+                              "temps_acces": [0, 12, 25, 40, 0]})
+        immo = pd.DataFrame({"commune": temps["commune"], "prix_m2": [2000, 1500, 1200, 900, 2500]})
+        codes = {norm_commune_name(n): f"0000{i}" for i, n in enumerate(temps["commune"], 1)}
+        pop = {f"0000{i}": p for i, p in enumerate([20000, 800, 300, 150, 9000], 1)}
+        return build_commune_opportunity_df(temps, immo, codes, code_to_name={v: k for k, v in codes.items()},
+                                            population_by_code=pop)
+
+    def test_top_communes_exclut_offre_sur_place_et_suit_la_lecture(self):
+        from app.commune_opportunity import top_communes_for_action
+
+        df = self._comm()
+        prio = top_communes_for_action(df, limit=10, mode="priorite")
+        besoin = top_communes_for_action(df, limit=10, mode="besoin")
+        for top in (prio, besoin):
+            self.assertTrue((pd.to_numeric(top["temps_acces"]) > 0).all(), "une commune à 0 min est classée")
+        self.assertEqual(list(pd.to_numeric(besoin["temps_acces"])), [40, 25, 12])
+        self.assertEqual(len(prio), 3)
+        self.assertTrue(prio["score_action"].is_monotonic_decreasing)
+        # carte : les communes avec offre portent le libellé « offre dans la commune », les autres leur niveau
+        sur_place = df[pd.to_numeric(df["temps_acces"]) <= 0]
+        self.assertTrue((sur_place["niveau"] == "Offre dans la commune").all())
+        self.assertTrue((sur_place["besoin_label"] == "Offre dans la commune").all())
+
+    def test_classes_de_besoin(self):
+        from app.commune_opportunity import besoin_class
+
+        self.assertEqual(besoin_class(0)[0], "Offre dans la commune")
+        self.assertEqual(besoin_class(12)[0], "10 à 15 min")
+        self.assertEqual(besoin_class(25)[0], "15 à 30 min")
+        self.assertEqual(besoin_class(40)[0], "Plus de 30 min")
+        self.assertEqual(besoin_class(float("nan"))[0], "N/D")
+
+    def test_index_recherche_coherent(self):
+        import json
+
+        idx = json.loads((ROOT / "static/data/index_recherche.json").read_text())
+        master = DATA["master"]
+        self.assertEqual({d["c"] for d in idx["departements"]}, set(master["dept"].astype(str)))
+        self.assertEqual(len(idx["regions"]), master["Code région"].nunique())
+        communes = DATA["temps"][["commune", "code_departement"]].dropna().drop_duplicates()
+        self.assertEqual(len(idx["communes"]), len(communes))
+        self.assertTrue((ROOT / "app/components/search_frontend/index.html").exists())
+
+    def test_contours_dom(self):
+        import json
+
+        fc = json.loads((ROOT / "static/geo/contours_dom.json").read_text())
+        self.assertEqual({f["properties"]["code"] for f in fc["features"]}, {"971", "972", "973", "974", "976"})
+        from app.components.maps import _outline_svg
+
+        self.assertIn("<path", _outline_svg("974", "#1B5E3F"))
+
+    def test_accueil_sans_panneau_lateral(self):
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=180)
+        at.query_params["view"] = "home"
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.sidebar.markdown), 0, "le panneau latéral doit être vide")
+        html = " ".join(m.value for m in at.markdown)
+        self.assertIn("sa-nav-links", html)
+        self.assertIn("dom-card", html)
+        self.assertNotIn("ophtalmo", html.lower())
+
+    def test_maintien_signale_les_poches_communales(self):
+        from app.leviers import profil, selectionner
+
+        recos = selectionner(profil("21", DATA), n=4)
+        self.assertEqual([r["id"] for r in recos], ["maintien"])
+        self.assertIn("62 communes", recos[0]["probleme"])
+        self.assertTrue(recos[0]["secteurs"])
+
+
 if __name__ == "__main__":
     unittest.main()
 

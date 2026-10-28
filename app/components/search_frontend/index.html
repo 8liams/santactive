@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<!--
+  Recherche territoriale — composant Streamlit (protocole v1, sans dépendance).
+  Suggestions flottantes, 7 résultats, clavier, aucun rerun pendant la frappe ;
+  la sélection renvoie {level, code, t} à Python qui navigue (?view=…).
+  Index : /app/static/data/index_recherche.json (servi par Streamlit, chargé une fois).
+-->
+<style>
+  html, body { margin:0; padding:0; background:transparent; font-family: Marianne, Inter, -apple-system, BlinkMacSystemFont, sans-serif; }
+  * { box-sizing:border-box; }
+  .wrap { position:relative; }
+  .field { position:relative; display:flex; align-items:center; background:#fff; border:1px solid #C9C6BA; border-radius:6px; transition:border-color .15s, box-shadow .15s; }
+  .field:focus-within { border-color:#1A3D8F; box-shadow:0 0 0 3px #E8EDF8; }
+  .field svg { position:absolute; left:14px; width:18px; height:18px; color:#6B6B68; pointer-events:none; }
+  input { width:100%; border:0; outline:0; background:transparent; color:#0A1938; font-family:inherit; }
+  input::placeholder { color:#8E8C84; }
+  .hero .field { height:54px; } .hero input { padding:0 44px 0 44px; font-size:16px; }
+  .nav .field { height:38px; border-radius:5px; } .nav input { padding:0 36px 0 38px; font-size:13px; }
+  .nav .field svg { left:12px; width:15px; height:15px; }
+  .hint { position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:11px; color:#9C9A92; border:1px solid #E8E6DD; border-radius:3px; padding:1px 6px; pointer-events:none; }
+  .nav .hint { display:none; }
+  .menu { position:absolute; left:0; right:0; top:calc(100% + 6px); background:#fff; border:1px solid #E8E6DD; border-radius:6px; box-shadow:0 12px 32px rgba(10,25,56,.14); overflow:hidden; display:none; }
+  .menu.open { display:block; }
+  .item { display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; border-bottom:1px solid #F3F2EC; }
+  .item:last-child { border-bottom:0; }
+  .item.active, .item:hover { background:#F3F6FC; }
+  .name { font-size:14px; color:#0A1938; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .name b { font-weight:700; color:#1A3D8F; }
+  .parent { font-size:12px; color:#6B6B68; white-space:nowrap; }
+  .lvl { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; border-radius:3px; padding:2px 7px; white-space:nowrap; }
+  .lvl-region { background:#0A1938; color:#fff; } .lvl-departement { background:#E8EDF8; color:#1A3D8F; } .lvl-commune { background:#F3F2EC; color:#4B4B48; }
+  .nav .item { padding:8px 12px; } .nav .name { font-size:13px; } .nav .parent { font-size:11px; }
+  .empty, .loading { padding:12px 14px; font-size:13px; color:#6B6B68; }
+  .foot { padding:6px 14px; font-size:11px; color:#9C9A92; background:#FAFAF8; border-top:1px solid #F3F2EC; }
+  @media (max-width: 480px) { .parent { display:none; } .foot { display:none; } }
+</style></head>
+<body class="hero">
+<div class="wrap">
+  <div class="field">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Rechercher un territoire…" aria-label="Rechercher un territoire" aria-autocomplete="list" aria-expanded="false" aria-controls="menu">
+    <span class="hint">↵</span>
+  </div>
+  <div id="menu" class="menu" role="listbox"></div>
+</div>
+<script>
+(function () {
+  const MAX = 7;
+  const q = document.getElementById('q');
+  const menu = document.getElementById('menu');
+  let index = null, loading = false, items = [], active = -1, closedHeight = 56, ready = false;
+
+  const send = (type, extra) => window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, extra || {}), '*');
+  const norm = s => (s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[-'’\s]+/g, ' ').trim();
+  const score = (n, s) => n === s ? 100 : n.startsWith(s) ? 95 : n.split(' ').some(w => w.startsWith(s)) ? 85 : 70;
+  const LVL = { region: 0, departement: 1, commune: 2 };
+  const LABEL = { region: 'Région', departement: 'Département', commune: 'Commune' };
+  const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const base = (() => { try { const p = window.parent.location.pathname; return p.endsWith('/') ? p.slice(0, -1) : p; } catch (e) { return ''; } })();
+
+  function loadIndex() {
+    if (index || loading) return;
+    loading = true;
+    fetch(base + '/app/static/data/index_recherche.json', { cache: 'force-cache' })
+      .then(r => r.json())
+      .then(d => {
+        index = {
+          regions: d.regions.map(r => ({ n: r.n, c: r.c, k: norm(r.n) })),
+          departements: d.departements.map(x => ({ n: x.n, c: x.c, pn: x.pn, k: norm(x.n) })),
+          communes: d.communes.map(c => ({ n: c[0], d: c[1], k: norm(c[0]) })),
+          noms: d.noms_departements || {},
+        };
+        loading = false; render();
+      })
+      .catch(() => { loading = false; });
+  }
+
+  function search(raw) {
+    const s = norm(raw);
+    if (s.length < 2 || !index) return [];
+    const out = [];
+    for (const r of index.regions) if (r.k.includes(s)) out.push({ level: 'region', code: r.c, name: r.n, parent: '', sc: score(r.k, s) });
+    for (const d of index.departements) {
+      const codeOk = s.toUpperCase() === d.c || s.padStart(2, '0') === d.c;
+      if (d.k.includes(s) || codeOk) out.push({ level: 'departement', code: d.c, name: d.n, parent: d.pn, sc: codeOk ? 100 : score(d.k, s) });
+    }
+    let n = 0;
+    for (const c of index.communes) if (c.k.includes(s)) { out.push({ level: 'commune', code: c.n + '|' + c.d, name: c.n, parent: index.noms[c.d] || c.d, sc: score(c.k, s) - 10 }); if (++n > 80) break; }
+    out.sort((a, b) => (b.sc - a.sc) || (LVL[a.level] - LVL[b.level]) || a.name.localeCompare(b.name, 'fr'));
+    return out.slice(0, MAX);
+  }
+
+  function setHeight(open) { send('streamlit:setFrameHeight', { height: open ? closedHeight + 8 + menu.offsetHeight + 8 : closedHeight }); }
+
+  function highlight(name, raw) {
+    const s = norm(raw), k = norm(name), i = k.indexOf(s);
+    if (i < 0 || !s) return esc(name);
+    return esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + s.length)) + '</b>' + esc(name.slice(i + s.length));
+  }
+
+  function render() {
+    const raw = q.value;
+    if (norm(raw).length < 2) { close(); return; }
+    items = search(raw);
+    let html = '';
+    if (!items.length) html = (loading || !index) ? '<div class="loading">Chargement de l’index…</div>' : '<div class="empty">Aucun territoire trouvé.</div>';
+    else html = items.map((it, i) =>
+      `<div class="item${i === active ? ' active' : ''}" role="option" data-i="${i}">` +
+      `<span class="name">${highlight(it.name, raw)}</span>` +
+      (it.parent ? `<span class="parent">${esc(it.parent)}</span>` : '') +
+      `<span class="lvl lvl-${it.level}">${LABEL[it.level]}</span></div>`).join('');
+    html += '<div class="foot">↑↓ pour naviguer · Entrée pour ouvrir · Échap pour fermer</div>';
+    menu.innerHTML = html; menu.classList.add('open'); q.setAttribute('aria-expanded', 'true');
+    menu.querySelectorAll('.item').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); go(items[+el.dataset.i]); });
+      el.addEventListener('mousemove', () => { active = +el.dataset.i; paint(); });
+    });
+    setHeight(true);
+  }
+  function paint() { menu.querySelectorAll('.item').forEach((el, i) => el.classList.toggle('active', i === active)); }
+  function close() { menu.classList.remove('open'); menu.innerHTML = ''; active = -1; q.setAttribute('aria-expanded', 'false'); setHeight(false); }
+
+  function go(it) {
+    if (!it) return;
+    close();
+    q.value = '';
+    send('streamlit:setComponentValue', { value: { level: it.level, code: it.code, t: Date.now() }, dataType: 'json' });
+  }
+
+  let t = null;
+  q.addEventListener('input', () => { loadIndex(); active = -1; clearTimeout(t); t = setTimeout(render, 60); });
+  q.addEventListener('focus', () => { loadIndex(); if (norm(q.value).length >= 2) render(); });
+  q.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!menu.classList.contains('open')) render(); active = Math.min(active + 1, items.length - 1); paint(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paint(); }
+    else if (e.key === 'Enter') { e.preventDefault(); go(items[active >= 0 ? active : 0]); }
+    else if (e.key === 'Escape') { close(); q.blur(); }
+  });
+  q.addEventListener('blur', () => setTimeout(close, 120));
+  document.addEventListener('mousedown', e => { if (!e.target.closest('.wrap')) close(); });
+
+  window.addEventListener('message', e => {
+    const d = e.data || {};
+    if (d.type !== 'streamlit:render') return;
+    const a = d.args || {};
+    if (!ready) {
+      ready = true;
+      document.body.className = a.variant || 'hero';
+      closedHeight = a.closed || 56;
+      if (a.placeholder) q.placeholder = a.placeholder;
+      if (a.autofocus) q.focus();
+      setHeight(false);
+    }
+  });
+  send('streamlit:componentReady', { apiVersion: 1 });
+})();
+</script>
+</body></html>

@@ -3024,8 +3024,13 @@ img[alt="ESData, ESD Paris"] {
 .st-key-fiche_actions [data-testid="stButton"] button:hover { border-color: #1A3D8F !important; background: #F3F6FC !important; }
 @media screen and (max-width: 768px) {
     .st-key-fiche_actions [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 6px !important; }
-    .st-key-fiche_actions [data-testid="stHorizontalBlock"] > div { flex: 1 1 28% !important; min-width: 0 !important; width: auto !important; }
-    .st-key-fiche_actions [data-testid="stHorizontalBlock"] > div:first-child { flex: 1 1 100% !important; min-width: 100% !important; }
+    /* :not(#_) : spécificité supérieure à la règle générique des blocs à 4 colonnes */
+    .st-key-fiche_actions:not(#_) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 28% !important; min-width: 0 !important; max-width: none !important; width: auto !important;
+    }
+    .st-key-fiche_actions:not(#_) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child {
+        flex: 1 1 100% !important; min-width: 100% !important;
+    }
     .st-key-fiche_actions .fiche-topbar .breadcrumb { flex-wrap: wrap; row-gap: 2px; }
     .map-legend { flex-wrap: wrap; justify-content: center; row-gap: 6px; }
 }
