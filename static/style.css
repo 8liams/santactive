@@ -774,8 +774,7 @@ div[data-testid="stExpander"] > div {
 .fiche-share-bar {
     background: linear-gradient(135deg, #F8F7F3 0%, #F3F2EC 100%);
     border: 1px solid #E8E6DD;
-    border-left: 4px solid #1A3D8F;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 18px 22px;
     margin-bottom: 20px;
 }
@@ -1739,8 +1738,12 @@ div[data-testid="stRadio"] label:hover {
     color: #1A3D8F !important;
     background: #F0F3FA !important;
 }
-div[data-testid="stRadio"] input[type="radio"] { display: none !important; }
+div[data-testid="stRadio"] input[type="radio"] { position: absolute !important; opacity: 0 !important; width: 1px !important; height: 1px !important; margin: 0 !important; pointer-events: none !important; }
 div[data-testid="stRadio"] svg { display: none !important; }
+/* Le cercle du bouton radio (premier enfant du label, hors texte) est masqué : toute la surface est cliquable */
+div[data-testid="stRadio"] label > div:first-child:not([data-testid="stMarkdownContainer"]) { display: none !important; }
+div[data-testid="stRadio"] label:has(input:focus-visible) { outline: 2px solid #1A3D8F !important; outline-offset: 2px !important; }
+div[data-testid="stRadio"] label p { margin: 0 !important; }
 
 /* ─── Comparison table v2 (comparer) ──────────────────────────────────────── */
 .comparison-table-v2 {
@@ -1900,12 +1903,12 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     max-width: 640px;
     margin: 0 0 16px;
     padding: 12px 16px;
-    border-radius: 4px;
-    border-left: 3px solid #1A3D8F;
+    border-radius: 6px;
+    border: 1px solid #C9D3EA;
     background: #F0F3FA;
 }
 .comparer-mode-banner.comparer-mode-region {
-    border-left-color: #A51C30;
+    border-color: #EBC4C8;
     background: #FEF3F3;
 }
 .comparer-mode-kicker {
@@ -2144,7 +2147,6 @@ div[data-testid="stVerticalBlock"]:has(.comparer-toggle-anchor)
     background: #F3F2EC;
     border: 1px solid #E0DDD4;
     border-radius: 6px;
-    border-left: 4px solid var(--bleu-regalien, #1A3D8F);
 }
 .reco-impact-title {
     font-size: 10px;
@@ -2957,13 +2959,15 @@ img[alt="ESData, ESD Paris"] {
    un sticky posé sur la barre elle-même n'aurait aucune marge de déplacement. C'est donc
    l'enveloppe qui est collante (le bloc vertical parent fait toute la hauteur de la page). */
 [data-testid="stLayoutWrapper"]:has(> .st-key-sa_topnav) {
-    position: sticky; top: 0; z-index: 80; background: #FFFFFF;
+    position: sticky; top: 0; z-index: 80;
+    background: var(--bg-paper, #FAFAF8);
+    box-shadow: 0 1px 0 rgba(10, 25, 56, 0.06), 0 4px 12px -8px rgba(10, 25, 56, 0.18);
 }
 .st-key-sa_topnav {
     position: relative; z-index: 80;
-    background: #FFFFFF;
-    border-bottom: 1px solid #E8E6DD;
-    margin: 0 0 16px; padding: 6px 0;
+    background: var(--bg-paper, #FAFAF8);
+    border: none;
+    margin: 0 0 16px; padding: 8px 0;
     gap: 0 !important;
 }
 .st-key-sa_topnav [data-testid="stHorizontalBlock"] { align-items: center; }
@@ -3125,7 +3129,7 @@ img[alt="ESData, ESD Paris"] {
 
 /* ─── Accès routier : territoire pilote et liens de parcours ─────────────── */
 .ign-pilote { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
-    background: #fff; border: 1px solid #E8E6DD; border-left: 4px solid #1A3D8F; border-radius: 6px; padding: 12px 16px; margin: 4px 0 12px; }
+    background: #fff; border: 1px solid #E8E6DD; border-radius: 6px; padding: 12px 16px; margin: 4px 0 12px; }
 .ign-pilote-lbl { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #6B6B68; }
 .ign-pilote-nom { display: block; font-size: 18px; font-weight: 700; color: #0A1938; margin: 2px 0; }
 .ign-pilote-ctx { display: block; font-size: 12px; color: #6B6B68; line-height: 1.4; }
@@ -3269,7 +3273,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 @media screen and (max-width: 768px) { .cmp-synth { grid-template-columns: 1fr; } }
 /* ─── Accueil : territoire de référence, six entrées ─────────────────────── */
 .ref-block { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; flex-wrap: wrap;
-    border: 1.5px solid #1A3D8F; border-left-width: 5px; border-radius: 6px; background: #F7F9FD; padding: 14px 18px; margin: 0 0 16px; }
+    border: 1px solid #E0DDD4; border-radius: 6px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(10, 25, 56, 0.04); padding: 14px 18px; margin: 0 0 16px; }
 .ref-block-main { flex: 1 1 520px; }
 .ref-block-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #1A3D8F; }
 .ref-block-title { font-size: 20px; font-weight: 700; color: #0A1938; margin: 2px 0 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3291,7 +3295,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
 
 /* ─── Accueil : résumé compact du territoire de référence ───────────────── */
 .ref-line { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;
-    border: 1.5px solid #1A3D8F; border-left-width: 5px; border-radius: 6px; background: #F7F9FD; padding: 10px 16px; margin: 0 0 14px; }
+    border: 1px solid #E0DDD4; border-radius: 6px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(10, 25, 56, 0.04); padding: 12px 18px; margin: 0 0 14px; }
 .ref-line-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 420px; min-width: 0; }
 .ref-line-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #1A3D8F; }
 .ref-line-title { font-size: 17px; font-weight: 700; color: #0A1938; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -3315,7 +3319,7 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
     padding: 10px 14px; font-size: 13px; line-height: 1.5; color: #2B2B2B; margin: 0 0 12px; }
 .sa-notice a { color: #1A3D8F !important; font-weight: 600; text-decoration: none !important; }
 .sa-notice a:hover { text-decoration: underline !important; }
-.sa-notice--info { border-color: #C9D3EA; border-left-color: #1A3D8F; background: #F7F9FD; margin-top: 4px; }
+.sa-notice--info { border-color: #C9D3EA; border-left-width: 1px; background: #F7F9FD; margin-top: 4px; }
 .sa-loading { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px dashed #C9C6BA; border-radius: 6px;
     color: #4B4B48; font-size: 13px; margin: 8px 0 16px; background: #FAFAF8; }
 .sa-loading::before { content: ""; width: 14px; height: 14px; border: 2px solid #C9D3EA; border-top-color: #1A3D8F; border-radius: 50%;
@@ -3342,14 +3346,14 @@ div[data-testid="stToggle"] label span[data-checked="true"], div[data-testid="st
     .sa-nav { min-height: 44px; }
 }
 /* ─── Simulateur : définition de la nouvelle offre ──────────────────────── */
-.ign-def { border: 1px solid #C9D3EA; border-left: 4px solid #1A3D8F; background: #F7F9FD; border-radius: 6px;
+.ign-def { border: 1px solid #C9D3EA; background: #F7F9FD; border-radius: 6px;
     padding: 9px 14px; font-size: 13px; line-height: 1.5; color: #2B2B2B; margin: 6px 0 12px; }
 .ign-def-lbl { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
     color: #1A3D8F; margin-right: 8px; }
 /* ─── Renforcement théorique de capacité : conclusion ───────────────────── */
-.cap-conclusion { border: 1px solid #E8E6DD; border-left: 4px solid #1A3D8F; border-radius: 6px; background: #FAFAF8;
+.cap-conclusion { border: 1px solid #E8E6DD; border-radius: 6px; background: #FAFAF8;
     padding: 12px 16px; margin: 4px 0 10px; font-size: 14px; line-height: 1.55; color: #2B2B2B; }
-.cap-conclusion.none { border-left-color: #1B5E3F; }
+.cap-conclusion.none { border-color: #CFE3D8; }
 .cap-conclusion strong { color: #0A1938; }
 .cap-conclusion p { margin: 0 0 6px; } .cap-conclusion p:last-child { margin: 0; }
 .cap-conclusion .cap-ssq { font-size: 12.5px; color: #6B6B68; }

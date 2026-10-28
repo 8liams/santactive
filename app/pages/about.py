@@ -59,41 +59,6 @@ def _prose(html: str) -> None:
                 unsafe_allow_html=True)
 
 
-# Sources réellement utilisées par l'application (producteur · millésime · rôle · lien de référence).
-# Trois statuts distinguent la donnée publique, l'agrégat calculé par Sant'active et l'estimation propre au projet.
-SOURCES: list[tuple[str, str, str, str]] = [
-    ("INSEE · Recensement de la population 2021", "Population municipale, âge, densité par commune et par département.",
-     "https://www.insee.fr/fr/statistiques?categorie=1&debut=0&idprec=5650720", "Donnée publique"),
-    ("INSEE · Accès aux équipements 2025 (BPE 2025, distancier Metric-OSRM)",
-     "Temps de trajet en voiture, par carreau habité de 200 m, vers le médecin généraliste le plus proche ; "
-     "habitants à plus de 15 minutes ; dimension temps du score et lecture communale.",
-     "https://www.insee.fr/fr/metadonnees/source/serie/s1161", "Donnée publique"),
-    ("DREES · Accessibilité potentielle localisée (APL) aux médecins généralistes · millésime " + APL_MILLESIME,
-     "Consultations accessibles par an et par habitant, par commune ; valeur départementale pondérée par la population "
-     "standardisée ; habitants sous le repère 2,5.",
-     "https://data.drees.solidarites-sante.gouv.fr/explore/?q=APL", "Donnée publique · agrégat Sant'active"),
-    ("DREES · Répertoire RPPS des professionnels de santé · 1er janvier 2026",
-     "Médecins généralistes et spécialistes en activité, par département.",
-     "https://data.drees.solidarites-sante.gouv.fr/explore/?q=RPPS", "Donnée publique"),
-    ("FINESS · ministère chargé de la Santé (diffusion DREES) · mars 2026",
-     "Sites d'établissements de santé ; retenus dans le score : centres hospitaliers, centres hospitaliers régionaux, "
-     "établissements privés de soins de suite et de réadaptation. Les cliniques privées de court séjour ne sont pas comptées.",
-     "https://www.data.gouv.fr/fr/datasets/finess-extraction-du-fichier-des-etablissements/", "Donnée publique"),
-    ("CNAM · Cartographie des pathologies et des dépenses · 2023",
-     "Patients pris en charge par pathologie et par département ; prévalences brutes et standardisées sur l'âge.",
-     "https://data.ameli.fr/", "Donnée publique · standardisation Sant'active"),
-    ("DGFiP · Demandes de valeurs foncières (DVF) · 2025",
-     "Prix médian des transactions immobilières, indicateur de contexte (5 % du score).",
-     "https://www.data.gouv.fr/fr/datasets/demandes-de-valeurs-foncieres/", "Donnée publique"),
-    ("IGN · Géoplateforme · service d'isochrones",
-     "Zones atteignables en 10, 15 et 20 minutes en voiture depuis un point d'implantation ; simulateur.",
-     "https://geoservices.ign.fr/documentation/services/services-geoplateforme/itineraire", "Service public en ligne"),
-    ("API Géo (geo.api.gouv.fr) · contours et population des communes",
-     "Référentiel des communes, contours départementaux et communaux servis par l'État.",
-     "https://geo.api.gouv.fr/", "Service public en ligne"),
-]
-
-
 def render(data: dict) -> None:
     render_breadcrumb([NavCrumb("Accueil", "home"), NavCrumb("À propos")], key_prefix="about_bc")
 
@@ -180,56 +145,29 @@ def render(data: dict) -> None:
         '<div style="font-size:13px;color:#4B4B48;margin-top:2px;">Intervenante ESD Paris · cheffe de projet DSI</div></div></div>',
         unsafe_allow_html=True)
 
-    # ── 3. SOURCES PUBLIQUES ─────────────────────────────────────────────────
-    _section("SOURCES", "Des données publiques <em>au service de la décision.</em>",
-             "Sant'active ne produit aucune donnée de santé : il réutilise des données diffusées par leurs producteurs "
-             "publics et des services en ligne de l'État. Trois statuts sont distingués dans toute l'application.")
+    # ── 3. SOURCES PUBLIQUES (renvoi : le détail est dans la Méthodologie) ───
+    _section("SOURCES", "Des données publiques <em>au service de la décision.</em>")
+    _prose(
+        "Sant’active ne produit aucune donnée de santé. Il réutilise des données diffusées par des organismes publics "
+        "(INSEE, DREES, Assurance Maladie, DGFiP, fichier FINESS du ministère chargé de la Santé) et des services en ligne de "
+        "l’État (IGN Géoplateforme, API Géo), puis calcule ses propres indicateurs : score, zones, indices offre × besoins, "
+        "estimations et simulations, toujours signalés comme tels. Chaque chiffre affiché rappelle son producteur et son "
+        f"millésime (APL {APL_MILLESIME}, temps d’accès INSEE 2025, RPPS 2026, recensement 2021, pathologies 2023).")
     st.markdown(
-        '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 18px;">'
-        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#F7F8FC;border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1A3D8F;margin-bottom:6px;">Donnée publique</div>'
-        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Valeur reprise telle quelle de son producteur (INSEE, DREES, CNAM, DGFiP, FINESS), avec son millésime.</div></div>'
-        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#F3F2EC;border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0A1938;margin-bottom:6px;">Indicateur calculé</div>'
-        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Agrégat ou rapport construit par Sant\'active à partir de ces données : APL départemental pondéré, densités, prévalences standardisées, score, zones, indices offre × besoins.</div></div>'
-        '<div style="flex:1;min-width:220px;padding:16px 18px;background:#FDF8EC;border-radius:6px;">'
-        '<div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#8A5A00;margin-bottom:6px;">Estimation ou simulation</div>'
-        '<div style="font-size:13.5px;color:#2B2B2B;line-height:1.6;">Calcul propre au projet, toujours signalé comme tel : équivalents temps plein théoriques, gain de proximité du simulateur, leviers d\'action.</div></div>'
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:14px 0 4px;">'
+        f'<a href="{internal_href("methodologie")}" target="_self" class="reco-link">Tableau des sources et méthode →</a>'
+        f'<a href="{internal_href("methodologie")}#glossaire" target="_self" class="reco-link">Comprendre les sigles →</a>'
         '</div>', unsafe_allow_html=True)
-
-    rows_html = ""
-    for nom, desc, url, statut in SOURCES:
-        rows_html += (
-            '<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid #E8E6DD;">'
-            '<div style="width:8px;height:8px;border-radius:50%;background:#1A3D8F;flex-shrink:0;margin-top:7px;"></div>'
-            '<div style="flex:1;">'
-            f'<a href="{url}" target="_blank" rel="noopener noreferrer" style="font-size:14px;font-weight:600;color:#1A3D8F;text-decoration:none;">{nom}</a>'
-            f'<span style="font-size:11px;color:#6B6B68;margin-left:8px;letter-spacing:0.04em;text-transform:uppercase;">{statut}</span>'
-            f'<div style="font-size:13px;color:#4B4B48;margin-top:3px;line-height:1.55;">{desc}</div>'
-            '</div></div>')
-    st.markdown(rows_html, unsafe_allow_html=True)
-    st.markdown(
-        '<p style="max-width:760px;font-size:13px;color:#6B6B68;line-height:1.7;margin-top:12px;">'
-        "Les données tabulaires sont diffusées par leurs producteurs sur leurs portails ou sur data.gouv.fr ; les services "
-        "d'isochrones et de référentiel géographique sont des services en ligne de l'État, interrogés à la demande. Les fonds de "
-        "carte proviennent d'OpenStreetMap et de ses contributeurs. Les conditions d'utilisation applicables sont celles indiquées "
-        "par chaque producteur. L'enquête DREES de 2016-2017 sur les délais de rendez-vous, utilisée dans les premières versions, "
-        "n'intervient plus dans les diagnostics ; elle reste citée dans l'historique de la Méthodologie."
-        '</p>', unsafe_allow_html=True)
 
     # ── 4. TRANSPARENCE ET LIMITES ───────────────────────────────────────────
     _section("TRANSPARENCE", "Ce que nous nous <em>engageons à dire.</em>")
     engagements = [
-        ("Des règles lisibles", "Le score, les zones, les priorités et les leviers reposent sur des règles écrites, publiées dans la "
-                                "Méthodologie et reproductibles ; aucune intelligence artificielle générative n'intervient dans les résultats."),
-        ("Des sources nommées", "Chaque indicateur affiche son producteur et son millésime ; les changements de méthode sont datés et "
-                                "justifiés dans l'historique de la Méthodologie."),
-        ("Des limites assumées", "Sant'active décrit l'offre et l'accessibilité géographique des soins de premier recours. Il ne mesure "
-                                 "ni la disponibilité réelle des rendez-vous, ni la qualité des soins, ni l'état de santé d'une population ; "
-                                 "le score situe un département parmi les autres, ce n'est pas une note de santé."),
-        ("Des pistes, pas des prescriptions", "Les leviers d'action sont des pistes à instruire avec les acteurs locaux ; ils ne "
-                                              "constituent ni une évaluation de politique publique ni un ordre de mise en œuvre."),
-        ("Un code ouvert", f"Le code de l'application et sa documentation technique sont publiés sur GitHub ({DEPOT_GITHUB.replace('https://', '')})."),
+        ("Des règles lisibles", "Score, zones, priorités et leviers reposent sur des règles écrites, expliquées dans la Méthodologie ; "
+                                "aucune intelligence artificielle générative n’intervient dans les résultats."),
+        ("Des limites dites", "Sant’active décrit l’offre et l’accessibilité géographique des soins ; il ne mesure ni la disponibilité "
+                              "réelle des rendez-vous, ni la qualité des soins, ni l’état de santé d’une population. Les leviers sont des "
+                              "pistes à instruire avec les acteurs locaux."),
+        ("Un code ouvert", f"Le code de l’application est publié sur GitHub ({DEPOT_GITHUB.replace('https://', '')})."),
     ]
     html = '<div style="max-width:760px;">'
     for titre, texte in engagements:
@@ -250,9 +188,8 @@ def render(data: dict) -> None:
         f'border-radius:6px;text-decoration:none;font-size:14px;font-weight:500;white-space:nowrap;">{CONTACT_EMAIL}</a></div>',
         unsafe_allow_html=True)
     ressources = [
-        (internal_href("methodologie"), "_self", "Méthodologie", "Ce que mesure l'outil, ses calculs, ses hypothèses, ses limites et son historique."),
-        (internal_href("methodologie") + "#glossaire", "_self", "Comprendre les sigles et indicateurs", "Glossaire : APL, RPPS, FINESS, BPE, carroyage, isochrone, standardisation, ETP…"),
-        (DEPOT_GITHUB, "_blank", "Code source et documentation technique (GitHub)", "Dépôt public : code de l'application, journal des évolutions du moteur, scripts d'audit."),
+        (internal_href("methodologie"), "_self", "Méthodologie", "Ce que mesure l’outil, d’où viennent les données, comment fonctionnent le score et les priorités, ses limites."),
+        (DEPOT_GITHUB, "_blank", "Code source (GitHub)", "Dépôt public de l’application."),
         ("https://www.opendatauniversity.org/", "_blank", "Open Data University", "Le programme de challenges open data à l'origine du projet (association Latitudes)."),
         ("https://ecole-du-digital.com/", "_blank", "ESD Paris", "École Supérieure du Digital, Mastère Data."),
     ]
