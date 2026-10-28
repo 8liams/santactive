@@ -251,7 +251,9 @@ class TestPages(unittest.TestCase):
         at = self._run(view="commune", commune_code="Ambérieu-en-Bugey|01")
         self.assertEqual(len(at.exception), 0)
         html = " ".join(m.value for m in at.markdown)
-        self.assertIn("0 min", html)
+        # Le temps affiché est le temps moyen INSEE 2025 (plus de « 0 = sur place ») ; la présence est explicite
+        self.assertIn("INSEE 2025", html)
+        self.assertIn("généraliste présent dans la commune", html)
 
 
 class TestInterface(unittest.TestCase):
