@@ -167,3 +167,34 @@ département. Non intégré au score.
 - Comparateur : lien direct `?view=comparer&depts=18,75,23`.
 - Vérification : captures Playwright (1440, 1920, 390 px) avant/après ;
   `tests/test_moteur.py::TestInterface` (49 tests au total).
+
+## 13. Parcours ARS et simulateur IGN (28 octobre 2026)
+
+- Parcours « Repérer → Diagnostiquer → Recommander → Simuler → Comparer » :
+  liens contextuels (fiche → communes fragiles, simulation IGN si pilote,
+  comparer, région ; leviers d'accès → simulation ; simulation → diagnostic ;
+  Prioriser → diagnostic ; accueil → quatre usages). Le département est passé
+  dans l'URL (`?view=acces&dept_code=18`, `&commune=…`).
+- Simulateur (`app/pages/acces_ign.py`) : `PILOTES_VALIDES` liste les
+  départements affichables (fichier présent **et** validé) ; classe « avant »
+  = la plus favorable de l'itinéraire (3 offres les plus proches à vol
+  d'oiseau) et de l'isochrone depuis un point d'offre ; scénario = isochrones
+  10/15/20 min depuis la commune (IGN, cache 24 h, reprise sur 429) ;
+  « nouvellement couverts » = classe avant > seuil et après ≤ seuil ;
+  « rapprochés » = déjà sous le seuil, classe améliorée. Vérifié : Argent-
+  sur-Sauldre +2 023 hab. à 15 min (elle-même) ; Jouet-sur-l'Aubois 0
+  (déjà dans l'isochrone 15 min d'une offre malgré 17 min par itinéraire),
+  1 303 hab. rapprochés. Limites affichées (centres de communes, capacité,
+  départements voisins ignorés).
+- Lecture communale « capacité » : `static/data/apl_communes_2023.csv`
+  (`scripts/donnees/exporter_apl_communes.py`, même source DREES que l'APL
+  départementale) ; communes sous 2,5 avec ou sans offre (Vierzon : APL 1,6
+  avec offre). « Faisabilité » devient « conditions de déploiement » (prix au
+  m², proxy partiel), pondérations inchangées.
+- Repère national « 11,2 M d'habitants sous APL 2,5 » : Σ parts
+  départementales × population INSEE 2021 ; recalcul direct sur le fichier
+  communal : 11 210 951 (16,6 %).
+- Formulations : « homogène » si écart ≤ 12 points et aucun critique ;
+  « Problématiques de santé prioritaires » ; populations qualifiées.
+- Extension IGN : voir le bilan du 28 octobre (≈ 3 itinéraires par commune
+  sans offre + 4 isochrones par commune d'offre ; Cher = 907 requêtes, 1,3 Mo).
