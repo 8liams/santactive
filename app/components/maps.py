@@ -60,19 +60,27 @@ def _tile_config() -> tuple[str, str]:
 
 TILE_URL, TILE_ATTR = _tile_config()
 
-BORDER_COLOR = "#FFFFFF"
-BORDER_WIDTH = 0.9
+BORDER_COLOR = "rgba(255,255,255,0.82)"   # contour fin, légèrement translucide : limites adoucies
+BORDER_WIDTH = 0.55
 HOVER_COLOR  = "#0A1938"
 
 # Dégradés par type d'indicateur
+# Palettes de la carte nationale (révision du 29 octobre 2026) : teintes désaturées à la manière des
+# publications statistiques, progression régulière de clarté entre classes (lisible aussi en niveaux de gris),
+# vert = favorable, teintes chaudes = défavorable. Les classes et leurs bornes ne changent pas.
 COLORMAPS: dict[str, list[str]] = {
-    "score": ["#A51C30", "#D4663B", "#E5B04A", "#A3C282", "#1B5E3F"],
-    # Prix : ambre → orange → bordeaux — pas de blanc pour que les valeurs basses restent lisibles
-    "prix":  ["#FEF3C7", "#F59E0B", "#D97706", "#B45309", "#7C2D12"],
-    "temps": ["#DCFCE7", "#86EFAC", "#F4C430", "#D4663B", "#A51C30"],
-    "pros":  ["#A51C30", "#E5B04A", "#A3C282", "#1B5E3F"],
-    "age":   ["#E8EDF8", "#C5D4EE", "#5A85C3", "#1A3D8F"],
+    # divergente : bordeaux doux → abricot → sable → sauge → vert profond (score, APL, médecins)
+    "score": ["#B9474A", "#DE9A6E", "#EBD9A8", "#9CBF93", "#3C7D63"],
+    # séquentielle chaude : sable → ocre → terre cuite → brun (prix immobilier, le plus cher = le plus foncé)
+    "prix":  ["#F6EAD2", "#E8C58C", "#D5955B", "#B6683C", "#7E3F24"],
+    # éloignement : vert d'eau → sauge → sable → abricot → bordeaux doux (plus d'habitants éloignés = plus chaud)
+    "temps": ["#DCEBDF", "#A9CDB2", "#EBD9A8", "#DE9A6E", "#B9474A"],
+    "pros":  ["#B9474A", "#EBD9A8", "#9CBF93", "#3C7D63"],
+    # séquentielle bleue : part des 65 ans et plus (plus âgée = plus foncé), quatre classes
+    "age":   ["#E7EDF7", "#BCCBE6", "#7F9BD0", "#3A5DA8"],
 }
+# Couleurs de la légende des zones (terciles) : extrémités et milieu de la palette « score »
+ZONE_COLORS = {"Critique": "#B9474A", "Intermédiaire": "#DDB36A", "Favorable": "#3C7D63"}
 
 
 def quantile_bins(values, n_classes: int) -> list[float]:
@@ -288,11 +296,14 @@ def render_national_choropleth(
         # Aplat légèrement translucide : le fond (routes, relief, villes) reste perceptible sans altérer la lecture
         # des classes ; contours blancs fins, territoire de référence cerné en bleu nuit.
         return {"fillColor": cmap(val), "color": "#0A1938" if dans_hl else BORDER_COLOR,
-                "weight": 2.4 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.74 if not hl or dans_hl else 0.32}
+                "weight": 2.0 if dans_hl else BORDER_WIDTH, "fillOpacity": 0.78 if not hl or dans_hl else 0.30}
 
     def _highlight(feature: dict) -> dict:
-        return {"fillColor": HOVER_COLOR, "color": HOVER_COLOR,
-                "weight": 2, "fillOpacity": 0.15}
+        # Survol : le département garde sa couleur de classe, légèrement plus pleine, et se détache par un
+        # contour bleu nuit (pas de voile qui masquerait la valeur).
+        val = data_map.get(feature["properties"]["code"])
+        fill = "#E8E6DD" if val is None or pd.isna(val) else cmap(val)
+        return {"fillColor": fill, "color": HOVER_COLOR, "weight": 1.8, "fillOpacity": 0.92}
 
     tooltip = folium.GeoJsonTooltip(
         fields=["dept_name", "main_display",
@@ -311,6 +322,7 @@ def render_national_choropleth(
         highlight_function=_highlight,
         tooltip=tooltip,
         name="departements",
+        smooth_factor=0.8,
     ).add_to(m)
 
     m.get_root().header.add_child(
@@ -318,6 +330,9 @@ def render_national_choropleth(
             "<style>"
             ".leaflet-control-attribution{display:none!important;}"
             ".leaflet-container{background:#F4F3EE!important;}"
+            # transitions discrètes du survol et de la mise en évidence (SVG Leaflet)
+            ".leaflet-interactive{transition:fill-opacity .22s ease,stroke-width .18s ease,stroke .18s ease;}"
+            ".leaflet-interactive:hover{stroke-linejoin:round;}"
             "</style>"
         )
     )

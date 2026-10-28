@@ -193,7 +193,7 @@ def _bounds_for(geojson: dict, codes: set[str]) -> list | None:
 def _render_national_map(master: pd.DataFrame, geojson) -> None:
     from .. import territoire as T
     from ..components import render_national_choropleth
-    from ..components.maps import COLORMAPS
+    from ..components.maps import COLORMAPS, ZONE_COLORS
 
     if not geojson:
         st.warning("Carte indisponible. Vérifiez la connexion.")
@@ -260,7 +260,7 @@ def _render_national_map(master: pd.DataFrame, geojson) -> None:
             + "".join(
                 f'<span class="legend-item"><span class="swatch" style="background:{c};"></span>'
                 f'{lab} <span class="count">({int(counts.get(lab, 0))})</span></span>'
-                for lab, c in (("Critique", "#A51C30"), ("Intermédiaire", "#E8A838"), ("Favorable", "#1B5E3F")))
+                for lab, c in ZONE_COLORS.items())
             + '</div>',
             unsafe_allow_html=True,
         )
