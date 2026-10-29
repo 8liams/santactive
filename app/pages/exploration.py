@@ -83,50 +83,55 @@ def render(data: dict) -> None:
             prio = dans
             perim = f" en {html.escape(str(dans['region'].iloc[0]))}"
     prio = prio.sort_values("_tri", ascending=False)
-    # Contexte : où est le territoire de référence, quel périmètre, pourquoi ces départements
-    if not t.is_national:
-        nom_ref = html.escape(T.nom_court(t, master))
-        nom_perim = html.escape(str(prio["region"].iloc[0])) if perim else "France entière"
-        if ref_dept and ref_dept in ind.index:
-            r0 = ind.loc[ref_dept]; q0 = r0["quadrant"]
-            e0 = expliquer(ref_dept, ind)
-            est_prio = ref_dept in prio.index
-            situation = (f"<strong>{nom_ref}</strong> : {html.escape(QUADRANTS[q0].lower())} (quadrant {q0}) — "
-                         + ("il fait partie des départements à examiner en priorité." if est_prio else
-                            "il n’est pas dans le quadrant « offre faible, besoins forts » : " + html.escape(_QUADRANT_LECTURE[q0]) + ".")
-                         + f" {html.escape(_raison(e0)).capitalize()}.")
-        else:
-            situation = f"<strong>{nom_ref}</strong> : périmètre de comparaison, ses départements sont situés dans le contexte national."
-        autres = [n for n in prio["Nom du département"].astype(str).tolist() if n != (T.nom_court(t, master) if ref_dept else None)]
+    # Section « À examiner en priorité » : France entière uniquement. Pour une région, un département ou une
+    # commune, ces recommandations nationales pourraient être lues comme propres au territoire : la page passe
+    # directement à la matrice, filtrée sur la région du territoire de référence.
+    if t.is_national:
+        # Contexte : où est le territoire de référence, quel périmètre, pourquoi ces départements
+        if not t.is_national:
+            nom_ref = html.escape(T.nom_court(t, master))
+            nom_perim = html.escape(str(prio["region"].iloc[0])) if perim else "France entière"
+            if ref_dept and ref_dept in ind.index:
+                r0 = ind.loc[ref_dept]; q0 = r0["quadrant"]
+                e0 = expliquer(ref_dept, ind)
+                est_prio = ref_dept in prio.index
+                situation = (f"<strong>{nom_ref}</strong> : {html.escape(QUADRANTS[q0].lower())} (quadrant {q0}) — "
+                             + ("il fait partie des départements à examiner en priorité." if est_prio else
+                                "il n’est pas dans le quadrant « offre faible, besoins forts » : " + html.escape(_QUADRANT_LECTURE[q0]) + ".")
+                             + f" {html.escape(_raison(e0)).capitalize()}.")
+            else:
+                situation = f"<strong>{nom_ref}</strong> : périmètre de comparaison, ses départements sont situés dans le contexte national."
+            autres = [n for n in prio["Nom du département"].astype(str).tolist() if n != (T.nom_court(t, master) if ref_dept else None)]
+            st.markdown(
+                f'<div class="sa-notice sa-notice--info" style="margin:0 0 10px;">{situation} '
+                f'<span style="color:#4B4B48;">Périmètre affiché : <strong>{nom_perim}</strong>. Les départements ci-dessous y ressortent parce que leur '
+                f'offre est sous la médiane nationale et leurs besoins au-dessus (critères du moteur, pas un classement « du pire au meilleur ») : '
+                + (html.escape(", ".join(autres[:5])) + (" …" if len(autres) > 5 else "") if autres else "aucun autre") + '.</span></div>',
+                unsafe_allow_html=True)
+        cards = ""
+        for code, r in prio.head(6).iterrows():
+            e = expliquer(code, ind)
+            moi = ' style="outline:2px solid #1A3D8F;"' if code == ref_dept else ""
+            if code == ref_dept:
+                lien_ref = "Votre territoire de référence"
+            elif ref_region and r["code_region"] == ref_region:
+                lien_ref = "Même région que votre territoire"
+            else:
+                lien_ref = ""
+            cards += (f'<a class="usage-card" href="{internal_href("dept", dept_code=code)}" target="_self"{moi}>'
+                      f'<div class="usage-title">{html.escape(e["nom"])} <span style="font-weight:400;color:#6B6B68;">({code})</span></div>'
+                      + (f'<div class="usage-tag">{lien_ref}</div>' if lien_ref else "")
+                      + f'<div class="usage-txt">Pourquoi : {html.escape(_raison(e))}.</div>'
+                      f'<div class="usage-link">Ouvrir le diagnostic →</div></a>')
         st.markdown(
-            f'<div class="sa-notice sa-notice--info" style="margin:0 0 10px;">{situation} '
-            f'<span style="color:#4B4B48;">Périmètre affiché : <strong>{nom_perim}</strong>. Les départements ci-dessous y ressortent parce que leur '
-            f'offre est sous la médiane nationale et leurs besoins au-dessus (critères du moteur, pas un classement « du pire au meilleur ») : '
-            + (html.escape(", ".join(autres[:5])) + (" …" if len(autres) > 5 else "") if autres else "aucun autre") + '.</span></div>',
+            f'<h4 class="subsection-title" style="margin-top:4px;">À examiner en priorité{perim} '
+            f'<span style="font-weight:400;color:#6B6B68;">· {len(prio)} département{"s" if len(prio) > 1 else ""}</span></h4>'
+            '<p class="sa-couverture" style="margin:-6px 0 8px;">Offre sous la médiane nationale et besoins au-dessus (quadrant A). '
+            'La raison principale est indiquée ; le détail est dans le diagnostic.</p>'
+            + (f'<div class="usage-grid usage-grid--3">{cards}</div>' if cards else
+               '<p class="sa-couverture">Aucun département de ce périmètre ne cumule offre faible et besoins forts.</p>'),
             unsafe_allow_html=True)
-    cards = ""
-    for code, r in prio.head(6).iterrows():
-        e = expliquer(code, ind)
-        moi = ' style="outline:2px solid #1A3D8F;"' if code == ref_dept else ""
-        if code == ref_dept:
-            lien_ref = "Votre territoire de référence"
-        elif ref_region and r["code_region"] == ref_region:
-            lien_ref = "Même région que votre territoire"
-        else:
-            lien_ref = ""
-        cards += (f'<a class="usage-card" href="{internal_href("dept", dept_code=code)}" target="_self"{moi}>'
-                  f'<div class="usage-title">{html.escape(e["nom"])} <span style="font-weight:400;color:#6B6B68;">({code})</span></div>'
-                  + (f'<div class="usage-tag">{lien_ref}</div>' if lien_ref else "")
-                  + f'<div class="usage-txt">Pourquoi : {html.escape(_raison(e))}.</div>'
-                  f'<div class="usage-link">Ouvrir le diagnostic →</div></a>')
-    st.markdown(
-        f'<h4 class="subsection-title" style="margin-top:4px;">À examiner en priorité{perim} '
-        f'<span style="font-weight:400;color:#6B6B68;">· {len(prio)} département{"s" if len(prio) > 1 else ""}</span></h4>'
-        '<p class="sa-couverture" style="margin:-6px 0 8px;">Offre sous la médiane nationale et besoins au-dessus (quadrant A). '
-        'La raison principale est indiquée ; le détail est dans le diagnostic.</p>'
-        + (f'<div class="usage-grid usage-grid--3">{cards}</div>' if cards else
-           '<p class="sa-couverture">Aucun département de ce périmètre ne cumule offre faible et besoins forts.</p>'),
-        unsafe_allow_html=True)
+
 
     # ── Niveau 2 : filtres + matrice ─────────────────────────────────────────
     st.markdown('<div class="section-header" style="margin-top:18px;"><div class="section-eyebrow">MATRICE</div>'
